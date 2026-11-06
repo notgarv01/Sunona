@@ -228,14 +228,23 @@ export const PlayerBar: React.FC<Props> = ({
           className="player-track-info"
           onClick={onOpenNowPlaying}
           style={{ cursor: 'pointer' }}
-          title="Click to open 3D Cover Flow Now Playing"
+          title="Click to open Now Playing (Esc to close)"
         >
           <div className="player-track-thumb-box">
-            <img src={currentSong.coverUrl} alt={currentSong.title} className="player-track-thumb" />
+            <img
+              src={currentSong.coverUrl || 'https://images.unsplash.com/photo-1511671782779-c97d3d27a1d4?w=600&auto=format&fit=crop&q=80'}
+              alt={currentSong.title || 'Track'}
+              className="player-track-thumb"
+              onError={(e) => {
+                (e.target as HTMLImageElement).src = 'https://images.unsplash.com/photo-1511671782779-c97d3d27a1d4?w=600&auto=format&fit=crop&q=80';
+              }}
+            />
           </div>
           <div className="player-track-meta">
-            <div className="player-track-title">{currentSong.title}</div>
-            <div className="player-track-artist">{currentSong.artist} • {currentSong.album}</div>
+            <div className="player-track-title">{currentSong.title || 'Untitled Track'}</div>
+            <div className="player-track-artist">
+              {currentSong.artist || 'Unknown Artist'}{currentSong.album ? ` • ${currentSong.album}` : ''}
+            </div>
           </div>
           <Heart
             size={18}

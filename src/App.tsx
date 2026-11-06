@@ -1146,34 +1146,36 @@ export const App: React.FC = () => {
       />
 
       {/* Fullscreen Now Playing Showcase Modal */}
-      <NowPlayingModal
-        isOpen={isNowPlayingOpen}
-        onClose={() => setIsNowPlayingOpen(false)}
-        currentSong={currentSong}
-        queue={queue}
-        isPlaying={isPlaying}
-        currentTime={currentTime}
-        duration={duration}
-        volume={volume}
-        isMuted={isMuted}
-        isShuffle={isShuffle}
-        repeatMode={repeatMode}
-        currentTheme={currentTheme}
-        onPlaySong={playSong}
-        onTogglePlay={handleTogglePlay}
-        onNext={handleNext}
-        onPrev={handlePrev}
-        onSeek={handleSeek}
-        onVolumeChange={handleVolumeChange}
-        onToggleMute={handleToggleMute}
-        onToggleShuffle={() => setIsShuffle((s) => !s)}
-        onToggleRepeat={() => {
-          if (repeatMode === 'off') setRepeatMode('all');
-          else if (repeatMode === 'all') setRepeatMode('one');
-          else setRepeatMode('off');
-        }}
-        onToggleLike={handleToggleLike}
-      />
+      {isNowPlayingOpen && currentSong && (
+        <NowPlayingModal
+          isOpen={isNowPlayingOpen}
+          onClose={() => setIsNowPlayingOpen(false)}
+          currentSong={currentSong}
+          queue={queue}
+          isPlaying={isPlaying}
+          currentTime={currentTime}
+          duration={duration}
+          volume={volume}
+          isMuted={isMuted}
+          isShuffle={isShuffle}
+          repeatMode={repeatMode}
+          currentTheme={currentTheme}
+          onPlaySong={playSong}
+          onTogglePlay={handleTogglePlay}
+          onNext={handleNext}
+          onPrev={handlePrev}
+          onSeek={handleSeek}
+          onVolumeChange={handleVolumeChange}
+          onToggleMute={handleToggleMute}
+          onToggleShuffle={() => setIsShuffle((s) => !s)}
+          onToggleRepeat={() => {
+            if (repeatMode === 'off') setRepeatMode('all');
+            else if (repeatMode === 'all') setRepeatMode('one');
+            else setRepeatMode('off');
+          }}
+          onToggleLike={handleToggleLike}
+        />
+      )}
 
       {/* Floating Mini-Player for Laptop Multitasking */}
       {isMiniPlayer && (

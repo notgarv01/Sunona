@@ -2440,6 +2440,38 @@ body.is-electron .app-header {
   justify-content: space-between;
 }
 
+body.is-electron .coverflow-header {
+  padding-top: 6px;
+  padding-right: 155px; /* Safely clear Windows frameless minimize/maximize/close controls */
+}
+
+.coverflow-back-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 14px;
+  background: rgba(255, 255, 255, 0.08);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: var(--radius-full);
+  color: #ffffff;
+  font-size: 0.82rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: var(--transition-fast);
+}
+
+.coverflow-back-btn:hover {
+  background: rgba(255, 255, 255, 0.16);
+  transform: translateX(-2px);
+}
+
+.coverflow-header-divider {
+  width: 1px;
+  height: 18px;
+  background: rgba(255, 255, 255, 0.15);
+  margin: 0 4px;
+}
+
 .coverflow-header-title {
   display: flex;
   align-items: center;

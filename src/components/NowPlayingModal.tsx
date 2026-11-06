@@ -45,6 +45,8 @@ interface Props {
   onToggleLike: (songId: string) => void;
 }
 
+const DEFAULT_COVER = 'https://images.unsplash.com/photo-1511671782779-c97d3d27a1d4?w=600&auto=format&fit=crop&q=80';
+
 export const NowPlayingModal: React.FC<Props> = ({
   isOpen,
   onClose,
@@ -69,21 +71,16 @@ export const NowPlayingModal: React.FC<Props> = ({
   onToggleRepeat,
   onToggleLike,
 }) => {
+  // --- ALL REACT HOOKS MUST BE UNCONDITIONALLY CALLED AT THE TOP ---
   const [viewMode, setViewMode] = useState<'flow' | 'lyrics'>('flow');
   const [isQueueOpen, setIsQueueOpen] = useState<boolean>(false);
   const [isVolumeHovered, setIsVolumeHovered] = useState<boolean>(false);
-  const scrubberRef = useRef<HTMLDivElement | null>(null);
+  const [isScrubDragging, setIsScrubDragging] = useState<boolean>(false);
+  const [scrubDragRatio, setScrubDragRatio] = useState<number | null>(null);
 
-  // Active lyric line index
-  const lyrics = currentSong?.lyrics || [];
-  let activeLyricIndex = -1;
-  for (let i = 0; i < lyrics.length; i++) {
-    if (currentTime >= lyrics[i].time) {
-      activeLyricIndex = i;
-    } else {
-      break;
-    }
-  }
+  const scrubberRef = useRef<HTMLDivElement | null>(null);
+  const isScrubDraggingRef = useRef<boolean>(false);
+  isScrubDraggingRef.current = isScrubDragging;
 
   // Keyboard navigation inside Now Playing
   useEffect(() => {
@@ -111,57 +108,64 @@ export const NowPlayingModal: React.FC<Props> = ({
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [isOpen, onClose, onTogglePlay, onNext, onPrev]);
 
+  // Sanitize lyrics array safely
+  const lyrics = useMemo(() => {
+    if (!currentSong || !Array.isArray(currentSong.lyrics)) return [];
+    return currentSong.lyrics.filter((l) => l && typeof l.time === 'number' && typeof l.text === 'string');
+  }, [currentSong]);
+
+  // Active lyric line index
+  const activeLyricIndex = useMemo(() => {
+    let idx = -1;
+    for (let i = 0; i < lyrics.length; i++) {
+      if (currentTime >= lyrics[i].time) {
+        idx = i;
+      } else {
+        break;
+      }
+    }
+    return idx;
+  }, [lyrics, currentTime]);
+
+  // Sanitize queue
+  const safeQueue = useMemo(() => {
+    if (!Array.isArray(queue)) return [];
+    return queue.filter((s): s is Song => Boolean(s && s.id));
+  }, [queue]);
+
   // Find index of current song in queue
   const currentIndex = useMemo(() => {
-    if (!currentSong || queue.length === 0) return 0;
-    const idx = queue.findIndex((s) => s.id === currentSong.id);
+    if (!currentSong || safeQueue.length === 0) return 0;
+    const idx = safeQueue.findIndex((s) => s.id === currentSong.id);
     return idx >= 0 ? idx : 0;
-  }, [currentSong, queue]);
+  }, [currentSong, safeQueue]);
 
   // Compute 3D Cover Flow visible cards (-3 to +3)
   const visibleCards = useMemo(() => {
     if (!currentSong) return [];
-    if (queue.length === 0) return [{ song: currentSong, offset: 0, index: 0 }];
+    if (safeQueue.length === 0) return [{ song: currentSong, offset: 0, index: 0 }];
 
     const items: { song: Song; offset: number; index: number }[] = [];
     const maxOffset = 3;
 
     for (let offset = -maxOffset; offset <= maxOffset; offset++) {
       const idx = currentIndex + offset;
-      if (idx >= 0 && idx < queue.length) {
-        items.push({ song: queue[idx], offset, index: idx });
+      if (idx >= 0 && idx < safeQueue.length && safeQueue[idx]) {
+        items.push({ song: safeQueue[idx], offset, index: idx });
       }
     }
-    return items;
-  }, [queue, currentIndex, currentSong]);
+    return items.length > 0 ? items : [{ song: currentSong, offset: 0, index: 0 }];
+  }, [safeQueue, currentIndex, currentSong]);
 
-  if (!isOpen || !currentSong) return null;
-
-  const formatTime = (secs: number) => {
-    if (!Number.isFinite(secs) || secs < 0) return '0:00';
-    const m = Math.floor(secs / 60);
-    const s = Math.floor(secs % 60);
-    return `${m}:${s < 10 ? '0' : ''}${s}`;
-  };
-
-  const [isScrubDragging, setIsScrubDragging] = useState(false);
-  const [scrubDragRatio, setScrubDragRatio] = useState<number | null>(null);
-  const isScrubDraggingRef = useRef(false);
-  isScrubDraggingRef.current = isScrubDragging;
-
+  // Scrub calculation
   const calculateScrubRatio = useCallback((clientX: number): number => {
     if (!scrubberRef.current) return 0;
     const rect = scrubberRef.current.getBoundingClientRect();
+    if (rect.width <= 0) return 0;
     return Math.max(0, Math.min(1, (clientX - rect.left) / rect.width));
   }, []);
 
-  const handleScrubMouseDown = (e: React.MouseEvent<HTMLDivElement>) => {
-    e.stopPropagation();
-    if (!scrubberRef.current || duration <= 0) return;
-    setIsScrubDragging(true);
-    setScrubDragRatio(calculateScrubRatio(e.clientX));
-  };
-
+  // Scrub dragging mouse listener
   useEffect(() => {
     const handleMouseMove = (e: MouseEvent) => {
       if (!isScrubDraggingRef.current || duration <= 0) return;
@@ -185,22 +189,49 @@ export const NowPlayingModal: React.FC<Props> = ({
     };
   }, [calculateScrubRatio, duration, onSeek]);
 
+  // --- SAFE RETURN: ONLY AFTER ALL HOOKS ARE CALLED ---
+  if (!isOpen || !currentSong) return null;
+
+  const formatTime = (secs: number) => {
+    if (!Number.isFinite(secs) || secs < 0) return '0:00';
+    const m = Math.floor(secs / 60);
+    const s = Math.floor(secs % 60);
+    return `${m}:${s < 10 ? '0' : ''}${s}`;
+  };
+
+  const handleScrubMouseDown = (e: React.MouseEvent<HTMLDivElement>) => {
+    e.stopPropagation();
+    if (!scrubberRef.current || duration <= 0) return;
+    setIsScrubDragging(true);
+    setScrubDragRatio(calculateScrubRatio(e.clientX));
+  };
+
   const activeScrubRatio = scrubDragRatio !== null ? scrubDragRatio : (duration > 0 ? currentTime / duration : 0);
   const progressPercent = Math.max(0, Math.min(100, activeScrubRatio * 100));
+  const songCover = currentSong.coverUrl || DEFAULT_COVER;
 
   return (
     <div className="coverflow-fullscreen-overlay">
       {/* Ambient Atmospheric Backdrop */}
       <div
         className="coverflow-ambient-bg"
-        style={{ backgroundImage: `url(${currentSong.coverUrl})` }}
+        style={{ backgroundImage: `url(${songCover})` }}
       />
       <div className="coverflow-smoke-overlay" />
 
       {/* Top Header Bar */}
       <header className="coverflow-header">
         <div className="coverflow-header-title">
-          <Disc className={isPlaying ? 'spinning-disc-icon' : ''} size={20} style={{ color: 'var(--primary)' }} />
+          <button
+            className="coverflow-back-btn"
+            onClick={onClose}
+            title="Return to Main View (Esc)"
+          >
+            <ChevronLeft size={18} />
+            <span>Back</span>
+          </button>
+          <div className="coverflow-header-divider" />
+          <Disc className={isPlaying ? 'spinning-disc-icon' : ''} size={18} style={{ color: 'var(--primary, #10b981)' }} />
           <span>Now Playing</span>
         </div>
 
@@ -220,7 +251,7 @@ export const NowPlayingModal: React.FC<Props> = ({
             </button>
           </div>
 
-          <button className="coverflow-close-btn" onClick={onClose} title="Close (Esc)">
+          <button className="coverflow-close-btn" onClick={onClose} title="Close Now Playing (Esc)">
             <X size={20} />
           </button>
         </div>
@@ -240,29 +271,34 @@ export const NowPlayingModal: React.FC<Props> = ({
 
           <div className="coverflow-carousel-container">
             {visibleCards.map(({ song, offset, index }) => {
+              if (!song || !song.id) return null;
               const isCenter = offset === 0;
+              const cardCover = song.coverUrl || DEFAULT_COVER;
 
               return (
                 <div
-                  key={`${song.id}_${index}`}
+                  key={`${song.id}_${index}_${offset}`}
                   className={`coverflow-card pos-${offset} ${isCenter ? 'is-center' : ''}`}
                   onClick={() => {
                     if (!isCenter) {
                       onPlaySong(song);
                     }
                   }}
-                  title={isCenter ? 'Now Playing' : `Click to play ${song.title}`}
+                  title={isCenter ? 'Now Playing' : `Click to play ${song.title || 'Track'}`}
                 >
                   <div className="coverflow-card-cover-wrap">
                     <img
-                      src={song.coverUrl}
-                      alt={song.title}
+                      src={cardCover}
+                      alt={song.title || 'Cover'}
                       className="coverflow-card-img"
+                      onError={(e) => {
+                        (e.target as HTMLImageElement).src = DEFAULT_COVER;
+                      }}
                     />
                   </div>
                   <div className="coverflow-card-meta">
-                    <div className="coverflow-card-title">{song.title}</div>
-                    <div className="coverflow-card-artist">{song.artist}</div>
+                    <div className="coverflow-card-title">{song.title || 'Untitled'}</div>
+                    <div className="coverflow-card-artist">{song.artist || 'Unknown Artist'}</div>
                   </div>
                 </div>
               );
@@ -295,7 +331,7 @@ export const NowPlayingModal: React.FC<Props> = ({
               })
             ) : (
               <div className="coverflow-lyrics-empty">
-                <MessageSquareText size={38} style={{ color: 'var(--text-muted)', marginBottom: '14px', opacity: 0.6 }} />
+                <MessageSquareText size={38} style={{ color: 'var(--text-muted, #71717a)', marginBottom: '14px', opacity: 0.6 }} />
                 <h3>No Synced Lyrics Found</h3>
                 <p>Instrumental track or lyrics unavailable</p>
               </div>
@@ -308,14 +344,17 @@ export const NowPlayingModal: React.FC<Props> = ({
       {isQueueOpen && (
         <aside className="coverflow-queue-drawer">
           <div className="coverflow-queue-header">
-            <h3>Up Next ({queue.length})</h3>
+            <h3>Up Next ({safeQueue.length})</h3>
             <button className="coverflow-close-btn" onClick={() => setIsQueueOpen(false)}>
               <X size={18} />
             </button>
           </div>
           <div className="coverflow-queue-list">
-            {queue.map((song, i) => {
+            {safeQueue.map((song, i) => {
+              if (!song || !song.id) return null;
               const isCurrent = song.id === currentSong.id;
+              const itemCover = song.coverUrl || DEFAULT_COVER;
+
               return (
                 <div
                   key={`${song.id}_${i}`}
@@ -323,10 +362,17 @@ export const NowPlayingModal: React.FC<Props> = ({
                   onClick={() => onPlaySong(song)}
                 >
                   <span className="coverflow-queue-idx">{i + 1}</span>
-                  <img src={song.coverUrl} alt={song.title} className="coverflow-queue-thumb" />
+                  <img
+                    src={itemCover}
+                    alt={song.title || 'Track'}
+                    className="coverflow-queue-thumb"
+                    onError={(e) => {
+                      (e.target as HTMLImageElement).src = DEFAULT_COVER;
+                    }}
+                  />
                   <div className="coverflow-queue-meta">
-                    <div className="coverflow-queue-title">{song.title}</div>
-                    <div className="coverflow-queue-artist">{song.artist}</div>
+                    <div className="coverflow-queue-title">{song.title || 'Untitled'}</div>
+                    <div className="coverflow-queue-artist">{song.artist || 'Unknown'}</div>
                   </div>
                   {isCurrent && isPlaying && (
                     <div className="coverflow-soundwave mini">
@@ -340,7 +386,7 @@ export const NowPlayingModal: React.FC<Props> = ({
         </aside>
       )}
 
-      {/* Floating Pill Player Bar (Apple / Metrolist Dynamic Island Style) */}
+      {/* Floating Pill Player Bar */}
       <footer className="coverflow-pill-bar">
         {/* Left: Previous, Play/Pause, Next */}
         <div className="coverflow-pill-left">
@@ -383,10 +429,17 @@ export const NowPlayingModal: React.FC<Props> = ({
 
         {/* Center: Song Capsule with Integrated Scrub Bar */}
         <div className="coverflow-pill-center">
-          <img src={currentSong.coverUrl} alt={currentSong.title} className="coverflow-capsule-thumb" />
+          <img
+            src={songCover}
+            alt={currentSong.title || 'Now Playing'}
+            className="coverflow-capsule-thumb"
+            onError={(e) => {
+              (e.target as HTMLImageElement).src = DEFAULT_COVER;
+            }}
+          />
           <div className="coverflow-capsule-meta">
-            <div className="coverflow-capsule-title">{currentSong.title}</div>
-            <div className="coverflow-capsule-artist">{currentSong.artist}</div>
+            <div className="coverflow-capsule-title">{currentSong.title || 'Untitled'}</div>
+            <div className="coverflow-capsule-artist">{currentSong.artist || 'Unknown'}</div>
           </div>
 
           <div className="coverflow-soundwave">
@@ -400,8 +453,8 @@ export const NowPlayingModal: React.FC<Props> = ({
           >
             <Heart
               size={18}
-              fill={currentSong.isLiked ? 'var(--accent)' : 'none'}
-              color={currentSong.isLiked ? 'var(--accent)' : 'currentColor'}
+              fill={currentSong.isLiked ? 'var(--accent, #10b981)' : 'none'}
+              color={currentSong.isLiked ? 'var(--accent, #10b981)' : 'currentColor'}
             />
           </button>
 

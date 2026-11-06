@@ -55,6 +55,14 @@ async function createWindow() {
     return { action: 'deny' };
   });
 
+  // Enable F12 and Ctrl+Shift+I for developer tools toggle
+  mainWindow.webContents.on('before-input-event', (event, input) => {
+    if (input.key === 'F12' || (input.control && input.shift && input.key.toLowerCase() === 'i')) {
+      mainWindow.webContents.toggleDevTools();
+      event.preventDefault();
+    }
+  });
+
   const isDev = process.argv.includes('--dev') || process.env.NODE_ENV === 'development';
 
   if (isDev) {

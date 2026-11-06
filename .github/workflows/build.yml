@@ -41,3 +41,4 @@ jobs:
         with:
           name: SunoNa-Setup-Windows
           path: dist-electron/*.exe
+

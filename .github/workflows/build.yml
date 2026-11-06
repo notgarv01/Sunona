@@ -39,3 +39,32 @@ jobs:
           name: SunoNa-Setup-Windows
           path: dist-electron/*.exe
 
+  build-mac:
+    runs-on: macos-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Install Dependencies
+        run: npm install
+
+      - name: Build Frontend Assets
+        run: npm run build
+
+      - name: Package Electron Mac (.dmg)
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: npx electron-builder --mac --publish always
+
+      - name: Upload Mac Installer to Artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: SunoNa-Setup-Mac
+          path: dist-electron/*.dmg
+

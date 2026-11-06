@@ -1,0 +1,540 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>SunoNa!! — Modern YouTube Music Desktop Client</title>
+  <meta name="description" content="Download SunoNa for Windows. Modern frameless YouTube Music client with Spotify aesthetics, synced karaoke lyrics, and laptop media keys." />
+  <link rel="icon" type="image/x-icon" href="../public/sunona.ico" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=JetBrains+Mono:wght@500;700&display=swap" rel="stylesheet" />
+  
+  <style>
+    :root {
+      --bg: #07060a;
+      --card-bg: rgba(22, 20, 31, 0.65);
+      --card-border: rgba(255, 255, 255, 0.08);
+      --primary: #a855f7;
+      --primary-hover: #9333ea;
+      --primary-glow: rgba(168, 85, 247, 0.4);
+      --accent: #22c55e;
+      --text-main: #f8fafc;
+      --text-muted: #94a3b8;
+    }
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    body {
+      background-color: var(--bg);
+      color: var(--text-main);
+      font-family: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      overflow-x: hidden;
+      line-height: 1.6;
+      background-image: 
+        radial-gradient(circle at 50% 0%, rgba(168, 85, 247, 0.15) 0%, transparent 60%),
+        radial-gradient(circle at 100% 100%, rgba(59, 130, 246, 0.08) 0%, transparent 50%);
+      background-attachment: fixed;
+    }
+
+    /* Container */
+    .container {
+      max-width: 1140px;
+      margin: 0 auto;
+      padding: 0 24px;
+    }
+
+    /* Navbar */
+    header.navbar {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 24px 0;
+      border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+    }
+
+    .brand {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      text-decoration: none;
+      color: #fff;
+    }
+
+    .brand-logo {
+      width: 40px;
+      height: 40px;
+      border-radius: 12px;
+      background: linear-gradient(135deg, #a855f7, #6366f1);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      box-shadow: 0 4px 16px var(--primary-glow);
+    }
+
+    .brand-title {
+      font-size: 1.3rem;
+      font-weight: 800;
+      letter-spacing: -0.02em;
+    }
+
+    .badge-pill {
+      font-size: 0.7rem;
+      padding: 4px 10px;
+      border-radius: 100px;
+      background: rgba(168, 85, 247, 0.12);
+      border: 1px solid rgba(168, 85, 247, 0.3);
+      color: #d8b4fe;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+    }
+
+    /* Hero Section */
+    .hero {
+      text-align: center;
+      padding: 80px 0 50px;
+    }
+
+    .hero-tag {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      padding: 6px 14px;
+      border-radius: 100px;
+      background: rgba(255, 255, 255, 0.04);
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      font-size: 0.85rem;
+      color: var(--text-muted);
+      margin-bottom: 24px;
+    }
+
+    .hero-tag span.dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background: var(--accent);
+      box-shadow: 0 0 8px var(--accent);
+    }
+
+    h1.hero-headline {
+      font-size: clamp(2.5rem, 6vw, 4.2rem);
+      font-weight: 800;
+      letter-spacing: -0.03em;
+      line-height: 1.1;
+      margin-bottom: 20px;
+      background: linear-gradient(180deg, #ffffff 30%, #94a3b8 100%);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+    }
+
+    h1.hero-headline span.gradient-text {
+      background: linear-gradient(135deg, #c084fc, #a855f7, #60a5fa);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+    }
+
+    p.hero-sub {
+      font-size: 1.15rem;
+      color: var(--text-muted);
+      max-width: 680px;
+      margin: 0 auto 36px;
+      font-weight: 400;
+    }
+
+    /* CTA Section */
+    .cta-container {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 14px;
+      margin-bottom: 60px;
+    }
+
+    .btn-download {
+      display: inline-flex;
+      align-items: center;
+      gap: 12px;
+      background: linear-gradient(135deg, #a855f7, #7c3aed);
+      color: #fff;
+      padding: 16px 36px;
+      border-radius: 14px;
+      font-size: 1.1rem;
+      font-weight: 700;
+      text-decoration: none;
+      box-shadow: 0 8px 30px rgba(168, 85, 247, 0.4), 0 0 0 1px rgba(255, 255, 255, 0.15) inset;
+      transition: all 0.25s ease;
+      cursor: pointer;
+    }
+
+    .btn-download:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 12px 38px rgba(168, 85, 247, 0.55), 0 0 0 1px rgba(255, 255, 255, 0.25) inset;
+      background: linear-gradient(135deg, #b865ff, #8b45ff);
+    }
+
+    .btn-download svg {
+      transition: transform 0.2s ease;
+    }
+
+    .btn-download:hover svg {
+      transform: translateY(2px);
+    }
+
+    .download-meta {
+      font-size: 0.85rem;
+      color: #64748b;
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+
+    .download-meta span.sep {
+      color: rgba(255, 255, 255, 0.15);
+    }
+
+    /* Showcase Mockup Window */
+    .mockup-wrapper {
+      position: relative;
+      margin: 0 auto 100px;
+      max-width: 980px;
+      border-radius: 18px;
+      padding: 8px;
+      background: rgba(255, 255, 255, 0.03);
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      box-shadow: 0 30px 80px rgba(0, 0, 0, 0.8), 0 0 60px rgba(168, 85, 247, 0.15);
+    }
+
+    .mockup-inner {
+      border-radius: 12px;
+      overflow: hidden;
+      background: #09090b;
+      border: 1px solid rgba(255, 255, 255, 0.05);
+    }
+
+    .mockup-titlebar {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      height: 40px;
+      padding: 0 16px;
+      background: #0c0a12;
+      border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+    }
+
+    .mockup-controls {
+      display: flex;
+      gap: 8px;
+    }
+
+    .mockup-dot {
+      width: 11px;
+      height: 11px;
+      border-radius: 50%;
+    }
+    .mockup-dot.red { background: #ef4444; }
+    .mockup-dot.yellow { background: #eab308; }
+    .mockup-dot.green { background: #22c55e; }
+
+    .mockup-img {
+      width: 100%;
+      height: auto;
+      display: block;
+    }
+
+    /* Feature Grid */
+    .features-section {
+      padding: 40px 0 100px;
+    }
+
+    .section-head {
+      text-align: center;
+      margin-bottom: 50px;
+    }
+
+    .section-head h2 {
+      font-size: 2.2rem;
+      font-weight: 800;
+      letter-spacing: -0.02em;
+      margin-bottom: 12px;
+    }
+
+    .section-head p {
+      color: var(--text-muted);
+      font-size: 1.05rem;
+    }
+
+    .grid-3 {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+      gap: 24px;
+    }
+
+    .card {
+      background: var(--card-bg);
+      border: 1px solid var(--card-border);
+      border-radius: 18px;
+      padding: 30px;
+      backdrop-filter: blur(20px);
+      transition: all 0.3s ease;
+    }
+
+    .card:hover {
+      transform: translateY(-4px);
+      border-color: rgba(168, 85, 247, 0.3);
+      box-shadow: 0 16px 36px rgba(0, 0, 0, 0.4), 0 0 20px rgba(168, 85, 247, 0.1);
+    }
+
+    .card-icon {
+      width: 48px;
+      height: 48px;
+      border-radius: 14px;
+      background: rgba(168, 85, 247, 0.1);
+      border: 1px solid rgba(168, 85, 247, 0.2);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: #c084fc;
+      margin-bottom: 20px;
+      font-size: 1.4rem;
+    }
+
+    .card h3 {
+      font-size: 1.25rem;
+      font-weight: 700;
+      margin-bottom: 10px;
+    }
+
+    .card p {
+      font-size: 0.95rem;
+      color: var(--text-muted);
+      line-height: 1.6;
+    }
+
+    /* Steps Section */
+    .steps-section {
+      padding: 60px 0 100px;
+      background: rgba(255, 255, 255, 0.01);
+      border-top: 1px solid rgba(255, 255, 255, 0.05);
+      border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+    }
+
+    .steps-row {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+      gap: 30px;
+      margin-top: 40px;
+    }
+
+    .step-item {
+      text-align: center;
+      padding: 20px;
+    }
+
+    .step-number {
+      width: 44px;
+      height: 44px;
+      border-radius: 50%;
+      background: rgba(168, 85, 247, 0.15);
+      border: 1px solid var(--primary);
+      color: #c084fc;
+      font-weight: 800;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      margin: 0 auto 16px;
+      font-size: 1.1rem;
+    }
+
+    .step-item h4 {
+      font-size: 1.15rem;
+      font-weight: 700;
+      margin-bottom: 8px;
+    }
+
+    .step-item p {
+      font-size: 0.9rem;
+      color: var(--text-muted);
+    }
+
+    /* Footer */
+    footer {
+      padding: 50px 0 40px;
+      text-align: center;
+      color: #64748b;
+      font-size: 0.9rem;
+    }
+
+    footer a {
+      color: #a855f7;
+      text-decoration: none;
+    }
+  </style>
+</head>
+<body>
+
+  <!-- Navbar -->
+  <header class="navbar container">
+    <a href="#" class="brand">
+      <div class="brand-logo">
+        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#ffffff" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+          <circle cx="12" cy="12" r="10"></circle>
+          <circle cx="12" cy="12" r="3"></circle>
+        </svg>
+      </div>
+      <span class="brand-title">SunoNa!!</span>
+      <span class="badge-pill">Desktop Hi-Fi</span>
+    </a>
+
+    <div>
+      <a href="https://github.com/notgarv01/Sunona/releases/latest" class="badge-pill" style="text-decoration:none;">v1.0.0 Stable</a>
+    </div>
+  </header>
+
+  <!-- Hero -->
+  <section class="hero container">
+    <div class="hero-tag">
+      <span class="dot"></span>
+      <span>1-Click Windows Desktop Music App</span>
+    </div>
+
+    <h1 class="hero-headline">
+      Music That Gets You.<br />
+      <span class="gradient-text">Zero Ads. Spotify Aesthetics.</span>
+    </h1>
+
+    <p class="hero-sub">
+      Stream YouTube Music in a sleek frameless desktop window. Synchronized karaoke lyrics, curated Indian charts, auto-recommendations, and laptop keyboard media controls.
+    </p>
+
+    <!-- Download Button Container -->
+    <div class="cta-container">
+      <a 
+        href="https://github.com/notgarv01/Sunona/releases/latest/download/SunoNa-Setup-1.0.0.exe" 
+        class="btn-download"
+        id="downloadBtn"
+      >
+        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+          <polyline points="7 10 12 15 17 10"></polyline>
+          <line x1="12" y1="15" x2="12" y2="3"></line>
+        </svg>
+        <span>Download for Windows (.exe)</span>
+      </a>
+
+      <div class="download-meta">
+        <span>Windows 10 / 11 (64-bit)</span>
+        <span class="sep">•</span>
+        <span>Single-Click Setup</span>
+        <span class="sep">•</span>
+        <span>Version 1.0.0</span>
+      </div>
+    </div>
+
+    <!-- Mockup Preview -->
+    <div class="mockup-wrapper">
+      <div class="mockup-inner">
+        <div class="mockup-titlebar">
+          <div class="mockup-controls">
+            <span class="mockup-dot red"></span>
+            <span class="mockup-dot yellow"></span>
+            <span class="mockup-dot green"></span>
+          </div>
+          <div style="font-size:0.75rem; color:#64748b; font-family:'JetBrains Mono', monospace;">SunoNa — Desktop Hi-Fi Frameless</div>
+          <div style="width:40px;"></div>
+        </div>
+        <img src="../frontpage1.jpeg" alt="SunoNa Desktop App Preview" class="mockup-img" />
+      </div>
+    </div>
+  </section>
+
+  <!-- Features Grid -->
+  <section class="features-section container">
+    <div class="section-head">
+      <h2>Engineered for Music Lovers</h2>
+      <p>Everything you love about Spotify combined with the infinite library of YouTube Music.</p>
+    </div>
+
+    <div class="grid-3">
+      <div class="card">
+        <div class="card-icon">🪟</div>
+        <h3>Spotify Frameless Window</h3>
+        <p>No ugly browser bars or window headers. Pure borderless Spotify dark aesthetic with integrated draggable window caption controls.</p>
+      </div>
+
+      <div class="card">
+        <div class="card-icon">⌨️</div>
+        <h3>Hardware Media Keys</h3>
+        <p>Control playback with laptop keyboard buttons (Play/Pause, Next Track, Previous Track) even while gaming or working in other apps.</p>
+      </div>
+
+      <div class="card">
+        <div class="card-icon">🎤</div>
+        <h3>Live Synced Karaoke Lyrics</h3>
+        <p>Real-time synchronized lyrics powered by a 5-stage automated fallback engine (LRCLIB, Genius, lyrics.ovh) that scrolls word-by-word.</p>
+      </div>
+
+      <div class="card">
+        <div class="card-icon">🇮🇳</div>
+        <h3>Curated Indian Charts</h3>
+        <p>Instant access to Bollywood Hot 50, Late Night Lofi, Punjabi Pop, Desi Hip-Hop, Acoustic Hits, and Mood Soundscapes.</p>
+      </div>
+
+      <div class="card">
+        <div class="card-icon">✨</div>
+        <h3>Personalized AI Daily Mixes</h3>
+        <p>4 dynamic Daily Mixes tailored to your taste profile, plus automatic YouTube Radio continuation so the music never stops.</p>
+      </div>
+
+      <div class="card">
+        <div class="card-icon">🌙</div>
+        <h3>Sleep Timer & Ambient Glow</h3>
+        <p>Set a sleep timer that smoothly fades out audio volume over time, with calming rain and coffee-shop soundscapes.</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- 3 Steps -->
+  <section class="steps-section">
+    <div class="container">
+      <div class="section-head">
+        <h2>Install in 5 Seconds</h2>
+        <p>No Node.js, no terminal, no complicated setup. Just double-click.</p>
+      </div>
+
+      <div class="steps-row">
+        <div class="step-item">
+          <div class="step-number">1</div>
+          <h4>Download</h4>
+          <p>Click the download button above to get the official <code>SunoNa-Setup-1.0.0.exe</code> installer.</p>
+        </div>
+
+        <div class="step-item">
+          <div class="step-number">2</div>
+          <h4>Install in 1-Click</h4>
+          <p>Double-click the downloaded setup. It creates a desktop shortcut and launches automatically.</p>
+        </div>
+
+        <div class="step-item">
+          <div class="step-number">3</div>
+          <h4>Enjoy Music</h4>
+          <p>Search any song, like your favorites, and enjoy continuous background music!</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Footer -->
+  <footer>
+    <div class="container">
+      <p>SunoNa!! Desktop Client • Crafted with ❤️ by <a href="https://github.com/notgarv01">Garv</a></p>
+      <p style="margin-top:6px; font-size:0.8rem;">Powered by YouTube Music & Electron • 100% Free & Open Source</p>
+    </div>
+  </footer>
+
+</body>
+</html>

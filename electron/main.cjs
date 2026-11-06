@@ -76,8 +76,28 @@ async function createWindow() {
     mainWindow.show();
   });
 
-  // Handle external link clicks
+  // Handle external link clicks and allow Google Auth popup
   mainWindow.webContents.setWindowOpenHandler(({ url }) => {
+    // Allow Google Account & Firebase Auth popup window
+    if (
+      url.includes('firebaseapp.com') ||
+      url.includes('accounts.google.com') ||
+      url.includes('google.com/o/oauth2')
+    ) {
+      return {
+        action: 'allow',
+        overrideBrowserWindowOptions: {
+          width: 500,
+          height: 640,
+          autoHideMenuBar: true,
+          webPreferences: {
+            nodeIntegration: false,
+            contextIsolation: true,
+          },
+        },
+      };
+    }
+
     const { shell } = require('electron');
     shell.openExternal(url);
     return { action: 'deny' };

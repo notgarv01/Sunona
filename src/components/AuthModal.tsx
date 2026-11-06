@@ -290,3 +290,4 @@ export const AuthModal: React.FC<Props> = ({ isOpen, onClose, onSuccess }) => {
     </div>
   );
 };
+

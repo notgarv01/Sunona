@@ -1,6 +1,34 @@
 const { app, BrowserWindow, globalShortcut, ipcMain, Menu } = require('electron');
 const path = require('path');
+const { autoUpdater } = require('electron-updater');
 const { startServer } = require('./server.cjs');
+
+// Auto-updater configuration: silent background download & install on exit
+autoUpdater.autoDownload = true;
+autoUpdater.autoInstallOnAppQuit = true;
+
+autoUpdater.on('checking-for-update', () => {
+  console.log('[AutoUpdater] Checking GitHub for updates...');
+});
+
+autoUpdater.on('update-available', (info) => {
+  console.log('[AutoUpdater] Update available:', info.version);
+});
+
+autoUpdater.on('update-not-available', () => {
+  console.log('[AutoUpdater] App is up to date.');
+});
+
+autoUpdater.on('error', (err) => {
+  console.warn('[AutoUpdater] Warning:', err ? err.message : 'Unknown error');
+});
+
+autoUpdater.on('update-downloaded', (info) => {
+  console.log('[AutoUpdater] Update downloaded:', info.version);
+  if (mainWindow && !mainWindow.isDestroyed()) {
+    mainWindow.webContents.send('update-ready', info.version);
+  }
+});
 
 // Prevent multiple instances of SunoNa running simultaneously
 const gotTheLock = app.requestSingleInstanceLock();
@@ -104,6 +132,15 @@ async function createWindow() {
     console.warn('Could not register media shortcuts:', err.message);
   }
 
+  // Check for auto-updates from GitHub in production mode
+  if (!isDev) {
+    setTimeout(() => {
+      autoUpdater.checkForUpdatesAndNotify().catch((err) => {
+        console.warn('[AutoUpdater] Initial check error:', err ? err.message : err);
+      });
+    }, 4000); // 4-second delay after startup for instant smooth boot
+  }
+
   mainWindow.on('closed', () => {
     mainWindow = null;
   });
@@ -126,6 +163,10 @@ ipcMain.on('window-maximize', () => {
 
 ipcMain.on('window-close', () => {
   if (mainWindow && !mainWindow.isDestroyed()) mainWindow.close();
+});
+
+ipcMain.on('restart-and-install', () => {
+  autoUpdater.quitAndInstall();
 });
 
 // Second instance triggered: focus the main window

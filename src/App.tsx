@@ -708,8 +708,9 @@ export const App: React.FC = () => {
     if (!electronAPI) return;
     document.body.classList.add('is-electron');
 
+    let unsubMedia: (() => void) | undefined;
     if (electronAPI.onMediaKey) {
-      const unsub = electronAPI.onMediaKey((key: string) => {
+      unsubMedia = electronAPI.onMediaKey((key: string) => {
         if (key === 'play-pause') {
           handleTogglePlay();
         } else if (key === 'next') {
@@ -718,9 +719,20 @@ export const App: React.FC = () => {
           handlePrev();
         }
       });
-      return unsub;
     }
-  }, [handleTogglePlay, handleNext, handlePrev]);
+
+    let unsubUpdate: (() => void) | undefined;
+    if (electronAPI.onUpdateReady) {
+      unsubUpdate = electronAPI.onUpdateReady((version: string) => {
+        showToast(`SunoNa v${version} downloaded! Will apply automatically.`);
+      });
+    }
+
+    return () => {
+      unsubMedia?.();
+      unsubUpdate?.();
+    };
+  }, [handleTogglePlay, handleNext, handlePrev, showToast]);
 
   // Seek audio
   const handleSeek = (seconds: number) => {

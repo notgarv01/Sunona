@@ -11,5 +11,11 @@ contextBridge.exposeInMainWorld('electronAPI', {
     ipcRenderer.on('media-key', handler);
     return () => ipcRenderer.removeListener('media-key', handler);
   },
+  onUpdateReady: (callback) => {
+    const handler = (_event, version) => callback(version);
+    ipcRenderer.on('update-ready', handler);
+    return () => ipcRenderer.removeListener('update-ready', handler);
+  },
+  restartAndInstall: () => ipcRenderer.send('restart-and-install'),
 });
 

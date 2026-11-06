@@ -334,7 +334,7 @@ export const INITIAL_ALBUMS: Album[] = [
         color: '#06b6d4',
         views: '160M views',
         likes: '2.8M',
-        isLiked: true,
+        isLiked: false,
         lyrics: [],
       },
       {
@@ -402,7 +402,7 @@ export const INITIAL_ALBUMS: Album[] = [
         color: '#f59e0b',
         views: '290M views',
         likes: '3.1M',
-        isLiked: true,
+        isLiked: false,
         lyrics: [],
       },
       {

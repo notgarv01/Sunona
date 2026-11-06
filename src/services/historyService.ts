@@ -18,7 +18,6 @@ export interface TasteProfile {
   topArtists: { artist: string; count: number }[];
 }
 
-const STORAGE_KEY = 'metrolist_history_v2';
 
 /**
  * Intelligent Genre / Song Type Classifier
@@ -87,30 +86,57 @@ export function detectGenreType(title: string, artist: string): string {
 
 class HistoryService {
   private history: Record<string, HistoryItem> = {};
+  private currentUserId: string = 'guest';
 
   constructor() {
+    try {
+      // Purge old global mock/test keys
+      if (typeof window !== 'undefined' && window.localStorage) {
+        window.localStorage.removeItem('metrolist_history_v1');
+        window.localStorage.removeItem('metrolist_history_v2');
+      }
+    } catch {}
     this.load();
+  }
+
+  private getStorageKey(): string {
+    return `sunona_history_${this.currentUserId}`;
+  }
+
+  public setUser(userId: string | null) {
+    this.currentUserId = userId?.trim() || 'guest';
+    this.load();
+  }
+
+  public clear() {
+    this.history = {};
+    try {
+      if (typeof window !== 'undefined' && window.localStorage) {
+        window.localStorage.removeItem(this.getStorageKey());
+      }
+    } catch {}
   }
 
   private load() {
     try {
-      // Purge legacy v1 test records (which held mock Imagine Dragons/Believer plays)
       if (typeof window !== 'undefined' && window.localStorage) {
-        window.localStorage.removeItem('metrolist_history_v1');
-      }
-      const data = localStorage.getItem(STORAGE_KEY);
-      if (data) {
-        this.history = JSON.parse(data);
+        const raw = window.localStorage.getItem(this.getStorageKey());
+        if (raw) {
+          this.history = JSON.parse(raw);
+          return;
+        }
       }
     } catch (e) {
       console.warn('Failed to load history from localStorage', e);
-      this.history = {};
     }
+    this.history = {};
   }
 
   private save() {
     try {
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(this.history));
+      if (typeof window !== 'undefined' && window.localStorage) {
+        window.localStorage.setItem(this.getStorageKey(), JSON.stringify(this.history));
+      }
     } catch (e) {
       console.warn('Failed to save history to localStorage', e);
     }
@@ -167,10 +193,10 @@ class HistoryService {
     const items = Object.values(this.history);
     const totalPlays = items.reduce((sum, it) => sum + it.playCount, 0);
 
-    if (items.length === 0) {
+    if (items.length === 0 || totalPlays === 0) {
       return {
-        primaryGenre: 'Bollywood & Hindi Romantic',
-        favoriteArtist: 'Pritam',
+        primaryGenre: '',
+        favoriteArtist: '',
         favoriteArtistPlays: 0,
         mostPlayedSong: null,
         totalPlays: 0,

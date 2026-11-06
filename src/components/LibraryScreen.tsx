@@ -132,7 +132,7 @@ export const LibraryScreen: React.FC<Props> = ({
             </div>
           </div>
           <span style={{ fontFamily: 'var(--font-mono)', fontSize: '0.7rem', color: 'var(--text-muted)', background: 'rgba(255, 255, 255, 0.05)', padding: '2px 8px', borderRadius: '4px' }}>
-            48.2 MB
+            {songs.filter((s) => s.isCached).length > 0 ? `${(songs.filter((s) => s.isCached).length * 4.8).toFixed(1)} MB` : '0.0 MB'}
           </span>
         </div>
       )}

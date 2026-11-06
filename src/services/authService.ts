@@ -41,9 +41,9 @@ class AuthService {
               photoURL: fbUser.photoURL || `https://api.dicebear.com/7.x/identicon/svg?seed=${fbUser.uid}`,
             };
             this.setUser(profile);
-          } else if (this.currentUser && !this.currentUser.isAnonymous) {
-            this.setUser(null);
           }
+          // Note: If fbUser is null, do NOT wipe custom Gmail session. 
+          // Session is only wiped when user explicitly clicks "Sign Out".
         });
       } catch (err) {
         console.warn('[AuthService] Firebase listener warning:', err);

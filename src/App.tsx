@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import type { Song, ThemePreset, LyricLine, DailyDiscoverItem, Playlist } from './types';
-import { INITIAL_SONGS, INITIAL_ALBUMS, THEME_PRESETS, INITIAL_DAILY_DISCOVER, MOODS } from './data/musicData';
+import { INITIAL_SONGS, INITIAL_ALBUMS, THEME_PRESETS, MOODS } from './data/musicData';
 import { audioEngine } from './services/audioEngine';
 import { historyService, type TasteProfile } from './services/historyService';
 import { playlistService } from './services/playlistService';
@@ -159,16 +159,7 @@ export const App: React.FC = () => {
   }, []);
 
   // Metrolist Discovery & Suggestion Engine States
-  const [dailyDiscover, setDailyDiscover] = useState<DailyDiscoverItem[]>(() => {
-    try {
-      const cached = localStorage.getItem('metrolist_daily_discover_cache_v2');
-      if (cached) {
-        const parsed = JSON.parse(cached);
-        if (Array.isArray(parsed) && parsed.length > 0) return parsed;
-      }
-    } catch {}
-    return INITIAL_DAILY_DISCOVER;
-  });
+  const [dailyDiscover, setDailyDiscover] = useState<DailyDiscoverItem[]>([]);
   const [listenAgain, setListenAgain] = useState<Song[]>([]);
   const [similarShelf, setSimilarShelf] = useState<{ title: string; songs: Song[] } | null>(null);
   const [mostPlayed, setMostPlayed] = useState<{ song: Song; playCount: number; genreType: string }[]>([]);
@@ -187,26 +178,49 @@ export const App: React.FC = () => {
     return authService.subscribe(async (user) => {
       setCurrentUser(user);
       if (user) {
+        historyService.setUser(user.uid);
+        const tp = historyService.getTasteProfile();
+        setTasteProfile(tp.totalPlays > 0 ? tp : undefined);
+        setMostPlayed(historyService.getMostPlayed(8));
+        setListenAgain(historyService.getListenAgain(10));
+
+        // Load Daily Discover only if user has listening seeds
+        const userSeeds = historyService.getDiscoverySeeds();
+        if (userSeeds.length > 0) {
+          fetch(`/api/daily-discover?seeds=${userSeeds.join(',')}`)
+            .then((res) => res.json())
+            .then((data) => {
+              if (data.discover && data.discover.length > 0) setDailyDiscover(data.discover);
+            })
+            .catch(() => {});
+        } else {
+          setDailyDiscover([]);
+        }
+
         // Pull cloud data for this Gmail ID
         const remote = await cloudSyncService.pullFromCloud(user);
         if (remote) {
-          if (Array.isArray(remote.likedSongs) && remote.likedSongs.length > 0) {
-            setLikedSongs((prev) => {
-              const map = new Map<string, Song>();
-              prev.forEach((s) => map.set(s.id, s));
-              remote.likedSongs.forEach((s) => map.set(s.id, { ...s, isLiked: true }));
-              const merged = Array.from(map.values());
-              try {
-                localStorage.setItem('sunona_liked_songs_v2', JSON.stringify(merged));
-              } catch {}
-              return merged;
-            });
+          if (Array.isArray(remote.likedSongs)) {
+            const mappedLiked = remote.likedSongs.map((s) => ({ ...s, isLiked: true }));
+            setLikedSongs(mappedLiked);
+            try {
+              localStorage.setItem('sunona_liked_songs_v2', JSON.stringify(mappedLiked));
+            } catch {}
           }
-          if (Array.isArray(remote.playlists) && remote.playlists.length > 0) {
+          if (Array.isArray(remote.playlists)) {
             playlistService.setPlaylists(remote.playlists);
             setPlaylists(remote.playlists);
           }
           showToast(`Library synced with ${user.email || user.displayName}`);
+        } else {
+          // Fresh account without prior cloud records: clean 0 slate
+          setLikedSongs([]);
+          playlistService.setPlaylists([]);
+          setPlaylists([]);
+          try {
+            localStorage.removeItem('sunona_liked_songs_v2');
+            localStorage.removeItem('sunona_user_playlists_v2');
+          } catch {}
         }
       }
     });
@@ -277,50 +291,55 @@ export const App: React.FC = () => {
     const initialMp = historyService.getMostPlayed();
     const initialTp = historyService.getTasteProfile();
     setMostPlayed(initialMp);
-    setTasteProfile(initialTp);
-
-    // Initial Favorite Artist / Genre Shelf
-    const favArtist = initialTp.favoriteArtist || 'Pritam';
-    fetch(`/api/search?q=${encodeURIComponent(favArtist + ' hits')}`)
-      .then((res) => res.json())
-      .then((data) => {
-        if (data.results && data.results.length > 0) {
-          setFavoriteArtistShelf({
-            title: `Because You Love ${favArtist}`,
-            subtitle: `Curated for your ${initialTp.primaryGenre} listening habit`,
-            songs: data.results,
-          });
-        }
-      })
-      .catch(() => {});
+    if (initialTp.totalPlays > 0) {
+      setTasteProfile(initialTp);
+      if (initialTp.favoriteArtist) {
+        fetch(`/api/search?q=${encodeURIComponent(initialTp.favoriteArtist + ' hits')}`)
+          .then((res) => res.json())
+          .then((data) => {
+            if (data.results && data.results.length > 0) {
+              setFavoriteArtistShelf({
+                title: `Because You Love ${initialTp.favoriteArtist}`,
+                subtitle: `Curated for your ${initialTp.primaryGenre} listening habit`,
+                songs: data.results,
+              });
+            }
+          })
+          .catch(() => {});
+      }
+    } else {
+      setTasteProfile(undefined);
+      setFavoriteArtistShelf(null);
+    }
 
     // 3. Daily Discover Recommendations (HomeViewModel.getDailyDiscover)
     const seedIds = historyService.getDiscoverySeeds();
-    const seedsQuery = seedIds.length > 0 ? `?seeds=${seedIds.join(',')}` : '';
-    fetch(`/api/daily-discover${seedsQuery}`)
-      .then((res) => res.json())
-      .then((data) => {
-        if (data.discover && data.discover.length > 0) {
-          setDailyDiscover(data.discover);
-          try {
-            localStorage.setItem('metrolist_daily_discover_cache_v2', JSON.stringify(data.discover));
-          } catch {}
-        }
-      })
-      .catch(() => {});
+    if (seedIds.length > 0) {
+      fetch(`/api/daily-discover?seeds=${seedIds.join(',')}`)
+        .then((res) => res.json())
+        .then((data) => {
+          if (data.discover && data.discover.length > 0) {
+            setDailyDiscover(data.discover);
+          }
+        })
+        .catch(() => {});
+    } else {
+      setDailyDiscover([]);
+    }
 
     // 4. Initial Similar Recommendations Shelf
-    const simQuery = topSeed
-      ? `?id=${topSeed.id}&title=${encodeURIComponent(topSeed.title)}`
-      : '?id=kPtn26x8TZM&title=Dooriyan';
-    fetch(`/api/similar${simQuery}`)
-      .then((res) => res.json())
-      .then((data) => {
-        if (data.results && data.results.length > 0) {
-          setSimilarShelf({ title: data.title, songs: data.results });
-        }
-      })
-      .catch(() => {});
+    if (topSeed) {
+      fetch(`/api/similar?id=${topSeed.id}&title=${encodeURIComponent(topSeed.title)}`)
+        .then((res) => res.json())
+        .then((data) => {
+          if (data.results && data.results.length > 0) {
+            setSimilarShelf({ title: data.title, songs: data.results });
+          }
+        })
+        .catch(() => {});
+    } else {
+      setSimilarShelf(null);
+    }
   }, []);
 
   // Mood filter handler to dynamically fetch matching songs
@@ -554,10 +573,10 @@ export const App: React.FC = () => {
     const updatedMp = historyService.getMostPlayed();
     const updatedTp = historyService.getTasteProfile();
     setMostPlayed(updatedMp);
-    setTasteProfile(updatedTp);
+    setTasteProfile(updatedTp.totalPlays > 0 ? updatedTp : undefined);
 
-    // Refresh recommendations for favorite artist if changed or active
-    if (updatedTp.favoriteArtist) {
+    // Refresh recommendations for favorite artist if user has plays
+    if (updatedTp.totalPlays > 0 && updatedTp.favoriteArtist) {
       fetch(`/api/search?q=${encodeURIComponent(updatedTp.favoriteArtist + ' top songs')}`)
         .then((res) => res.json())
         .then((data) => {
@@ -1358,7 +1377,26 @@ export const App: React.FC = () => {
           onSignOut={() => {
             authService.signOut();
             setCurrentUser(null);
-            showToast('Signed out from Google Account.');
+            historyService.setUser('guest');
+            historyService.clear();
+            setLikedSongs([]);
+            playlistService.setPlaylists([]);
+            setPlaylists([]);
+            setTasteProfile(undefined);
+            setMostPlayed([]);
+            setListenAgain([]);
+            setFavoriteArtistShelf(null);
+            setDailyDiscover([]);
+            setSimilarShelf(null);
+            try {
+              localStorage.removeItem('sunona_liked_songs_v2');
+              localStorage.removeItem('sunona_user_playlists_v2');
+              localStorage.removeItem('metrolist_daily_discover_cache_v2');
+              localStorage.removeItem('metrolist_history_v2');
+              localStorage.removeItem('metrolist_history_v1');
+              localStorage.removeItem('metrolist_search_history_v1');
+            } catch {}
+            showToast('Signed out successfully.');
           }}
           onManualSync={handleManualCloudSync}
         />

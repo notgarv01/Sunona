@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { Mic2, X, Languages, RotateCcw, ExternalLink, Loader2 } from 'lucide-react';
+import { Mic2, X, Languages, RotateCcw, ExternalLink, Loader2, MicOff } from 'lucide-react';
 import type { Song, LyricLine } from '../types';
 
 interface Props {
@@ -133,11 +133,11 @@ export const LyricsDrawer: React.FC<Props> = ({
         ) : (
           <div className="lyrics-not-found-card">
             <div className="not-found-icon-wrap">
-              <span className="skull-emoji">💀</span>
+              <MicOff size={26} style={{ color: 'var(--text-secondary)' }} />
             </div>
 
             <h3 className="not-found-title">
-              Lyrics nahi mile
+              Lyrics available nahi hain
             </h3>
 
             {currentSong?.geniusUrl && (

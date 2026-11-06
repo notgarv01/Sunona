@@ -64,6 +64,10 @@ class AudioEngine {
     }
   }
 
+  public getCurrentSong(): Song | null {
+    return this.currentSong;
+  }
+
   public togglePlay(): boolean {
     if (this.audio.paused) {
       this.audio.play().catch(() => {});

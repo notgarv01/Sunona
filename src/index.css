@@ -531,10 +531,15 @@ body.is-electron .app-header {
 }
 
 .icon-btn.active {
-  background: var(--primary);
-  color: #fff;
-  border-color: var(--primary);
-  box-shadow: 0 0 15px var(--primary-glow);
+  background: rgba(56, 189, 248, 0.2);
+  color: #38bdf8;
+  border-color: rgba(56, 189, 248, 0.5);
+  box-shadow: 0 0 16px rgba(56, 189, 248, 0.35);
+}
+
+.icon-btn.active svg {
+  color: #38bdf8;
+  stroke: #38bdf8;
 }
 
 .btn-badge {
@@ -1637,16 +1642,16 @@ body.is-electron .app-header {
 }
 
 .not-found-icon-wrap {
-  width: 60px;
-  height: 60px;
+  width: 56px;
+  height: 56px;
   border-radius: 50%;
-  background: rgba(255, 36, 66, 0.12);
-  border: 1px solid rgba(255, 36, 66, 0.35);
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.12);
   display: flex;
   align-items: center;
   justify-content: center;
   margin-bottom: 16px;
-  box-shadow: 0 0 25px rgba(255, 36, 66, 0.25);
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.4);
 }
 
 .skull-emoji {
@@ -1959,7 +1964,7 @@ body.is-electron .app-header {
   backdrop-filter: blur(32px);
   border-top: 1px solid var(--border-glass);
   display: grid;
-  grid-template-columns: 280px 1fr 340px;
+  grid-template-columns: 280px 1fr auto;
   align-items: center;
   padding: 0 24px;
   position: relative;
@@ -2168,7 +2173,19 @@ body.is-electron .app-header {
   display: flex;
   align-items: center;
   justify-content: flex-end;
-  gap: 16px;
+  gap: 12px;
+}
+
+.player-tools-right .icon-btn {
+  width: 36px;
+  height: 36px;
+  min-width: 36px;
+  min-height: 36px;
+  max-width: 36px;
+  max-height: 36px;
+  border-radius: 50%;
+  flex-shrink: 0;
+  padding: 0;
 }
 
 .visualizer-canvas-box {

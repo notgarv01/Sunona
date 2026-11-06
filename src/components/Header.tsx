@@ -47,7 +47,7 @@ export const Header: React.FC<Props> = ({
   onOpenUpdates,
   isUpdateReady,
   isUpdateDownloading,
-  version = '1.0.8',
+  version = '1.0.9',
   onAddToPlaylist,
   currentSong,
   isPlaying,

@@ -51,19 +51,42 @@ function parseLrcLyrics(lrcText: string): LyricLine[] {
   return result;
 }
 
+interface StoredPlaybackSession {
+  song: Song;
+  currentTime: number;
+  duration: number;
+  queue?: Song[];
+}
+
+const getStoredPlaybackSession = (): StoredPlaybackSession | null => {
+  try {
+    const raw = localStorage.getItem('sunona_last_playback_session');
+    if (!raw) return null;
+    const parsed = JSON.parse(raw);
+    if (parsed && parsed.song && parsed.song.id) {
+      return parsed;
+    }
+  } catch (err) {
+    console.warn('Failed to parse last playback session:', err);
+  }
+  return null;
+};
+
 export const App: React.FC = () => {
+  const initialSession = useRef<StoredPlaybackSession | null>(getStoredPlaybackSession()).current;
+
   const [songs, setSongs] = useState<Song[]>(INITIAL_SONGS);
-  const [currentSong, setCurrentSong] = useState<Song | null>(null);
-  const [queue, setQueue] = useState<Song[]>(INITIAL_SONGS);
-  const queueRef = useRef<Song[]>(INITIAL_SONGS);
+  const [currentSong, setCurrentSong] = useState<Song | null>(() => (initialSession ? initialSession.song : null));
+  const [queue, setQueue] = useState<Song[]>(() => ((initialSession?.queue && initialSession.queue.length > 0) ? initialSession.queue : INITIAL_SONGS));
+  const queueRef = useRef<Song[]>((initialSession?.queue && initialSession.queue.length > 0) ? initialSession.queue : INITIAL_SONGS);
   const playbackContextRef = useRef<'radio' | 'playlist'>('radio');
 
   useEffect(() => {
     queueRef.current = queue;
   }, [queue]);
   const [isPlaying, setIsPlaying] = useState<boolean>(false);
-  const [currentTime, setCurrentTime] = useState<number>(0);
-  const [duration, setDuration] = useState<number>(0);
+  const [currentTime, setCurrentTime] = useState<number>(() => (initialSession ? initialSession.currentTime : 0));
+  const [duration, setDuration] = useState<number>(() => (initialSession ? (initialSession.duration || initialSession.song.duration || 0) : 0));
   const [volume, setVolume] = useState<number>(0.85);
   const [isMuted, setIsMuted] = useState<boolean>(false);
   const [isShuffle, setIsShuffle] = useState<boolean>(false);
@@ -114,7 +137,7 @@ export const App: React.FC = () => {
   const [isUpdateModalOpen, setIsUpdateModalOpen] = useState<boolean>(false);
   const [updateState, setUpdateState] = useState<UpdateState>({
     status: 'idle',
-    currentVersion: '1.0.8',
+    currentVersion: '1.0.9',
   });
 
   const showToast = useCallback((msg: string) => {
@@ -553,17 +576,23 @@ export const App: React.FC = () => {
   }, []);
 
   // Play a specific song with auto lyrics resolution, history logging & live automix radio suggestions
-  const playSong = useCallback((song: Song, customQueue?: Song[], contextMode?: 'playlist' | 'radio') => {
+  const playSong = useCallback((song: Song, customQueue?: Song[], contextMode?: 'playlist' | 'radio', seekTime?: number) => {
     const isLiked = likedSongs.some((ls) => ls.id === song.id) || !!song.isLiked;
     const enrichedSong: Song = { ...song, isLiked };
     setCurrentSong(enrichedSong);
     audioEngine.playSong(enrichedSong);
     setIsPlaying(true);
-    setCurrentTime(0);
+    const startOffset = (seekTime !== undefined && seekTime > 0) ? seekTime : 0;
+    setCurrentTime(startOffset);
+    if (startOffset > 0) {
+      setTimeout(() => {
+        audioEngine.seek(startOffset);
+      }, 150);
+    }
     setDuration(song.duration);
 
     // Broadcast play event to Listen Together room
-    listenTogetherService.broadcastHostPlay(song, 0);
+    listenTogetherService.broadcastHostPlay(song, startOffset);
 
     // Determine playback mode
     if (contextMode) {
@@ -788,6 +817,11 @@ export const App: React.FC = () => {
       playSong(songs[0]);
       return;
     }
+    if (currentSong && !audioEngine.getCurrentSong()) {
+      // First play after restoring session from localStorage: start audio and resume at saved timestamp
+      playSong(currentSong, undefined, undefined, currentTime);
+      return;
+    }
     const playing = audioEngine.togglePlay();
     setIsPlaying(playing);
     if (playing) {
@@ -796,6 +830,29 @@ export const App: React.FC = () => {
       listenTogetherService.broadcastHostPause();
     }
   }, [currentSong, songs, playSong, currentTime]);
+
+  // Persist current playback session so returning users resume where they left off
+  const lastSavedTimeRef = useRef<number>(0);
+  useEffect(() => {
+    if (!currentSong) return;
+    const now = Date.now();
+    if (now - lastSavedTimeRef.current > 1500 || !isPlaying) {
+      lastSavedTimeRef.current = now;
+      try {
+        localStorage.setItem(
+          'sunona_last_playback_session',
+          JSON.stringify({
+            song: currentSong,
+            currentTime: Math.floor(currentTime),
+            duration: duration || currentSong.duration,
+            queue: queueRef.current,
+          })
+        );
+      } catch (e) {
+        // storage quota fallback
+      }
+    }
+  }, [currentSong, currentTime, duration, isPlaying]);
 
   // Electron Native Integration: Keyboard Media Keys & Native Frame Support
   useEffect(() => {

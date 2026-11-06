@@ -202,7 +202,7 @@ export const SettingsModal: React.FC<Props> = ({ isOpen, onClose, onOpenIntro })
                 <Smile size={16} style={{ color: '#38bdf8' }} />
                 <div>
                   <div style={{ fontSize: '0.86rem', fontWeight: 700, color: '#fff' }}>
-                    Garv's Intro Screen ("Sunte Hai!!")
+                    Garv's Intro Screen ("SunoNa!!")
                   </div>
                   <div style={{ fontSize: '0.74rem', color: 'var(--text-secondary)' }}>
                     Revisit funny confessions, rules & personality notes

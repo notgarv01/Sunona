@@ -222,6 +222,9 @@ export const AlbumScreen: React.FC<Props> = ({
                     src={song.coverUrl || album.coverUrl}
                     alt={song.title}
                     className="song-row-thumb"
+                    onError={(e) => {
+                      (e.target as HTMLImageElement).src = album.coverUrl || 'https://images.unsplash.com/photo-1511671782779-c97d3d27a1d4?w=300&auto=format&fit=crop&q=80';
+                    }}
                   />
 
                   <div className="song-row-main">

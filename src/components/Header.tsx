@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect, useCallback } from 'react';
-import { Search, Play, Keyboard, PictureInPicture, X, Loader2, Disc, ListPlus, Clock, TrendingUp, Download } from 'lucide-react';
+import { Search, Play, Keyboard, X, Loader2, Disc, ListPlus, Clock, TrendingUp, Download, RefreshCw } from 'lucide-react';
 import type { Song } from '../types';
 import type { UserProfile } from '../services/authService';
 
@@ -7,6 +7,10 @@ interface Props {
   onSelectSong: (song: Song) => void;
   onToggleMiniPlayer: () => void;
   onOpenShortcuts: () => void;
+  onOpenUpdates?: () => void;
+  isUpdateReady?: boolean;
+  isUpdateDownloading?: boolean;
+  version?: string;
   onAddToPlaylist?: (song: Song) => void;
   currentSong: Song | null;
   isPlaying: boolean;
@@ -38,8 +42,12 @@ function getStoredSearchHistory(): string[] {
 
 export const Header: React.FC<Props> = ({
   onSelectSong,
-  onToggleMiniPlayer,
+  onToggleMiniPlayer: _onToggleMiniPlayer,
   onOpenShortcuts,
+  onOpenUpdates,
+  isUpdateReady,
+  isUpdateDownloading,
+  version = '1.0.6',
   onAddToPlaylist,
   currentSong,
   isPlaying,
@@ -193,7 +201,7 @@ export const Header: React.FC<Props> = ({
           </div>
           <div>
             <span className="brand-title">SunoNa!!</span>
-            <div className="brand-subtitle">Desktop Hi-Fi</div>
+            <div className="brand-subtitle" style={{ color: 'var(--accent)', fontWeight: 600, letterSpacing: '0.04em' }}>v{version}</div>
           </div>
         </div>
 
@@ -441,13 +449,28 @@ export const Header: React.FC<Props> = ({
           </span>
         </div>
 
-        {/* Mini-Player PiP Button */}
+        {/* Check for Software Updates Button */}
         <button
           className="icon-btn"
-          onClick={onToggleMiniPlayer}
-          title="Open Floating Mini-Player (Laptop PiP)"
+          onClick={onOpenUpdates}
+          title="Check for Software Updates"
+          style={{ position: 'relative' }}
         >
-          <PictureInPicture size={18} />
+          <RefreshCw size={17} className={isUpdateDownloading ? 'animate-spin' : ''} style={{ color: isUpdateReady ? '#34d399' : 'inherit' }} />
+          {isUpdateReady && (
+            <span
+              style={{
+                position: 'absolute',
+                top: '6px',
+                right: '6px',
+                width: '7px',
+                height: '7px',
+                borderRadius: '50%',
+                background: '#10b981',
+                boxShadow: '0 0 8px #10b981',
+              }}
+            />
+          )}
         </button>
 
         {/* Laptop Keyboard Shortcuts Dialog */}

@@ -28,6 +28,7 @@ import { SleepTimerModal } from './components/SleepTimerModal';
 import { SleepOverlay } from './components/SleepOverlay';
 import { AuthModal } from './components/AuthModal';
 import { UserProfileModal } from './components/UserProfileModal';
+import { UpdateModal, type UpdateState } from './components/UpdateModal';
 import { authService, type UserProfile } from './services/authService';
 import { cloudSyncService } from './services/cloudSyncService';
 
@@ -76,11 +77,14 @@ export const App: React.FC = () => {
   const [isMiniPlayer, setIsMiniPlayer] = useState<boolean>(false);
   const [isNowPlayingOpen, setIsNowPlayingOpen] = useState<boolean>(false);
 
-  // Persistent Liked Songs Collection (Starts empty, populated as user likes songs or syncs with Google)
+  // Persistent Liked Songs Collection (User-scoped and clean)
   const [likedSongs, setLikedSongs] = useState<Song[]>(() => {
     try {
       localStorage.removeItem('sunona_liked_songs_v1');
-      const saved = localStorage.getItem('sunona_liked_songs_v2');
+      localStorage.removeItem('sunona_liked_songs_v2'); // Clean up old test data
+      const activeUser = authService.getCurrentUser();
+      const storageKey = activeUser?.uid ? `sunona_liked_songs_${activeUser.uid}` : 'sunona_liked_songs_guest';
+      const saved = localStorage.getItem(storageKey);
       if (saved) {
         const parsed = JSON.parse(saved);
         if (Array.isArray(parsed)) return parsed;
@@ -107,6 +111,11 @@ export const App: React.FC = () => {
   const [currentUser, setCurrentUser] = useState<UserProfile | null>(() => authService.getCurrentUser());
   const [isAuthModalOpen, setIsAuthModalOpen] = useState<boolean>(false);
   const [isProfileModalOpen, setIsProfileModalOpen] = useState<boolean>(false);
+  const [isUpdateModalOpen, setIsUpdateModalOpen] = useState<boolean>(false);
+  const [updateState, setUpdateState] = useState<UpdateState>({
+    status: 'idle',
+    currentVersion: '1.0.6',
+  });
 
   const showToast = useCallback((msg: string) => {
     setToastMessage(msg);
@@ -199,12 +208,13 @@ export const App: React.FC = () => {
 
         // Pull cloud data for this Gmail ID
         const remote = await cloudSyncService.pullFromCloud(user);
+        const userStorageKey = `sunona_liked_songs_${user.uid}`;
         if (remote) {
           if (Array.isArray(remote.likedSongs)) {
             const mappedLiked = remote.likedSongs.map((s) => ({ ...s, isLiked: true }));
             setLikedSongs(mappedLiked);
             try {
-              localStorage.setItem('sunona_liked_songs_v2', JSON.stringify(mappedLiked));
+              localStorage.setItem(userStorageKey, JSON.stringify(mappedLiked));
             } catch {}
           }
           if (Array.isArray(remote.playlists)) {
@@ -218,7 +228,9 @@ export const App: React.FC = () => {
           playlistService.setPlaylists([]);
           setPlaylists([]);
           try {
+            localStorage.removeItem(userStorageKey);
             localStorage.removeItem('sunona_liked_songs_v2');
+            localStorage.removeItem('sunona_liked_songs_guest');
             localStorage.removeItem('sunona_user_playlists_v2');
           } catch {}
         }
@@ -804,18 +816,94 @@ export const App: React.FC = () => {
       });
     }
 
-    let unsubUpdate: (() => void) | undefined;
+    let unsubChecking: (() => void) | undefined;
+    let unsubAvailable: (() => void) | undefined;
+    let unsubNotAvailable: (() => void) | undefined;
+    let unsubProgress: (() => void) | undefined;
+    let unsubReady: (() => void) | undefined;
+    let unsubError: (() => void) | undefined;
+
+    if (electronAPI.onUpdateChecking) {
+      unsubChecking = electronAPI.onUpdateChecking(() => {
+        setUpdateState((prev) => ({ ...prev, status: 'checking', error: undefined }));
+      });
+    }
+    if (electronAPI.onUpdateAvailable) {
+      unsubAvailable = electronAPI.onUpdateAvailable((info: any) => {
+        setUpdateState((prev) => ({
+          ...prev,
+          status: 'available',
+          availableVersion: info?.version,
+        }));
+      });
+    }
+    if (electronAPI.onUpdateNotAvailable) {
+      unsubNotAvailable = electronAPI.onUpdateNotAvailable(() => {
+        setUpdateState((prev) => ({ ...prev, status: 'not-available' }));
+      });
+    }
+    if (electronAPI.onUpdateProgress) {
+      unsubProgress = electronAPI.onUpdateProgress((p: any) => {
+        setUpdateState((prev) => ({
+          ...prev,
+          status: 'downloading',
+          progressPercent: p?.percent || 0,
+          transferredBytes: p?.transferred,
+          totalBytes: p?.total,
+          bytesPerSecond: p?.bytesPerSecond,
+        }));
+      });
+    }
     if (electronAPI.onUpdateReady) {
-      unsubUpdate = electronAPI.onUpdateReady((version: string) => {
-        showToast(`SunoNa v${version} downloaded! Will apply automatically.`);
+      unsubReady = electronAPI.onUpdateReady((version: string) => {
+        setUpdateState((prev) => ({
+          ...prev,
+          status: 'ready',
+          availableVersion: version,
+        }));
+        showToast(`SunoNa v${version} update ready to install!`);
+      });
+    }
+    if (electronAPI.onUpdateError) {
+      unsubError = electronAPI.onUpdateError((err: string) => {
+        setUpdateState((prev) => ({
+          ...prev,
+          status: 'error',
+          error: typeof err === 'string' ? err : 'Update check failed',
+        }));
       });
     }
 
     return () => {
       unsubMedia?.();
-      unsubUpdate?.();
+      unsubChecking?.();
+      unsubAvailable?.();
+      unsubNotAvailable?.();
+      unsubProgress?.();
+      unsubReady?.();
+      unsubError?.();
     };
   }, [handleTogglePlay, handleNext, handlePrev, showToast]);
+
+  const handleCheckForUpdates = useCallback(() => {
+    const electronAPI = (window as any).electronAPI;
+    if (electronAPI?.checkForUpdates) {
+      setUpdateState((prev) => ({ ...prev, status: 'checking', error: undefined }));
+      electronAPI.checkForUpdates();
+    } else {
+      setUpdateState((prev) => ({ ...prev, status: 'checking', error: undefined }));
+      setTimeout(() => {
+        setUpdateState((prev) => ({ ...prev, status: 'not-available' }));
+      }, 1200);
+    }
+  }, []);
+
+  const handleRestartAndInstall = useCallback(() => {
+    const electronAPI = (window as any).electronAPI;
+    if (electronAPI?.restartAndInstall) {
+      electronAPI.restartAndInstall();
+    }
+  }, []);
 
   // Seek audio
   const handleSeek = (seconds: number) => {
@@ -863,7 +951,8 @@ export const App: React.FC = () => {
         }
       }
       try {
-        localStorage.setItem('sunona_liked_songs_v2', JSON.stringify(updated));
+        const activeKey = currentUser?.uid ? `sunona_liked_songs_${currentUser.uid}` : 'sunona_liked_songs_guest';
+        localStorage.setItem(activeKey, JSON.stringify(updated));
       } catch {}
       return updated;
     });
@@ -1047,11 +1136,14 @@ export const App: React.FC = () => {
         )}
       </div>
 
-      {/* Top Header with Live YouTube Search */}
+      {/* Top Header with Live YouTube Search & Software Updates */}
       <Header
         onSelectSong={playSong}
         onToggleMiniPlayer={() => setIsMiniPlayer((m) => !m)}
         onOpenShortcuts={() => setIsShortcutsOpen(true)}
+        onOpenUpdates={() => setIsUpdateModalOpen(true)}
+        isUpdateReady={updateState.status === 'ready'}
+        isUpdateDownloading={updateState.status === 'downloading' || updateState.status === 'checking'}
         onAddToPlaylist={(song) => setSongToAddToPlaylist(song)}
         currentSong={currentSong}
         isPlaying={isPlaying}
@@ -1389,6 +1481,10 @@ export const App: React.FC = () => {
             setDailyDiscover([]);
             setSimilarShelf(null);
             try {
+              if (currentUser?.uid) {
+                localStorage.removeItem(`sunona_liked_songs_${currentUser.uid}`);
+              }
+              localStorage.removeItem('sunona_liked_songs_guest');
               localStorage.removeItem('sunona_liked_songs_v2');
               localStorage.removeItem('sunona_user_playlists_v2');
               localStorage.removeItem('metrolist_daily_discover_cache_v2');
@@ -1401,6 +1497,14 @@ export const App: React.FC = () => {
           onManualSync={handleManualCloudSync}
         />
       )}
+      {/* Software Updates & Download Progress Dialog */}
+      <UpdateModal
+        isOpen={isUpdateModalOpen}
+        onClose={() => setIsUpdateModalOpen(false)}
+        updateState={updateState}
+        onCheckForUpdates={handleCheckForUpdates}
+        onRestartAndInstall={handleRestartAndInstall}
+      />
     </div>
   );
 };

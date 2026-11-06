@@ -329,7 +329,14 @@ export const HomeScreen: React.FC<Props> = ({
                   <span>{index + 1}</span>
                 )}
               </div>
-              <img src={song.coverUrl} alt={song.title} className="song-row-thumb" />
+              <img
+                src={song.coverUrl || 'https://images.unsplash.com/photo-1511671782779-c97d3d27a1d4?w=300&auto=format&fit=crop&q=80'}
+                alt={song.title}
+                className="song-row-thumb"
+                onError={(e) => {
+                  (e.target as HTMLImageElement).src = 'https://images.unsplash.com/photo-1511671782779-c97d3d27a1d4?w=300&auto=format&fit=crop&q=80';
+                }}
+              />
               <div className="song-row-main">
                 <div className="song-row-title">{song.title}</div>
                 <div className="song-row-artist">{song.artist}</div>

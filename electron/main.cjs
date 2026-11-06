@@ -9,18 +9,36 @@ autoUpdater.autoInstallOnAppQuit = true;
 
 autoUpdater.on('checking-for-update', () => {
   console.log('[AutoUpdater] Checking GitHub for updates...');
+  if (mainWindow && !mainWindow.isDestroyed()) {
+    mainWindow.webContents.send('update-checking');
+  }
 });
 
 autoUpdater.on('update-available', (info) => {
   console.log('[AutoUpdater] Update available:', info.version);
+  if (mainWindow && !mainWindow.isDestroyed()) {
+    mainWindow.webContents.send('update-available', info);
+  }
 });
 
-autoUpdater.on('update-not-available', () => {
+autoUpdater.on('update-not-available', (info) => {
   console.log('[AutoUpdater] App is up to date.');
+  if (mainWindow && !mainWindow.isDestroyed()) {
+    mainWindow.webContents.send('update-not-available', info);
+  }
+});
+
+autoUpdater.on('download-progress', (progressObj) => {
+  if (mainWindow && !mainWindow.isDestroyed()) {
+    mainWindow.webContents.send('update-progress', progressObj);
+  }
 });
 
 autoUpdater.on('error', (err) => {
   console.warn('[AutoUpdater] Warning:', err ? err.message : 'Unknown error');
+  if (mainWindow && !mainWindow.isDestroyed()) {
+    mainWindow.webContents.send('update-error', err ? err.message : 'Update check failed');
+  }
 });
 
 autoUpdater.on('update-downloaded', (info) => {
@@ -28,6 +46,15 @@ autoUpdater.on('update-downloaded', (info) => {
   if (mainWindow && !mainWindow.isDestroyed()) {
     mainWindow.webContents.send('update-ready', info.version);
   }
+});
+
+// Manual update trigger from UI
+ipcMain.on('check-for-updates', () => {
+  autoUpdater.checkForUpdatesAndNotify().catch((err) => {
+    if (mainWindow && !mainWindow.isDestroyed()) {
+      mainWindow.webContents.send('update-error', err ? err.message : 'Update check failed');
+    }
+  });
 });
 
 // Prevent multiple instances of SunoNa running simultaneously

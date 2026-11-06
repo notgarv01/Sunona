@@ -1,7 +1,7 @@
 {
   "name": "sunona",
   "productName": "SunoNa",
-  "version": "1.0.2",
+  "version": "1.0.3",
   "description": "SunoNa - Modern YouTube Music Desktop Client",
   "author": "Garv <garv@sunona.app>",
   "private": true,
@@ -19,6 +19,7 @@
   "dependencies": {
     "@distube/ytdl-core": "^5.0.1",
     "electron-updater": "^6.8.11",
+    "firebase": "^13.2.0",
     "lucide-react": "^1.61.0",
     "react": "^19.3.1",
     "react-dom": "^19.3.1"

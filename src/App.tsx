@@ -26,6 +26,10 @@ import { SettingsModal } from './components/SettingsModal';
 import { IntroScreen } from './components/IntroScreen';
 import { SleepTimerModal } from './components/SleepTimerModal';
 import { SleepOverlay } from './components/SleepOverlay';
+import { AuthModal } from './components/AuthModal';
+import { UserProfileModal } from './components/UserProfileModal';
+import { authService, type UserProfile } from './services/authService';
+import { cloudSyncService } from './services/cloudSyncService';
 
 // Helper to parse LRC formatted lyrics into LyricLine[]
 function parseLrcLyrics(lrcText: string): LyricLine[] {
@@ -97,6 +101,11 @@ export const App: React.FC = () => {
   const [songToAddToPlaylist, setSongToAddToPlaylist] = useState<Song | null>(null);
   const [toastMessage, setToastMessage] = useState<string | null>(null);
   const toastTimerRef = useRef<any>(null);
+
+  // Google Authentication & Cloud Sync
+  const [currentUser, setCurrentUser] = useState<UserProfile | null>(() => authService.getCurrentUser());
+  const [isAuthModalOpen, setIsAuthModalOpen] = useState<boolean>(false);
+  const [isProfileModalOpen, setIsProfileModalOpen] = useState<boolean>(false);
 
   const showToast = useCallback((msg: string) => {
     setToastMessage(msg);
@@ -171,6 +180,60 @@ export const App: React.FC = () => {
   const [isListenTogetherOpen, setIsListenTogetherOpen] = useState<boolean>(false);
   const [isShortcutsOpen, setIsShortcutsOpen] = useState<boolean>(false);
   const [isSettingsOpen, setIsSettingsOpen] = useState<boolean>(false);
+
+  // Google Auth Subscription & Cloud Data Synchronization
+  useEffect(() => {
+    return authService.subscribe(async (user) => {
+      setCurrentUser(user);
+      if (user) {
+        // Pull cloud data for this Gmail ID
+        const remote = await cloudSyncService.pullFromCloud(user);
+        if (remote) {
+          if (Array.isArray(remote.likedSongs) && remote.likedSongs.length > 0) {
+            setLikedSongs((prev) => {
+              const map = new Map<string, Song>();
+              prev.forEach((s) => map.set(s.id, s));
+              remote.likedSongs.forEach((s) => map.set(s.id, { ...s, isLiked: true }));
+              const merged = Array.from(map.values());
+              try {
+                localStorage.setItem('sunona_liked_songs_v1', JSON.stringify(merged));
+              } catch {}
+              return merged;
+            });
+          }
+          if (Array.isArray(remote.playlists) && remote.playlists.length > 0) {
+            playlistService.setPlaylists(remote.playlists);
+            setPlaylists(remote.playlists);
+          }
+          showToast(`Library synced with ${user.email || user.displayName}`);
+        }
+      }
+    });
+  }, [showToast]);
+
+  // Auto-backup to Cloud when library changes for logged in Gmail user
+  useEffect(() => {
+    if (currentUser) {
+      const timer = setTimeout(() => {
+        cloudSyncService.pushToCloud(currentUser, {
+          likedSongs,
+          playlists,
+          tasteProfile,
+        });
+      }, 1500);
+      return () => clearTimeout(timer);
+    }
+  }, [currentUser, likedSongs, playlists, tasteProfile]);
+
+  const handleManualCloudSync = useCallback(async () => {
+    if (!currentUser) return;
+    await cloudSyncService.pushToCloud(currentUser, {
+      likedSongs,
+      playlists,
+      tasteProfile,
+    });
+    showToast('All music data synced to your Google Account!');
+  }, [currentUser, likedSongs, playlists, tasteProfile, showToast]);
 
   // Apply Theme CSS Custom Variables
   const applyTheme = (theme: ThemePreset) => {
@@ -972,6 +1035,9 @@ export const App: React.FC = () => {
         onAddToPlaylist={(song) => setSongToAddToPlaylist(song)}
         currentSong={currentSong}
         isPlaying={isPlaying}
+        user={currentUser}
+        onOpenAuth={() => setIsAuthModalOpen(true)}
+        onOpenProfile={() => setIsProfileModalOpen(true)}
       />
 
       {/* Body: Sidebar + Main Viewport + Drawer */}
@@ -1269,6 +1335,33 @@ export const App: React.FC = () => {
         isOpen={isSleepOverlayOpen}
         onWakeUp={() => setIsSleepOverlayOpen(false)}
       />
+
+      {/* Google Authentication Dialog */}
+      <AuthModal
+        isOpen={isAuthModalOpen}
+        onClose={() => setIsAuthModalOpen(false)}
+        onSuccess={(user) => {
+          setCurrentUser(user);
+          showToast(`Welcome, ${user.displayName}! Cloud sync active.`);
+        }}
+      />
+
+      {/* Google User Profile & Cloud Backup Details */}
+      {currentUser && (
+        <UserProfileModal
+          isOpen={isProfileModalOpen}
+          onClose={() => setIsProfileModalOpen(false)}
+          user={currentUser}
+          likedSongsCount={likedSongs.length}
+          playlistsCount={playlists.length}
+          onSignOut={() => {
+            authService.signOut();
+            setCurrentUser(null);
+            showToast('Signed out from Google Account.');
+          }}
+          onManualSync={handleManualCloudSync}
+        />
+      )}
     </div>
   );
 };

@@ -58,6 +58,11 @@ class PlaylistService {
     return [...this.playlists];
   }
 
+  public setPlaylists(newPlaylists: Playlist[]): void {
+    this.playlists = [...newPlaylists];
+    this.save();
+  }
+
   public getPlaylist(id: string): Playlist | undefined {
     return this.playlists.find((p) => p.id === id);
   }

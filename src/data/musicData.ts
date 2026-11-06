@@ -75,8 +75,8 @@ export const INITIAL_SONGS: Song[] = [
     color: '#38bdf8',
     views: '185M views',
     likes: '1.2M',
-    isLiked: true,
-    isCached: true,
+    isLiked: false,
+    isCached: false,
     lyrics: [
       { time: 0, text: '♪ [Guitar Acoustic Melody Intro] ♪' },
       { time: 24, text: 'Yeh dooriyan, yeh dooriyan' },
@@ -99,8 +99,8 @@ export const INITIAL_SONGS: Song[] = [
     color: '#fbbf24',
     views: '302M views',
     likes: '4.8M',
-    isLiked: true,
-    isCached: true,
+    isLiked: false,
+    isCached: false,
     lyrics: [
       { time: 0, text: '♪ [Acoustic Fingerpicking Intro] ♪' },
       { time: 14, text: 'Dekho dekho kaisi baatein yahan ki' },
@@ -144,8 +144,8 @@ export const INITIAL_SONGS: Song[] = [
     color: '#06b6d4',
     views: '225M views',
     likes: '2.4M',
-    isLiked: true,
-    isCached: true,
+    isLiked: false,
+    isCached: false,
     lyrics: [
       { time: 0, text: '♪ [Acoustic Guitar Strum] ♪' },
       { time: 10, text: 'O sajni re, kaise kate din raat' },
@@ -164,7 +164,7 @@ export const INITIAL_SONGS: Song[] = [
     color: '#f59e0b',
     views: '650M views',
     likes: '5.2M',
-    isLiked: true,
+    isLiked: false,
     isCached: false,
     lyrics: [
       { time: 0, text: '♪ [Violin & Flute Melodic Intro] ♪' },
@@ -185,8 +185,8 @@ export const INITIAL_SONGS: Song[] = [
     color: '#818cf8',
     views: '476M views',
     likes: '4.1M',
-    isLiked: true,
-    isCached: true,
+    isLiked: false,
+    isCached: false,
     lyrics: [
       { time: 0, text: '♪ [Gentle Acoustic Ukulele & Guitar] ♪' },
       { time: 14, text: 'Jo tum mere ho, phir kya baatein hain' },
@@ -204,7 +204,7 @@ export const INITIAL_SONGS: Song[] = [
     color: '#34d399',
     views: '240M views',
     likes: '2.1M',
-    isLiked: true,
+    isLiked: false,
     isCached: false,
     lyrics: [
       { time: 0, text: '♪ [Melodic Guitar Intro] ♪' },
@@ -264,7 +264,8 @@ export const INITIAL_ALBUMS: Album[] = [
         color: '#8b5cf6',
         views: '190M views',
         likes: '1.7M',
-        isLiked: true,
+        isLiked: false,
+        isCached: false,
         lyrics: [],
       },
       {
@@ -504,35 +505,7 @@ export const INITIAL_ALBUMS: Album[] = [
   },
 ];
 
-export const INITIAL_PLAYLISTS: Playlist[] = [
-  {
-    id: 'pl-1',
-    title: 'Bollywood Romance & Acoustic Hits',
-    description: 'The most soulful Hindi melodies, acoustic indie and romantic classics.',
-    coverUrl: 'https://i.ytimg.com/vi/kPtn26x8TZM/hqdefault.jpg',
-    songCount: 50,
-    songs: INITIAL_SONGS,
-    isCurated: true,
-  },
-  {
-    id: 'pl-2',
-    title: 'Indie & Unplugged Sessions',
-    description: 'Soulful acoustic guitars, heartfelt lyrics and raw vocal performances.',
-    coverUrl: 'https://i.ytimg.com/vi/gJLVTKhTnog/hqdefault.jpg',
-    songCount: 38,
-    songs: [INITIAL_SONGS[1], INITIAL_SONGS[5], INITIAL_SONGS[0]],
-    isCurated: true,
-  },
-  {
-    id: 'pl-3',
-    title: 'SunoNa!! Offline Favorites',
-    description: 'Your personal collection of saved and downloaded offline tracks.',
-    coverUrl: 'https://i.ytimg.com/vi/ElZfdU54Cp8/hqdefault.jpg',
-    songCount: 24,
-    songs: [INITIAL_SONGS[0], INITIAL_SONGS[1], INITIAL_SONGS[2]],
-    isCurated: false,
-  },
-];
+export const INITIAL_PLAYLISTS: Playlist[] = [];
 
 export const MOODS: MoodItem[] = [
   {

@@ -1,7 +1,6 @@
 import type { Playlist, Song } from '../types';
-import { INITIAL_PLAYLISTS } from '../data/musicData';
 
-const STORAGE_KEY = 'metrolist_playlists_v1';
+const STORAGE_KEY = 'sunona_user_playlists_v2';
 
 class PlaylistService {
   private playlists: Playlist[] = [];
@@ -14,10 +13,13 @@ class PlaylistService {
   private load() {
     try {
       if (typeof window !== 'undefined' && window.localStorage) {
+        // Clean up legacy hardcoded key if present
+        localStorage.removeItem('metrolist_playlists_v1');
+
         const data = localStorage.getItem(STORAGE_KEY);
         if (data) {
           const parsed = JSON.parse(data);
-          if (Array.isArray(parsed) && parsed.length > 0) {
+          if (Array.isArray(parsed)) {
             this.playlists = parsed;
             return;
           }
@@ -27,8 +29,8 @@ class PlaylistService {
       console.warn('Failed to load playlists from localStorage', e);
     }
 
-    // Default initialization if none exists
-    this.playlists = [...INITIAL_PLAYLISTS];
+    // Default: Clean start with 0 playlists
+    this.playlists = [];
     this.save();
   }
 

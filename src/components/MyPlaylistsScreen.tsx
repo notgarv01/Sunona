@@ -170,6 +170,34 @@ export const MyPlaylistsScreen: React.FC<Props> = ({
           <p>Try searching with another name or click "Create Playlist" above.</p>
         </div>
       )}
+
+      {playlists.length === 0 && (
+        <div style={{ textAlign: 'center', padding: '80px 20px', color: 'var(--text-muted)' }}>
+          <ListMusic size={54} style={{ opacity: 0.25, marginBottom: '16px' }} />
+          <h3 style={{ color: '#fff', fontSize: '1.2rem', marginBottom: '8px' }}>No playlists yet</h3>
+          <p style={{ maxWidth: '360px', margin: '0 auto 20px', fontSize: '0.9rem', lineHeight: 1.5 }}>
+            Create your own custom playlists to organize your favorite tracks, or sign in with Google to sync your collection.
+          </p>
+          <button
+            onClick={onCreatePlaylist}
+            style={{
+              padding: '10px 20px',
+              borderRadius: '24px',
+              background: 'var(--primary)',
+              color: '#09090b',
+              fontWeight: 600,
+              border: 'none',
+              cursor: 'pointer',
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: '8px',
+            }}
+          >
+            <Plus size={16} />
+            <span>Create First Playlist</span>
+          </button>
+        </div>
+      )}
     </div>
   );
 };

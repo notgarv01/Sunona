@@ -76,16 +76,17 @@ export const App: React.FC = () => {
   const [isMiniPlayer, setIsMiniPlayer] = useState<boolean>(false);
   const [isNowPlayingOpen, setIsNowPlayingOpen] = useState<boolean>(false);
 
-  // Persistent Liked Songs Collection
+  // Persistent Liked Songs Collection (Starts empty, populated as user likes songs or syncs with Google)
   const [likedSongs, setLikedSongs] = useState<Song[]>(() => {
     try {
-      const saved = localStorage.getItem('sunona_liked_songs_v1');
+      localStorage.removeItem('sunona_liked_songs_v1');
+      const saved = localStorage.getItem('sunona_liked_songs_v2');
       if (saved) {
         const parsed = JSON.parse(saved);
-        if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+        if (Array.isArray(parsed)) return parsed;
       }
     } catch {}
-    return INITIAL_SONGS.filter((s) => s.isLiked);
+    return [];
   });
   const [libraryFilter, setLibraryFilter] = useState<'all' | 'liked' | 'cached' | 'playlists'>('all');
 
@@ -196,7 +197,7 @@ export const App: React.FC = () => {
               remote.likedSongs.forEach((s) => map.set(s.id, { ...s, isLiked: true }));
               const merged = Array.from(map.values());
               try {
-                localStorage.setItem('sunona_liked_songs_v1', JSON.stringify(merged));
+                localStorage.setItem('sunona_liked_songs_v2', JSON.stringify(merged));
               } catch {}
               return merged;
             });
@@ -843,7 +844,7 @@ export const App: React.FC = () => {
         }
       }
       try {
-        localStorage.setItem('sunona_liked_songs_v1', JSON.stringify(updated));
+        localStorage.setItem('sunona_liked_songs_v2', JSON.stringify(updated));
       } catch {}
       return updated;
     });

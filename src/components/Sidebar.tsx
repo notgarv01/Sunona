@@ -115,6 +115,18 @@ export const Sidebar: React.FC<Props> = ({
           </button>
         </div>
         <div className="sidebar-playlists-scroll">
+          {playlists.length === 0 && (
+            <div
+              style={{
+                padding: '8px 14px',
+                fontSize: '0.78rem',
+                color: 'var(--text-muted)',
+                opacity: 0.5,
+              }}
+            >
+              No playlists yet
+            </div>
+          )}
           {playlists.map((pl) => {
             const isSelected = activeView === 'playlist' && selectedPlaylistId === pl.id;
 

@@ -1,0 +1,224 @@
+{
+  "App.tsx": {
+    "mtime": 1793961961.4449718,
+    "seen": 1793962001.7930558,
+    "ast_hash": "35ca048bd04081e74661a9fd40c0b6e1",
+    "semantic_hash": ""
+  },
+  "components/AddToPlaylistModal.tsx": {
+    "mtime": 1793883012.3075461,
+    "seen": 1793959758.6317644,
+    "ast_hash": "4f64f7a6aac9f14ad5a8c6deacb00d40",
+    "semantic_hash": ""
+  },
+  "components/AlbumScreen.tsx": {
+    "mtime": 1793887679.7053034,
+    "seen": 1793959758.6317692,
+    "ast_hash": "60ba298beff39e768d8a360ee21a4f5c",
+    "semantic_hash": ""
+  },
+  "components/AudioVisualizer.tsx": {
+    "mtime": 1792858217.2767904,
+    "seen": 1793959758.6317718,
+    "ast_hash": "fb0f0f886a73323edc6a050f58eec157",
+    "semantic_hash": ""
+  },
+  "components/CreatePlaylistModal.tsx": {
+    "mtime": 1793883012.4096906,
+    "seen": 1793959758.6317744,
+    "ast_hash": "c91da1961b412ea219448334f706ca52",
+    "semantic_hash": ""
+  },
+  "components/ExploreScreen.tsx": {
+    "mtime": 1793961977.6955452,
+    "seen": 1793962001.7930849,
+    "ast_hash": "260fc3d9bc6b227aac90acd7cb25720a",
+    "semantic_hash": ""
+  },
+  "components/Header.tsx": {
+    "mtime": 1793962817.5887325,
+    "seen": 1793962883.6208138,
+    "ast_hash": "41a4c16973af74bb6f90dfdbe062dbd9",
+    "semantic_hash": ""
+  },
+  "components/HomeScreen.tsx": {
+    "mtime": 1793952644.6594648,
+    "seen": 1793959758.6317801,
+    "ast_hash": "7b92b6675f26aee0a2035cec1c11a8a8",
+    "semantic_hash": ""
+  },
+  "components/IntroScreen.tsx": {
+    "mtime": 1793961293.6842918,
+    "seen": 1793961348.2375858,
+    "ast_hash": "83910b78fcc5f8794ef609247365bb19",
+    "semantic_hash": ""
+  },
+  "components/LibraryScreen.tsx": {
+    "mtime": 1793961801.6888244,
+    "seen": 1793962001.7930956,
+    "ast_hash": "53fdae37dbc1178d51d1ac6a0f1063f8",
+    "semantic_hash": ""
+  },
+  "components/ListenTogetherModal.tsx": {
+    "mtime": 1793889122.679597,
+    "seen": 1793959758.6317852,
+    "ast_hash": "ba22f07502129194dcbcef485e54e754",
+    "semantic_hash": ""
+  },
+  "components/LyricsDrawer.tsx": {
+    "mtime": 1793957629.5742557,
+    "seen": 1793959758.631787,
+    "ast_hash": "2d03e0325cbc24fa160707defa94c4c4",
+    "semantic_hash": ""
+  },
+  "components/MiniPlayer.tsx": {
+    "mtime": 1793888490.580222,
+    "seen": 1793959758.6317887,
+    "ast_hash": "73e66bbe1440bc9c47ebb27636c02e6b",
+    "semantic_hash": ""
+  },
+  "components/MyPlaylistsScreen.tsx": {
+    "mtime": 1793885373.805208,
+    "seen": 1793959758.6317904,
+    "ast_hash": "e340b288aac69b835b5996a4438fb2b0",
+    "semantic_hash": ""
+  },
+  "components/NowPlayingModal.tsx": {
+    "mtime": 1793958693.4448657,
+    "seen": 1793959758.6317918,
+    "ast_hash": "2bff3cf4c055c55c770cd8a9a1b7fc5d",
+    "semantic_hash": ""
+  },
+  "components/PlayerBar.tsx": {
+    "mtime": 1793958642.4589596,
+    "seen": 1793959758.6317937,
+    "ast_hash": "59d84f45924a3ec71ae7bc8b0866f542",
+    "semantic_hash": ""
+  },
+  "components/PlaylistScreen.tsx": {
+    "mtime": 1793883012.6318994,
+    "seen": 1793959758.6317954,
+    "ast_hash": "7cf294ae5ecf4be632cce127e0ffc72c",
+    "semantic_hash": ""
+  },
+  "components/QueueDrawer.tsx": {
+    "mtime": 1793863333.33936,
+    "seen": 1793959758.631797,
+    "ast_hash": "b7e693f8e2846f77fa2bbb91af90a2e5",
+    "semantic_hash": ""
+  },
+  "components/SettingsModal.tsx": {
+    "mtime": 1793892044.6863363,
+    "seen": 1793959758.6317985,
+    "ast_hash": "fa26f42b534285b6faefe75a0d19a957",
+    "semantic_hash": ""
+  },
+  "components/ShortcutsModal.tsx": {
+    "mtime": 1792858411.650187,
+    "seen": 1793959758.6318002,
+    "ast_hash": "90228a52f634e9965dda2faa1be0f940",
+    "semantic_hash": ""
+  },
+  "components/Sidebar.tsx": {
+    "mtime": 1793961776.188517,
+    "seen": 1793962001.7931218,
+    "ast_hash": "92f6ec92c878cc33c44ce5017b3514af",
+    "semantic_hash": ""
+  },
+  "components/SleepOverlay.tsx": {
+    "mtime": 1793958185.37889,
+    "seen": 1793959758.631803,
+    "ast_hash": "3253b27cbb6bd084a0e290afe0c568be",
+    "semantic_hash": ""
+  },
+  "components/SleepTimerModal.tsx": {
+    "mtime": 1793958191.5359173,
+    "seen": 1793959758.6318052,
+    "ast_hash": "a4a42705d474f7fefa8068ce17932925",
+    "semantic_hash": ""
+  },
+  "components/YouTubeEmbedPlayer.tsx": {
+    "mtime": 1793890945.696964,
+    "seen": 1793959758.631807,
+    "ast_hash": "9be3286955c2d0181fa960e850afa82c",
+    "semantic_hash": ""
+  },
+  "data/musicData.ts": {
+    "mtime": 1793952566.5697105,
+    "seen": 1793959758.6318088,
+    "ast_hash": "52b1fcfab76818b89175e65a39a8ef5c",
+    "semantic_hash": ""
+  },
+  "main.tsx": {
+    "mtime": 1793961179.3334367,
+    "seen": 1793961200.915076,
+    "ast_hash": "c5ee78875221dca9ed6b4e4b41e63cea",
+    "semantic_hash": ""
+  },
+  "services/audioEngine.ts": {
+    "mtime": 1793957876.0082607,
+    "seen": 1793959758.6318119,
+    "ast_hash": "19eb8ca276d72661c6b073a79ad7d32c",
+    "semantic_hash": ""
+  },
+  "services/historyService.ts": {
+    "mtime": 1793867899.9016724,
+    "seen": 1793959758.6318133,
+    "ast_hash": "440985ec659f9391119b9daee3e9caa2",
+    "semantic_hash": ""
+  },
+  "services/listenTogetherService.ts": {
+    "mtime": 1793891015.771371,
+    "seen": 1793959758.631815,
+    "ast_hash": "d152726950bde6cc993930adfaec2a3a",
+    "semantic_hash": ""
+  },
+  "services/playlistService.ts": {
+    "mtime": 1793890988.849293,
+    "seen": 1793959758.6318164,
+    "ast_hash": "30ceddd80d175ac9f333f4abf777387a",
+    "semantic_hash": ""
+  },
+  "types.ts": {
+    "mtime": 1793957079.5755847,
+    "seen": 1793959758.631818,
+    "ast_hash": "52b315f47ef02b2ee0e98392af76a436",
+    "semantic_hash": ""
+  },
+  "assets/garv.jpg": {
+    "mtime": 1793892318.7561905,
+    "seen": 1793959758.6318195,
+    "ast_hash": "3d3879172e42972a11a2dc8001c37991",
+    "semantic_hash": ""
+  },
+  "assets/garv_cutout.png": {
+    "mtime": 1793892713.7238092,
+    "seen": 1793959758.6318214,
+    "ast_hash": "c470755d7563ef0c5dc3f79ab12ec82e",
+    "semantic_hash": ""
+  },
+  "assets/garv_studio.png": {
+    "mtime": 1793953979.2909565,
+    "seen": 1793959758.6318228,
+    "ast_hash": "2ec2aba44608b8b75b0bd8c0dabbc702",
+    "semantic_hash": ""
+  },
+  "assets/hero.png": {
+    "mtime": 1792857949.956282,
+    "seen": 1793959758.6318245,
+    "ast_hash": "aead493361b27e7510691c5d7072dfc1",
+    "semantic_hash": ""
+  },
+  "assets/react.svg": {
+    "mtime": 1792857950.0368576,
+    "seen": 1793959758.6318262,
+    "ast_hash": "f0402b67b6ce880f65666bb49e841696",
+    "semantic_hash": ""
+  },
+  "assets/vite.svg": {
+    "mtime": 1792857950.0528574,
+    "seen": 1793959758.6318276,
+    "ast_hash": "9960a24288958394ac50e57ff638b036",
+    "semantic_hash": ""
+  }
+}

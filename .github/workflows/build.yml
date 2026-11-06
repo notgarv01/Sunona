@@ -1,0 +1,43 @@
+name: Build & Release SunoNa Desktop
+
+on:
+  push:
+    branches:
+      - main
+      - master
+    tags:
+      - 'v*'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build-windows:
+    runs-on: windows-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Install Dependencies
+        run: npm install
+
+      - name: Build Frontend Assets
+        run: npm run build
+
+      - name: Package Electron Windows Installer (.exe)
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: npx electron-builder --win --publish always
+
+      - name: Upload Windows Installer to Artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: SunoNa-Setup-Windows
+          path: dist-electron/*.exe

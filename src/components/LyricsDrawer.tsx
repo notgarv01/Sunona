@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { Mic2, X, Languages, RotateCcw, SearchX, ExternalLink, Loader2 } from 'lucide-react';
+import { Mic2, X, Languages, RotateCcw, ExternalLink, Loader2 } from 'lucide-react';
 import type { Song, LyricLine } from '../types';
 
 interface Props {
@@ -52,16 +52,6 @@ export const LyricsDrawer: React.FC<Props> = ({
     }
   };
 
-  const defaultProviders = [
-    '1. LRCLIB Official (Exact Studio Match)',
-    '2. LRCLIB Community (Fuzzy Search)',
-    '3. Lyrics.ovh (Global Text Library)',
-    '4. LRCLIB OST (Title-Only Deep Search)',
-    '5. Global Music Lyrics Archive',
-  ];
-
-  const searchedProviders = currentSong?.searchedProviders || defaultProviders;
-
   return (
     <aside className="app-drawer">
       <div className="drawer-header">
@@ -105,12 +95,6 @@ export const LyricsDrawer: React.FC<Props> = ({
               <Loader2 size={32} className="spin-anim" style={{ color: 'var(--primary)' }} />
             </div>
             <h3 className="searching-title">Lyrics dhoond rahe hain...</h3>
-            <p className="searching-subtitle">
-              5 platforms scan ho rahe hain:
-            </p>
-            <span className="searching-platforms-badge">
-              LRCLIB • Genius • Lyrics.ovh • Vault • Archive
-            </span>
             <div className="searching-loader-bar">
               <div className="searching-loader-fill" />
             </div>
@@ -153,12 +137,8 @@ export const LyricsDrawer: React.FC<Props> = ({
             </div>
 
             <h3 className="not-found-title">
-              5 jagah dekha fir bhi nahi mil rahe lyrics
+              Lyrics nahi mile
             </h3>
-
-            <p className="not-found-desc">
-              Bhai 5 alag-alag platforms pe khoj liya, par lagta hai singer ne lyrics release hi nahi kiye ya gaana bilkul taaza hai!
-            </p>
 
             {currentSong?.geniusUrl && (
               <a
@@ -168,25 +148,9 @@ export const LyricsDrawer: React.FC<Props> = ({
                 className="genius-fallback-btn"
               >
                 <span>🧠</span>
-                <span>Open Verified Song on Genius ↗</span>
+                <span>Open Song on Genius ↗</span>
               </a>
             )}
-
-            {/* Checklist of all 5 searched platforms */}
-            <div className="searched-providers-box">
-              <div className="providers-box-title">
-                <SearchX size={13} color="#ff334b" />
-                <span>Checked 5 Platforms:</span>
-              </div>
-              <ul className="providers-checklist">
-                {searchedProviders.map((p, idx) => (
-                  <li key={idx} className="provider-check-row">
-                    <span className="provider-name">{p}</span>
-                    <span className="provider-status-cross">❌ Not Found</span>
-                  </li>
-                ))}
-              </ul>
-            </div>
 
             {onRetry && (
               <button

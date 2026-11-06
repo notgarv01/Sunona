@@ -114,7 +114,7 @@ export const App: React.FC = () => {
   const [isUpdateModalOpen, setIsUpdateModalOpen] = useState<boolean>(false);
   const [updateState, setUpdateState] = useState<UpdateState>({
     status: 'idle',
-    currentVersion: '1.0.6',
+    currentVersion: '1.0.7',
   });
 
   const showToast = useCallback((msg: string) => {

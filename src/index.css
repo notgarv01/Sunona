@@ -1511,6 +1511,8 @@ body.is-electron .app-header {
   flex-direction: column;
   height: 100%;
   animation: slideLeft 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+  overflow-x: hidden;
+  box-sizing: border-box;
 }
 
 @keyframes slideLeft {
@@ -1553,11 +1555,15 @@ body.is-electron .app-header {
 .lyrics-container {
   flex: 1;
   overflow-y: auto;
+  overflow-x: hidden;
   padding: 32px 24px;
   display: flex;
   flex-direction: column;
   gap: 24px;
   scroll-behavior: smooth;
+  width: 100%;
+  max-width: 100%;
+  box-sizing: border-box;
 }
 
 .lyric-line {
@@ -1615,15 +1621,19 @@ body.is-electron .app-header {
   white-space: nowrap;
 }
 
-/* 5-Stage Waterfall Lyrics Not Found Card */
+/* Lyrics Not Found Card */
 .lyrics-not-found-card {
   display: flex;
   flex-direction: column;
   align-items: center;
+  justify-content: center;
   text-align: center;
-  padding: 36px 18px 48px;
-  max-width: 360px;
-  margin: 0 auto;
+  padding: 48px 16px;
+  width: 100%;
+  max-width: 100%;
+  box-sizing: border-box;
+  margin: auto 0;
+  overflow-x: hidden;
 }
 
 .not-found-icon-wrap {
@@ -1646,11 +1656,12 @@ body.is-electron .app-header {
 
 .not-found-title {
   font-family: var(--font-heading);
-  font-size: 1.05rem;
+  font-size: 1.1rem;
   font-weight: 800;
   color: #ffffff;
   line-height: 1.35;
-  margin: 0 0 10px;
+  margin: 0 0 16px;
+  word-break: break-word;
 }
 
 .not-found-desc {
@@ -1813,10 +1824,13 @@ body.is-electron .app-header {
   align-items: center;
   justify-content: center;
   text-align: center;
-  padding: 56px 20px;
-  gap: 12px;
-  max-width: 340px;
-  margin: 0 auto;
+  padding: 56px 16px;
+  gap: 16px;
+  width: 100%;
+  max-width: 100%;
+  box-sizing: border-box;
+  margin: auto 0;
+  overflow-x: hidden;
 }
 
 .searching-radar-glow {

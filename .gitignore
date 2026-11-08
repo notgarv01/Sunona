@@ -25,3 +25,14 @@ setup-electron-binary.cjs
 *.njsproj
 *.sln
 *.sw?
+
+# Personal Photos, Screenshots & Intro Media (Untracked)
+*garv*
+*myphoto*
+frontpage*
+docs/frontpage*
+uiux_inside.jpeg
+SunoNAlogo.jpeg
+src/components/IntroScreen.tsx
+
+

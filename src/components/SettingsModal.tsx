@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Sliders, X, Shield, Volume2, HardDrive, Sparkles, Smile } from 'lucide-react';
+import { Sliders, X, Volume2, HardDrive, Sparkles, Smile } from 'lucide-react';
 
 interface Props {
   isOpen: boolean;
@@ -8,11 +8,11 @@ interface Props {
 }
 
 export const SettingsModal: React.FC<Props> = ({ isOpen, onClose, onOpenIntro }) => {
-  const [quality, setQuality] = useState('high');
-  const [eqPreset, setEqPreset] = useState('bass');
+  const [quality, setQuality] = useState<string>(
+    () => localStorage.getItem('sunona_streaming_quality') || 'high'
+  );
   const [skipSilence, setSkipSilence] = useState(true);
   const [normalizeAudio, setNormalizeAudio] = useState(true);
-  const [proxyEnabled, setProxyEnabled] = useState(false);
 
   if (!isOpen) return null;
 
@@ -25,9 +25,9 @@ export const SettingsModal: React.FC<Props> = ({ isOpen, onClose, onOpenIntro })
               <Sliders size={16} />
             </div>
             <div>
-              <div className="modal-title" style={{ fontSize: '1.2rem' }}>SunoNa!! Settings & Equalizer</div>
+              <div className="modal-title" style={{ fontSize: '1.2rem' }}>SunoNa!! Settings</div>
               <div style={{ fontSize: '0.74rem', color: 'var(--text-secondary)' }}>
-                Audio processing, proxy routing and cache preferences
+                Audio playback and offline cache preferences
               </div>
             </div>
           </div>
@@ -42,7 +42,7 @@ export const SettingsModal: React.FC<Props> = ({ isOpen, onClose, onOpenIntro })
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '8px' }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                 <Sparkles size={16} style={{ color: 'var(--primary)' }} />
-                <span style={{ fontSize: '0.88rem', fontWeight: 700 }}>YouTube Search & Streaming Engine</span>
+                <span style={{ fontSize: '0.88rem', fontWeight: 700 }}>YouTube Search & Music Engine</span>
               </div>
               <span className="brand-platform-tag">INNERTUBE ACTIVE</span>
             </div>
@@ -79,7 +79,8 @@ export const SettingsModal: React.FC<Props> = ({ isOpen, onClose, onOpenIntro })
               </button>
             </div>
           </div>
-          {/* Audio Quality */}
+
+          {/* Streaming Audio Quality */}
           <div style={{ background: 'rgba(255,255,255,0.03)', padding: '14px', borderRadius: 'var(--radius-md)' }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '8px' }}>
               <Volume2 size={16} style={{ color: 'var(--primary)' }} />
@@ -87,15 +88,23 @@ export const SettingsModal: React.FC<Props> = ({ isOpen, onClose, onOpenIntro })
             </div>
             <div style={{ display: 'flex', gap: '8px' }}>
               {[
-                { id: 'normal', label: 'Opus 128 kbps (Data Saver)' },
-                { id: 'high', label: 'Opus 160 kbps (Standard)' },
-                { id: 'ultra', label: 'AAC 256 kbps (Studio High)' },
+                { id: 'low', label: 'Low', desc: 'Data Saver' },
+                { id: 'medium', label: 'Medium', desc: 'Standard' },
+                { id: 'high', label: 'High', desc: 'HQ Audio' },
               ].map((q) => (
                 <button
                   key={q.id}
                   className={`btn-secondary ${quality === q.id ? 'btn-primary' : ''}`}
-                  style={{ flex: 1, padding: '8px 10px', fontSize: '0.74rem' }}
-                  onClick={() => setQuality(q.id)}
+                  style={{
+                    flex: 1,
+                    padding: '8px 10px',
+                    fontSize: '0.82rem',
+                    fontWeight: 600,
+                  }}
+                  onClick={() => {
+                    setQuality(q.id);
+                    localStorage.setItem('sunona_streaming_quality', q.id);
+                  }}
                 >
                   {q.label}
                 </button>
@@ -103,28 +112,12 @@ export const SettingsModal: React.FC<Props> = ({ isOpen, onClose, onOpenIntro })
             </div>
           </div>
 
-          {/* Equalizer Preset */}
-          <div style={{ background: 'rgba(255,255,255,0.03)', padding: '14px', borderRadius: 'var(--radius-md)' }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '8px' }}>
-              <Sparkles size={16} style={{ color: 'var(--accent)' }} />
-              <span style={{ fontSize: '0.88rem', fontWeight: 700 }}>Hardware Equalizer Preset</span>
-            </div>
-            <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
-              {['Flat (Studio)', 'Bass Boost +6dB', 'Electronic Glow', 'Acoustic Clarity', 'Vocal Enhancer'].map((preset) => (
-                <button
-                  key={preset}
-                  className={`mood-chip ${eqPreset === preset ? 'active' : ''}`}
-                  style={{ fontSize: '0.78rem' }}
-                  onClick={() => setEqPreset(preset)}
-                >
-                  {preset}
-                </button>
-              ))}
-            </div>
-          </div>
-
           {/* Audio Engine Toggles */}
           <div style={{ background: 'rgba(255,255,255,0.03)', padding: '14px', borderRadius: 'var(--radius-md)', display: 'flex', flexDirection: 'column', gap: '12px' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '2px' }}>
+              <Volume2 size={16} style={{ color: 'var(--primary)' }} />
+              <span style={{ fontSize: '0.88rem', fontWeight: 700 }}>Playback Enhancements</span>
+            </div>
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
               <div>
                 <div style={{ fontSize: '0.86rem', fontWeight: 600 }}>Normalize Audio Volume (ReplayGain)</div>
@@ -147,25 +140,6 @@ export const SettingsModal: React.FC<Props> = ({ isOpen, onClose, onOpenIntro })
                 type="checkbox"
                 checked={skipSilence}
                 onChange={(e) => setSkipSilence(e.target.checked)}
-                style={{ width: '18px', height: '18px', accentColor: 'var(--primary)' }}
-              />
-            </div>
-          </div>
-
-          {/* Regional Restrictions Proxy (From Metrolist README) */}
-          <div style={{ background: 'rgba(255,255,255,0.03)', padding: '14px', borderRadius: 'var(--radius-md)' }}>
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                <Shield size={16} style={{ color: '#22c55e' }} />
-                <div>
-                  <div style={{ fontSize: '0.86rem', fontWeight: 600 }}>Regional Bypass Proxy / VPN</div>
-                  <div style={{ fontSize: '0.74rem', color: 'var(--text-secondary)' }}>Bypasses YouTube Music geo-blocks via US proxy</div>
-                </div>
-              </div>
-              <input
-                type="checkbox"
-                checked={proxyEnabled}
-                onChange={(e) => setProxyEnabled(e.target.checked)}
                 style={{ width: '18px', height: '18px', accentColor: 'var(--primary)' }}
               />
             </div>

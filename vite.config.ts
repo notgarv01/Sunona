@@ -176,14 +176,24 @@ function youtubeStreamingPlugin(): Plugin {
             });
 
             const data: any = await response.json();
-            const contents =
-              data.contents?.twoColumnSearchResultsRenderer?.primaryContents?.sectionListRenderer?.contents?.[0]
-                ?.itemSectionRenderer?.contents || [];
+            const sections =
+              data.contents?.twoColumnSearchResultsRenderer?.primaryContents?.sectionListRenderer?.contents || [];
 
             const songs: any[] = [];
-            for (const c of contents) {
-              const vr = c.videoRenderer;
-              if (vr && vr.videoId) {
+            const seenIds = new Set<string>();
+
+            for (const section of sections) {
+              const contents = section.itemSectionRenderer?.contents || [];
+              for (const c of contents) {
+                // Filter out albums, playlists, channels, shorts shelves (User explicitly requested no albums!)
+                if (c.playlistRenderer || c.shelfRenderer || c.reelShelfRenderer || c.radioRenderer || c.channelRenderer) {
+                  continue;
+                }
+
+                const vr = c.videoRenderer;
+                if (!vr || !vr.videoId || seenIds.has(vr.videoId)) continue;
+                seenIds.add(vr.videoId);
+
                 const durText = vr.lengthText?.simpleText || '3:30';
                 const parts = durText.split(':').map((p: string) => parseInt(p, 10));
                 let durSeconds = 210;
@@ -193,55 +203,122 @@ function youtubeStreamingPlugin(): Plugin {
                   durSeconds = parts[0] * 3600 + parts[1] * 60 + parts[2];
                 }
 
+                // Exclude full albums and long compilations (> 11 mins / 660s)
+                if (durSeconds > 660) {
+                  continue;
+                }
+
+                const rawTitle = vr.title?.runs?.[0]?.text || 'Unknown Title';
+                const channel =
+                  vr.ownerText?.runs?.[0]?.text ||
+                  vr.shortBylineText?.runs?.[0]?.text ||
+                  'YouTube Music Artist';
+
+                // Clean YouTube clutter from title (official video tags, label pipes, album names)
+                let cleanTitle = rawTitle;
+                if (cleanTitle.includes('|')) {
+                  cleanTitle = cleanTitle.split('|')[0].trim();
+                }
+                cleanTitle = cleanTitle.replace(/\[[^\]]*\]/g, ' ');
+                cleanTitle = cleanTitle.replace(/\((?:official|full song|lyric|video|audio|music video|visualizer|album version|album|latest|hd|4k|remix|prod).*?\)/gi, ' ');
+                cleanTitle = cleanTitle.replace(/\*\*(?:official|video|audio).*?\*\*/gi, ' ');
+                cleanTitle = cleanTitle.replace(/album\s*:\s*\{?[^}]*\}?/gi, ' ');
+                cleanTitle = cleanTitle.replace(/\b(?:official video|official audio|full song|lyrical video|music video|audio song|latest punjabi song|latest hindi song)\b.*$/gi, ' ');
+                cleanTitle = cleanTitle.replace(/^\s*["'](.*?)["']\s*(?:song)?/i, '$1');
+                cleanTitle = cleanTitle.replace(/\s+/g, ' ').trim();
+
+                let artistName = channel.replace(/ - Topic$/i, '').replace(/VEVO$/i, '').replace(/Official$/i, '').trim();
+                if (cleanTitle.includes(' - ')) {
+                  const p = cleanTitle.split(' - ');
+                  if (p.length === 2 && p[0].trim().length > 1 && p[1].trim().length > 1) {
+                    artistName = p[0].trim();
+                    cleanTitle = p[1].trim();
+                  }
+                }
+                cleanTitle = cleanTitle.replace(/[-–—:]\s*$/, '').trim();
+                if (!cleanTitle) cleanTitle = rawTitle;
+
                 songs.push({
                   id: vr.videoId,
-                  title: vr.title?.runs?.[0]?.text || 'Unknown Title',
-                  artist:
-                    vr.ownerText?.runs?.[0]?.text ||
-                    vr.shortBylineText?.runs?.[0]?.text ||
-                    'YouTube Music Artist',
+                  title: cleanTitle,
+                  rawTitle: rawTitle,
+                  artist: artistName,
                   album: 'YouTube Music',
                   duration: durSeconds,
                   durationFormatted: durText,
                   coverUrl:
                     vr.thumbnail?.thumbnails?.pop()?.url ||
                     `https://img.youtube.com/vi/${vr.videoId}/hqdefault.jpg`,
-                  views: vr.viewCountText?.simpleText || '1.2M views',
+                  views: vr.viewCountText?.simpleText || 'Trending',
                 });
               }
             }
 
-            // Intelligent Relevance & Official Song Ranking
+            // Phonetic helper for Hindi/Punjabi transliterations (e.g., 'daaru' <-> 'daru', 'peeke' <-> 'pee ke')
+            function normalizePhonetic(str: string): string {
+              return str
+                .toLowerCase()
+                .replace(/aa/g, 'a')
+                .replace(/ee/g, 'i')
+                .replace(/oo/g, 'u')
+                .replace(/[^a-z0-9]/g, '');
+            }
+
+            // Precision relevance scoring focusing on true song matching
             function getRelevanceScore(item: any, q: string): number {
               let score = 0;
               const t = (item.title || '').toLowerCase();
+              const rt = (item.rawTitle || '').toLowerCase();
               const a = (item.artist || '').toLowerCase();
-              const qLower = q.toLowerCase();
+              const qLower = q.toLowerCase().trim();
+              const qPhonetic = normalizePhonetic(qLower);
+              const tPhonetic = normalizePhonetic(t);
 
-              // Exact search query match
-              if (t.includes(qLower)) score += 50;
-              if (a.includes(qLower)) score += 30;
+              const qWords = qLower.split(/\s+/).filter(Boolean);
 
-              // Official release bonus
-              if (/official (video|audio|music video|lyric)/i.test(t)) score += 45;
-              if (/vevo|topic|coke studio|t-series|sony music|yrf|zee music|speed records|white hill/i.test(a)) score += 35;
+              // Heavy penalty for non-songs, jukeboxes, albums, mashups
+              if (/jukebox|all songs|compilation|mashup|nonstop|full album|best of/i.test(rt)) {
+                score -= 600;
+              }
+              if (item.duration > 600) {
+                score -= 400;
+              }
+              if (/karaoke/i.test(rt) || /karaoke/i.test(a)) score -= 300;
+              if (/instrumental/i.test(rt)) score -= 200;
+              if (/tutorial|guitar lesson|how to play/i.test(rt)) score -= 300;
 
-              // View count popularity bonus
-              const vText = item.views || '';
-              if (vText.includes('B views') || vText.includes('B')) {
-                score += 40;
-              } else if (vText.includes('M views') || vText.includes('M')) {
-                const num = parseFloat(vText);
-                score += Math.min(35, isNaN(num) ? 10 : num * 1.5);
+              // 1. Exact Title Matches
+              if (t === qLower || tPhonetic === qPhonetic) {
+                score += 800; // Perfect exact song match!
+              } else if (t.startsWith(qLower) || tPhonetic.startsWith(qPhonetic)) {
+                score += 500; // Title starts with query
+              } else if (t.includes(qLower) || tPhonetic.includes(qPhonetic)) {
+                score += 350; // Title contains query
               }
 
-              // Heavily deprioritize karaoke, background music, tutorials, covers
-              if (/karaoke/i.test(t) || /karaoke/i.test(a)) score -= 120;
-              if (/instrumental/i.test(t) || /instrumental/i.test(a)) score -= 80;
-              if (/background music|bgm/i.test(t)) score -= 70;
-              if (/slowed|reverb/i.test(t)) score -= 50;
-              if (/tutorial|guitar lesson|how to play/i.test(t)) score -= 90;
-              if (/cover/i.test(t) && !qLower.includes('cover')) score -= 40;
+              // 2. Word-by-word matches
+              let matchedWords = 0;
+              for (const w of qWords) {
+                const wPhonetic = normalizePhonetic(w);
+                const wordRegex = new RegExp('\\b' + w + '\\b', 'i');
+                if (wordRegex.test(t) || wordRegex.test(rt)) {
+                  score += 150;
+                  matchedWords++;
+                } else if (t.includes(w) || tPhonetic.includes(wPhonetic)) {
+                  score += 80;
+                  matchedWords++;
+                }
+                if (wordRegex.test(a)) {
+                  score += 60;
+                }
+              }
+              if (matchedWords === qWords.length && qWords.length > 1) {
+                score += 250; // All search words matched in song title!
+              }
+
+              // 3. Modest official boost (tie-breaker only, never beats exact song title)
+              if (/official (video|audio|music video|lyric)/i.test(rt)) score += 20;
+              if (/vevo|topic|coke studio|t-series|sony music|yrf|zee music|speed records/i.test(a)) score += 15;
 
               return score;
             }

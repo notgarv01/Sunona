@@ -51,7 +51,7 @@ export const AddToPlaylistModal: React.FC<Props> = ({
   };
 
   return (
-    <div className="modal-overlay" onClick={onClose}>
+    <div className="modal-backdrop" onClick={onClose}>
       <div
         className="add-to-playlist-dialog"
         onClick={(e) => e.stopPropagation()}

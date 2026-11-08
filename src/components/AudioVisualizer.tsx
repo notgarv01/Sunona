@@ -7,9 +7,15 @@ interface Props {
   accentColor?: string;
 }
 
-export const AudioVisualizer: React.FC<Props> = ({ isPlaying, primaryColor = '#a855f7', accentColor = '#ec4899' }) => {
+export const AudioVisualizer: React.FC<Props> = ({
+  isPlaying,
+  primaryColor = '#a855f7',
+  accentColor = '#ec4899',
+}) => {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const animFrameRef = useRef<number | null>(null);
+  // Store smoothed bar heights for fluid studio-meter motion
+  const barHeightsRef = useRef<number[]>(new Array(14).fill(4));
 
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -17,26 +23,53 @@ export const AudioVisualizer: React.FC<Props> = ({ isPlaying, primaryColor = '#a
     const ctx = canvas.getContext('2d');
     if (!ctx) return;
 
+    const barCount = 14;
+    const width = canvas.width;
+    const height = canvas.height;
+    const barWidth = 3;
+    const gap = 2;
+    const totalBarsWidth = barCount * barWidth + (barCount - 1) * gap;
+    const offsetX = Math.max(0, Math.floor((width - totalBarsWidth) / 2));
+
+    // Static resting bar heights when NOT playing (clean, symmetric, stationary - RUKA HUA)
+    const staticResting = [3, 4, 5, 5, 6, 6, 6, 6, 5, 5, 4, 4, 3, 3];
+
     const render = () => {
-      const width = canvas.width;
-      const height = canvas.height;
       ctx.clearRect(0, 0, width, height);
 
       const freqData = audioEngine.getVisualizerData();
-      const barCount = 14;
-      const barWidth = Math.floor(width / barCount) - 2;
 
       for (let i = 0; i < barCount; i++) {
-        // Take samples from frequency bins
-        const binIndex = Math.floor((i / barCount) * freqData.length);
-        const rawVal = freqData[binIndex] || 0;
-        
-        // If not playing, draw subtle resting idle bars with gentle wave
-        const idleWave = Math.sin(Date.now() / 400 + i) * 3 + 4;
-        const normalizedHeight = isPlaying ? Math.max(3, (rawVal / 255) * height) : idleWave;
+        let targetHeight = 3;
 
-        const x = i * (barWidth + 2);
-        const y = height - normalizedHeight;
+        if (isPlaying) {
+          // Dynamic amplitude reacting to voice and music frequencies
+          const binIndex = Math.min(freqData.length - 1, Math.floor((i / barCount) * freqData.length));
+          const rawVal = freqData[binIndex] || 0;
+          // Scale to canvas height (leave 2px margin at top for crisp aesthetic)
+          targetHeight = Math.max(3, (rawVal / 255) * (height - 2));
+        } else {
+          // Song nahi chal raha: COMPLETELY STATIC (ruka hua), ZERO motion!
+          targetHeight = staticResting[i] || 3;
+        }
+
+        // Smooth physics-based meter transition: snappy attack on voice/beats, gentle decay
+        const prev = barHeightsRef.current[i] ?? 3;
+        let current: number;
+        if (isPlaying) {
+          if (targetHeight > prev) {
+            current = prev + (targetHeight - prev) * 0.7; // Snappy rise
+          } else {
+            current = prev + (targetHeight - prev) * 0.3; // Natural decay
+          }
+        } else {
+          // Quickly settle to resting static position and freeze
+          current = prev + (targetHeight - prev) * 0.25;
+        }
+        barHeightsRef.current[i] = current;
+
+        const x = offsetX + i * (barWidth + gap);
+        const y = height - current;
 
         // Gradient from primary to accent
         const grad = ctx.createLinearGradient(0, height, 0, 0);
@@ -45,7 +78,7 @@ export const AudioVisualizer: React.FC<Props> = ({ isPlaying, primaryColor = '#a
 
         ctx.fillStyle = grad;
         ctx.beginPath();
-        ctx.roundRect(x, y, barWidth, normalizedHeight, [3, 3, 0, 0]);
+        ctx.roundRect(x, y, barWidth, Math.max(2, current), [2, 2, 0, 0]);
         ctx.fill();
       }
 
@@ -62,7 +95,10 @@ export const AudioVisualizer: React.FC<Props> = ({ isPlaying, primaryColor = '#a
   }, [isPlaying, primaryColor, accentColor]);
 
   return (
-    <div className="visualizer-canvas-box" title="Real-time Audio Analyser">
+    <div
+      className="visualizer-canvas-box"
+      title={isPlaying ? 'Live Audio Analyser (Dynamic Voice & Music Spectrum)' : 'Audio Analyser (Stationary)'}
+    >
       <canvas ref={canvasRef} width={80} height={28} className="visualizer-canvas" />
     </div>
   );

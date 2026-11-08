@@ -34,7 +34,7 @@ export const HomeScreen: React.FC<Props> = ({
   listenAgain = [],
   similarShelf,
   mostPlayed = [],
-  tasteProfile,
+  tasteProfile: _tasteProfile,
   favoriteArtistShelf,
   onPlaySong,
   onToggleLike,
@@ -66,25 +66,13 @@ export const HomeScreen: React.FC<Props> = ({
 
   return (
     <div className="app-viewport">
-      {/* Editorial Header with Taste Profile */}
+      {/* Editorial Header */}
       <div className="section-hero">
         <div className="hero-header-row">
           <div>
             <div className="hero-greeting">{getGreeting()}</div>
             <h1 className="hero-title">Listen Now</h1>
           </div>
-
-          {tasteProfile && tasteProfile.totalPlays > 0 && (
-            <div className="hero-taste-badge" title="Your Personalized Taste Affinity">
-              <span className="hero-taste-dot" />
-              <span>
-                Taste Affinity: <strong>{tasteProfile.primaryGenre}</strong>
-                {tasteProfile.favoriteArtist && (
-                  <> • Top Artist: <strong>{tasteProfile.favoriteArtist}</strong> ({tasteProfile.favoriteArtistPlays} plays)</>
-                )}
-              </span>
-            </div>
-          )}
         </div>
       </div>
 
@@ -106,34 +94,6 @@ export const HomeScreen: React.FC<Props> = ({
             </div>
           ))}
         </div>
-
-        {/* Active Mood Showcase Banner */}
-        {activeMoodItem && (
-          <div className="active-mood-spotlight">
-            <div className="mood-spotlight-left">
-              <span className="mood-spotlight-emoji">{activeMoodItem.emoji}</span>
-              <div className="mood-spotlight-text">
-                <div className="mood-spotlight-title">
-                  <span>Vibe: <strong>{activeMoodItem.name}</strong></span>
-                  <span className="mood-status-pill">Active Mood</span>
-                </div>
-                <div className="mood-spotlight-tagline">{activeMoodItem.tagline}</div>
-              </div>
-            </div>
-            <button
-              className="mood-play-mix-btn"
-              onClick={() => {
-                if (songs && songs.length > 0) {
-                  onPlaySong(songs[0], songs);
-                }
-              }}
-              title={`Play ${activeMoodItem.name} Mix`}
-            >
-              <Play size={14} fill="#0b0914" color="#0b0914" />
-              <span>Play {activeMoodItem.name} Mix</span>
-            </button>
-          </div>
-        )}
       </div>
 
       {/* 1. Daily Discover */}

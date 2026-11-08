@@ -18,9 +18,8 @@ export const ShortcutsModal: React.FC<Props> = ({ isOpen, onClose }) => {
     { key: 'M', desc: 'Toggle mute' },
     { key: 'L', desc: 'Toggle live synced lyrics' },
     { key: 'Q', desc: 'Toggle play queue drawer' },
-    { key: 'P', desc: 'Toggle floating mini-player (PiP)' },
     { key: 'Ctrl + K', desc: 'Focus search bar' },
-    { key: 'Esc', desc: 'Close dialogs or mini-player' },
+    { key: 'Esc', desc: 'Close open dialogs & overlays' },
   ];
 
   return (

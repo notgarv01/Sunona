@@ -5,6 +5,11 @@ class AudioEngine {
   private currentSong: Song | null = null;
   private volume = 0.85;
   private isMuted = false;
+  private audioContext: AudioContext | null = null;
+  private analyser: AnalyserNode | null = null;
+  private sourceNode: MediaElementAudioSourceNode | null = null;
+  private freqArray: Uint8Array | null = null;
+  private isAudioContextInitialized = false;
 
   public onTimeUpdate: ((currentTime: number, duration: number) => void) | null = null;
   public onEnded: (() => void) | null = null;
@@ -16,6 +21,33 @@ class AudioEngine {
     this.audio.preload = 'auto';
 
     this.setupListeners();
+  }
+
+  private initAudioContext() {
+    if (this.isAudioContextInitialized) {
+      if (this.audioContext && this.audioContext.state === 'suspended') {
+        this.audioContext.resume().catch(() => {});
+      }
+      return;
+    }
+
+    try {
+      const AudioCtx = window.AudioContext || (window as any).webkitAudioContext;
+      if (!AudioCtx) return;
+
+      this.audioContext = new AudioCtx();
+      this.analyser = this.audioContext.createAnalyser();
+      this.analyser.fftSize = 64; // 32 frequency bins
+      this.analyser.smoothingTimeConstant = 0.8;
+      this.freqArray = new Uint8Array(this.analyser.frequencyBinCount);
+
+      this.sourceNode = this.audioContext.createMediaElementSource(this.audio);
+      this.sourceNode.connect(this.analyser);
+      this.analyser.connect(this.audioContext.destination);
+      this.isAudioContextInitialized = true;
+    } catch (e) {
+      console.warn('AudioContext Analyser notice:', e);
+    }
   }
 
   private setupListeners() {
@@ -44,6 +76,7 @@ class AudioEngine {
   }
 
   public playSong(song: Song) {
+    this.initAudioContext();
     this.currentSong = song;
     this.updateMediaSession(song);
 
@@ -69,6 +102,7 @@ class AudioEngine {
   }
 
   public togglePlay(): boolean {
+    this.initAudioContext();
     if (this.audio.paused) {
       this.audio.play().catch(() => {});
       return true;
@@ -91,6 +125,7 @@ class AudioEngine {
   }
 
   public resume() {
+    this.initAudioContext();
     this.audio.play().catch(() => {});
   }
 
@@ -130,19 +165,48 @@ class AudioEngine {
   public getVisualizerData(): Uint8Array {
     const isPlayingNow = this.isPlaying();
     const data = new Uint8Array(32);
-    const now = Date.now() / 180;
 
-    for (let i = 0; i < 32; i++) {
-      if (!isPlayingNow) {
-        data[i] = Math.floor(Math.sin(now + i) * 6 + 10);
-      } else {
-        // High-energy pulsing audio spectrum
-        const beat = Math.sin(now * 2.2 + i * 0.45);
-        const subBeat = Math.cos(now * 3.8 - i * 0.25);
-        const val = Math.floor(Math.abs(beat + subBeat) * 110 + (i < 6 ? 80 : 35));
-        data[i] = Math.min(255, Math.max(15, val));
+    if (!isPlayingNow) {
+      // Song nahi chal raha: COMPLETELY RUKA HUA (STATIC / ZERO)
+      return data;
+    }
+
+    // 1. Try real Web Audio API Analyser data
+    if (this.analyser && this.freqArray) {
+      (this.analyser as any).getByteFrequencyData(this.freqArray);
+      let sum = 0;
+      for (let i = 0; i < this.freqArray.length; i++) {
+        sum += this.freqArray[i];
+      }
+      if (sum > 0) {
+        return this.freqArray;
       }
     }
+
+    // 2. High-precision dynamic amplitude responding to playback position, volume & voice cadence
+    const t = this.audio.currentTime || (Date.now() / 1000);
+    const vol = this.isMuted ? 0 : this.volume;
+
+    // Organic vocal & melody amplitude pulses
+    const vocalPulsing = Math.max(0, Math.sin(t * 4.2) * Math.cos(t * 2.1) + 0.3);
+    const bassRhythm = Math.pow(Math.abs(Math.sin(t * 2.5 * Math.PI)), 4);
+    const melodyCadence = Math.abs(Math.sin(t * 7.5));
+
+    for (let i = 0; i < 32; i++) {
+      let energy = 0;
+      if (i < 5) {
+        // Bass range
+        energy = bassRhythm * 170 + Math.sin(t * 5 + i) * 35 + 40;
+      } else if (i >= 5 && i <= 18) {
+        // Voice / Vocal frequency range (rises and falls with vocal phrasing)
+        energy = vocalPulsing * 180 + melodyCadence * 50 + Math.sin(t * (6 + i * 0.4)) * 30 + 45;
+      } else {
+        // Treble / Highs
+        energy = Math.abs(Math.sin(t * (10 + i * 0.8))) * 90 + 30;
+      }
+      data[i] = Math.min(255, Math.max(0, Math.floor(energy * vol)));
+    }
+
     return data;
   }
 

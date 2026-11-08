@@ -13,11 +13,14 @@ import {
   Heart,
   Mic2,
   ListMusic,
-  PictureInPicture,
   Maximize2,
   Disc,
   ListPlus,
   Moon,
+  PanelRight,
+  Tv2,
+  PlusCircle,
+  PictureInPicture2,
 } from 'lucide-react';
 import type { Song, ThemePreset } from '../types';
 import { AudioVisualizer } from './AudioVisualizer';
@@ -34,6 +37,9 @@ interface Props {
   isLyricsOpen: boolean;
   isQueueOpen: boolean;
   currentTheme: ThemePreset;
+  uiMode?: 'sunona' | 'spotify';
+  isNowPlayingViewOpen?: boolean;
+  onToggleNowPlayingView?: () => void;
   onOpenNowPlaying?: () => void;
   onTogglePlay: () => void;
   onNext: () => void;
@@ -45,7 +51,6 @@ interface Props {
   onToggleRepeat: () => void;
   onToggleLyrics: () => void;
   onToggleQueue: () => void;
-  onToggleMiniPlayer: () => void;
   onToggleLike: (songId: string) => void;
   onAddToPlaylist?: (song: Song) => void;
   isSleepTimerActive?: boolean;
@@ -65,6 +70,9 @@ export const PlayerBar: React.FC<Props> = ({
   isLyricsOpen,
   isQueueOpen,
   currentTheme,
+  uiMode = 'sunona',
+  isNowPlayingViewOpen = false,
+  onToggleNowPlayingView,
   onOpenNowPlaying,
   onTogglePlay,
   onNext,
@@ -76,7 +84,6 @@ export const PlayerBar: React.FC<Props> = ({
   onToggleRepeat,
   onToggleLyrics,
   onToggleQueue,
-  onToggleMiniPlayer,
   onToggleLike,
   onAddToPlaylist,
   isSleepTimerActive = false,
@@ -189,6 +196,200 @@ export const PlayerBar: React.FC<Props> = ({
     ? (currentTime / duration) 
     : 0;
   const progressPercent = Math.max(0, Math.min(100, activeRatio * 100));
+
+  if (uiMode === 'spotify') {
+    return (
+      <footer className="player-bar spotify-desktop-player-bar">
+        {/* Left: Track Details */}
+        <div className="spotify-pb-left">
+          {currentSong ? (
+            <>
+              <div
+                className="spotify-pb-thumb-wrap"
+                onClick={onOpenNowPlaying}
+                title="Expand Now Playing"
+              >
+                <img
+                  src={currentSong.coverUrl || 'https://images.unsplash.com/photo-1511671782779-c97d3d27a1d4?w=600&auto=format&fit=crop&q=80'}
+                  alt={currentSong.title}
+                  className="spotify-pb-thumb"
+                />
+              </div>
+              <div className="spotify-pb-meta">
+                <span
+                  className="spotify-pb-title"
+                  onClick={onOpenNowPlaying}
+                  title={currentSong.title}
+                >
+                  {currentSong.title}
+                </span>
+                <span className="spotify-pb-artist">{currentSong.artist}</span>
+              </div>
+              <button
+                className={`spotify-pb-icon-btn ${currentSong.isLiked ? 'liked' : ''}`}
+                onClick={() => {
+                  onToggleLike(currentSong.id);
+                  if (onAddToPlaylist) onAddToPlaylist(currentSong);
+                }}
+                title={currentSong.isLiked ? 'Saved to Your Library' : 'Save to Your Library'}
+              >
+                <PlusCircle size={20} />
+              </button>
+            </>
+          ) : (
+            <div className="spotify-pb-empty">
+              <Disc size={20} style={{ opacity: 0.4 }} />
+              <span>No track playing</span>
+            </div>
+          )}
+        </div>
+
+        {/* Center: Controls & Embedded Progress Scrubber */}
+        <div className="spotify-pb-center">
+          <div className="spotify-pb-controls-row">
+            <button
+              className={`spotify-pb-ctrl-btn ${isShuffle ? 'active' : ''}`}
+              onClick={onToggleShuffle}
+              title="Enable shuffle"
+            >
+              <Shuffle size={16} />
+              {isShuffle && <span className="spotify-pb-dot" />}
+            </button>
+            <button
+              className="spotify-pb-ctrl-btn"
+              onClick={onPrev}
+              title="Previous (Left Arrow)"
+            >
+              <SkipBack size={18} />
+            </button>
+            <button
+              className="spotify-pb-circle-play"
+              onClick={onTogglePlay}
+              title={isPlaying ? 'Pause' : 'Play'}
+            >
+              {isPlaying ? (
+                <Pause size={18} fill="#000000" />
+              ) : (
+                <Play size={18} fill="#000000" style={{ marginLeft: 2 }} />
+              )}
+            </button>
+            <button
+              className="spotify-pb-ctrl-btn"
+              onClick={onNext}
+              title="Next (Right Arrow)"
+            >
+              <SkipForward size={18} />
+            </button>
+            <button
+              className={`spotify-pb-ctrl-btn ${repeatMode !== 'off' ? 'active' : ''}`}
+              onClick={onToggleRepeat}
+              title={`Enable repeat (${repeatMode})`}
+            >
+              {repeatMode === 'one' ? <Repeat1 size={17} /> : <Repeat size={16} />}
+              {repeatMode !== 'off' && <span className="spotify-pb-dot" />}
+            </button>
+          </div>
+
+          {/* Scrubber row */}
+          <div className="spotify-pb-timeline-row">
+            <span className="spotify-pb-time">{formatTime(currentTime)}</span>
+            <div
+              ref={progressBarRef}
+              className={`spotify-pb-scrubber ${isDragging ? 'is-dragging' : ''}`}
+              onMouseDown={handleMouseDown}
+              onTouchStart={handleTouchStart}
+              onMouseMove={handleMouseMoveContainer}
+              onMouseLeave={handleMouseLeaveContainer}
+            >
+              <div className="spotify-pb-track">
+                <div
+                  className="spotify-pb-fill"
+                  style={{ width: `${progressPercent}%` }}
+                >
+                  <div className="spotify-pb-thumb-handle" />
+                </div>
+              </div>
+            </div>
+            <span className="spotify-pb-time">{formatTime(duration)}</span>
+          </div>
+        </div>
+
+        {/* Right: Actions & Volume */}
+        <div className="spotify-pb-right">
+          {onToggleNowPlayingView && (
+            <button
+              className={`spotify-pb-icon-btn ${isNowPlayingViewOpen ? 'active' : ''}`}
+              onClick={onToggleNowPlayingView}
+              title="Now Playing View"
+            >
+              <PanelRight size={17} />
+            </button>
+          )}
+
+          <button
+            className={`spotify-pb-icon-btn ${isLyricsOpen ? 'active' : ''}`}
+            onClick={onToggleLyrics}
+            title="Lyrics (L)"
+          >
+            <Mic2 size={16} />
+          </button>
+
+          <button
+            className={`spotify-pb-icon-btn ${isQueueOpen ? 'active' : ''}`}
+            onClick={onToggleQueue}
+            title="Queue (Q)"
+          >
+            <ListMusic size={17} />
+          </button>
+
+          <button className="spotify-pb-icon-btn" title="Connect to a device">
+            <Tv2 size={16} />
+          </button>
+
+          {/* Volume Control */}
+          <div className="spotify-pb-volume-box">
+            <button className="spotify-pb-icon-btn" onClick={onToggleMute}>
+              {isMuted || volume === 0 ? (
+                <VolumeX size={17} />
+              ) : volume < 0.5 ? (
+                <Volume1 size={17} />
+              ) : (
+                <Volume2 size={17} />
+              )}
+            </button>
+            <div className="spotify-pb-vol-slider-wrap">
+              <input
+                type="range"
+                min="0"
+                max="1"
+                step="0.01"
+                value={isMuted ? 0 : volume}
+                onChange={(e) => onVolumeChange(parseFloat(e.target.value))}
+                className="spotify-pb-vol-slider"
+                title={`Volume: ${Math.round((isMuted ? 0 : volume) * 100)}%`}
+              />
+            </div>
+          </div>
+
+          <button
+            className="spotify-pb-icon-btn"
+            onClick={onOpenNowPlaying}
+            title="Miniplayer"
+          >
+            <PictureInPicture2 size={16} />
+          </button>
+
+          <button
+            className="spotify-pb-icon-btn"
+            onClick={onOpenNowPlaying}
+            title="Full screen"
+          >
+            <Maximize2 size={16} />
+          </button>
+        </div>
+      </footer>
+    );
+  }
 
   return (
     <footer className="player-bar">
@@ -391,15 +592,6 @@ export const PlayerBar: React.FC<Props> = ({
           title="Play Queue (Q)"
         >
           <ListMusic size={16} />
-        </button>
-
-        {/* Mini-Player Button */}
-        <button
-          className="icon-btn"
-          onClick={onToggleMiniPlayer}
-          title="Mini-Player PiP"
-        >
-          <PictureInPicture size={16} />
         </button>
 
         {/* Full-Screen Now Playing Button */}

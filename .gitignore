@@ -32,6 +32,7 @@ setup-electron-binary.cjs
 frontpage*
 docs/frontpage*
 uiux_inside.jpeg
+SunoNAlogo.jpeg
 src/components/IntroScreen.tsx
 
 

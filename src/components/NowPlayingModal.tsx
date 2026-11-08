@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react';
+import { motion } from 'motion/react';
 import {
   X,
   Play,
@@ -13,10 +14,9 @@ import {
   Volume1,
   Heart,
   MessageSquareText,
-  ListMusic,
+  ListPlus,
   ChevronLeft,
   ChevronRight,
-  Disc,
 } from 'lucide-react';
 import type { Song, ThemePreset } from '../types';
 
@@ -43,9 +43,158 @@ interface Props {
   onToggleShuffle: () => void;
   onToggleRepeat: () => void;
   onToggleLike: (songId: string) => void;
+  onAddToPlaylist?: (song: Song) => void;
 }
 
 const DEFAULT_COVER = 'https://images.unsplash.com/photo-1511671782779-c97d3d27a1d4?w=600&auto=format&fit=crop&q=80';
+
+// SwiftUI & Flutter Native Card Deck Spring Physics
+const springTransition = {
+  type: 'spring' as const,
+  stiffness: 210,
+  damping: 26,
+  mass: 0.95,
+};
+
+const getCardAnimation = (offset: number) => {
+  switch (offset) {
+    case 0:
+      return {
+        x: 0,
+        z: 80,
+        rotateY: 0,
+        rotateZ: 0,
+        scale: 1.02,
+        opacity: 1,
+        zIndex: 30,
+        filter: 'brightness(1)',
+      };
+    case 1:
+      return {
+        x: 295,
+        z: -40,
+        rotateY: -24,
+        rotateZ: 1.8,
+        scale: 0.86,
+        opacity: 0.94,
+        zIndex: 20,
+        filter: 'brightness(0.85)',
+      };
+    case -1:
+      return {
+        x: -295,
+        z: -40,
+        rotateY: 24,
+        rotateZ: -1.8,
+        scale: 0.86,
+        opacity: 0.94,
+        zIndex: 20,
+        filter: 'brightness(0.85)',
+      };
+    case 2:
+      return {
+        x: 510,
+        z: -110,
+        rotateY: -32,
+        rotateZ: 3.2,
+        scale: 0.72,
+        opacity: 0.7,
+        zIndex: 10,
+        filter: 'brightness(0.65)',
+      };
+    case -2:
+      return {
+        x: -510,
+        z: -110,
+        rotateY: 32,
+        rotateZ: -3.2,
+        scale: 0.72,
+        opacity: 0.7,
+        zIndex: 10,
+        filter: 'brightness(0.65)',
+      };
+    case 3:
+      return {
+        x: 690,
+        z: -180,
+        rotateY: -38,
+        rotateZ: 4.5,
+        scale: 0.58,
+        opacity: 0,
+        zIndex: 1,
+        filter: 'brightness(0.4)',
+      };
+    case -3:
+      return {
+        x: -690,
+        z: -180,
+        rotateY: 38,
+        rotateZ: -4.5,
+        scale: 0.58,
+        opacity: 0,
+        zIndex: 1,
+        filter: 'brightness(0.4)',
+      };
+    default:
+      return {
+        x: offset > 0 ? 800 : -800,
+        z: -250,
+        rotateY: offset > 0 ? -45 : 45,
+        rotateZ: offset > 0 ? 5 : -5,
+        scale: 0.5,
+        opacity: 0,
+        zIndex: 0,
+        filter: 'brightness(0.3)',
+      };
+  }
+};
+
+// Highly Optimized Memoized 3D Card with Motion Spring Interpolation
+const CoverFlowCard = React.memo<{
+  song: Song;
+  offset: number;
+  isCenter: boolean;
+  onPlay: (song: Song, offset: number) => void;
+}>(({ song, offset, isCenter, onPlay }) => {
+  const cardCover = song.coverUrl || DEFAULT_COVER;
+  const anim = getCardAnimation(offset);
+
+  return (
+    <motion.div
+      className={`coverflow-card pos-${offset} ${isCenter ? 'is-center' : ''}`}
+      initial={false}
+      animate={anim}
+      transition={springTransition}
+      style={{
+        transformStyle: 'preserve-3d',
+        willChange: 'transform, opacity',
+      }}
+      onClick={(e) => {
+        e.stopPropagation();
+        onPlay(song, offset);
+      }}
+      title={isCenter ? 'Click to toggle play/pause' : `Play ${song.title || 'Track'}`}
+    >
+      <div className="coverflow-card-cover-wrap">
+        <img
+          src={cardCover}
+          alt={song.title || 'Cover'}
+          className="coverflow-card-img"
+          loading="eager"
+          decoding="async"
+          onError={(e) => {
+            (e.target as HTMLImageElement).src = DEFAULT_COVER;
+          }}
+        />
+      </div>
+      <div className="coverflow-card-dim" />
+      <div className="coverflow-card-meta">
+        <div className="coverflow-card-title">{song.title || 'Untitled'}</div>
+        <div className="coverflow-card-artist">{song.artist || 'Unknown Artist'}</div>
+      </div>
+    </motion.div>
+  );
+});
 
 export const NowPlayingModal: React.FC<Props> = ({
   isOpen,
@@ -70,17 +219,45 @@ export const NowPlayingModal: React.FC<Props> = ({
   onToggleShuffle,
   onToggleRepeat,
   onToggleLike,
+  onAddToPlaylist,
 }) => {
   // --- ALL REACT HOOKS MUST BE UNCONDITIONALLY CALLED AT THE TOP ---
   const [viewMode, setViewMode] = useState<'flow' | 'lyrics'>('flow');
   const [isQueueOpen, setIsQueueOpen] = useState<boolean>(false);
-  const [isVolumeHovered, setIsVolumeHovered] = useState<boolean>(false);
   const [isScrubDragging, setIsScrubDragging] = useState<boolean>(false);
   const [scrubDragRatio, setScrubDragRatio] = useState<number | null>(null);
 
   const scrubberRef = useRef<HTMLDivElement | null>(null);
   const isScrubDraggingRef = useRef<boolean>(false);
   isScrubDraggingRef.current = isScrubDragging;
+
+  // Butter-smooth Carousel Drag & Physics Tracking
+  const didDragRef = useRef<boolean>(false);
+  const lastWheelTimeRef = useRef<number>(0);
+
+  const handleCardPlay = useCallback((song: Song, offset: number) => {
+    if (didDragRef.current) return;
+    if (offset === 0) {
+      onTogglePlay();
+    } else {
+      onPlaySong(song);
+    }
+  }, [onTogglePlay, onPlaySong]);
+
+  const handleWheel = useCallback((e: React.WheelEvent) => {
+    const delta = Math.abs(e.deltaX) > Math.abs(e.deltaY) ? e.deltaX : e.deltaY;
+    if (Math.abs(delta) > 24) {
+      const now = Date.now();
+      if (now - lastWheelTimeRef.current > 420) {
+        lastWheelTimeRef.current = now;
+        if (delta > 0) {
+          onNext();
+        } else {
+          onPrev();
+        }
+      }
+    }
+  }, [onNext, onPrev]);
 
   // Keyboard navigation inside Now Playing
   useEffect(() => {
@@ -230,9 +407,6 @@ export const NowPlayingModal: React.FC<Props> = ({
             <ChevronLeft size={18} />
             <span>Back</span>
           </button>
-          <div className="coverflow-header-divider" />
-          <Disc className={isPlaying ? 'spinning-disc-icon' : ''} size={18} style={{ color: 'var(--primary, #10b981)' }} />
-          <span>Now Playing</span>
         </div>
 
         <div className="coverflow-header-actions">
@@ -250,64 +424,69 @@ export const NowPlayingModal: React.FC<Props> = ({
               Synced Lyrics
             </button>
           </div>
-
-          <button className="coverflow-close-btn" onClick={onClose} title="Close Now Playing (Esc)">
-            <X size={20} />
-          </button>
         </div>
       </header>
 
       {/* Main Showcase: Cover Flow 3D or Synced Lyrics */}
       {viewMode === 'flow' ? (
-        <main className="coverflow-stage">
+        <main
+          className="coverflow-stage"
+          onWheel={handleWheel}
+        >
           {/* Previous / Next Arrow Floaters */}
           <button
             className="coverflow-nav-arrow left"
-            onClick={onPrev}
+            onClick={(e) => {
+              e.stopPropagation();
+              onPrev();
+            }}
             title="Previous Song (Left Arrow)"
           >
             <ChevronLeft size={32} />
           </button>
 
-          <div className="coverflow-carousel-container">
+          <motion.div
+            className="coverflow-carousel-container"
+            drag="x"
+            dragSnapToOrigin
+            dragElastic={0.25}
+            dragTransition={{ bounceStiffness: 260, bounceDamping: 28 }}
+            onDragStart={() => {
+              didDragRef.current = true;
+            }}
+            onDragEnd={(_, info) => {
+              setTimeout(() => {
+                didDragRef.current = false;
+              }, 120);
+              const offsetThreshold = 40;
+              const velocityThreshold = 200;
+              if (info.offset.x < -offsetThreshold || info.velocity.x < -velocityThreshold) {
+                onNext();
+              } else if (info.offset.x > offsetThreshold || info.velocity.x > velocityThreshold) {
+                onPrev();
+              }
+            }}
+          >
             {visibleCards.map(({ song, offset, index }) => {
               if (!song || !song.id) return null;
-              const isCenter = offset === 0;
-              const cardCover = song.coverUrl || DEFAULT_COVER;
-
               return (
-                <div
-                  key={`${song.id}_${index}_${offset}`}
-                  className={`coverflow-card pos-${offset} ${isCenter ? 'is-center' : ''}`}
-                  onClick={() => {
-                    if (!isCenter) {
-                      onPlaySong(song);
-                    }
-                  }}
-                  title={isCenter ? 'Now Playing' : `Click to play ${song.title || 'Track'}`}
-                >
-                  <div className="coverflow-card-cover-wrap">
-                    <img
-                      src={cardCover}
-                      alt={song.title || 'Cover'}
-                      className="coverflow-card-img"
-                      onError={(e) => {
-                        (e.target as HTMLImageElement).src = DEFAULT_COVER;
-                      }}
-                    />
-                  </div>
-                  <div className="coverflow-card-meta">
-                    <div className="coverflow-card-title">{song.title || 'Untitled'}</div>
-                    <div className="coverflow-card-artist">{song.artist || 'Unknown Artist'}</div>
-                  </div>
-                </div>
+                <CoverFlowCard
+                  key={`${song.id}_${index}`}
+                  song={song}
+                  offset={offset}
+                  isCenter={offset === 0}
+                  onPlay={handleCardPlay}
+                />
               );
             })}
-          </div>
+          </motion.div>
 
           <button
             className="coverflow-nav-arrow right"
-            onClick={onNext}
+            onClick={(e) => {
+              e.stopPropagation();
+              onNext();
+            }}
             title="Next Song (Right Arrow)"
           >
             <ChevronRight size={32} />
@@ -388,14 +567,47 @@ export const NowPlayingModal: React.FC<Props> = ({
 
       {/* Floating Pill Player Bar */}
       <footer className="coverflow-pill-bar">
-        {/* Left: Previous, Play/Pause, Next */}
+        {/* Sleek Integrated Scrub Bar on Top Border of Pill */}
+        <div
+          ref={scrubberRef}
+          className={`coverflow-pill-scrub-bar ${isScrubDragging ? 'dragging' : ''}`}
+          onMouseDown={handleScrubMouseDown}
+          title={`${formatTime(currentTime)} / ${formatTime(duration)} - Click or drag to seek`}
+        >
+          <div className="coverflow-pill-scrub-track">
+            <div
+              className="coverflow-pill-scrub-fill"
+              style={{ width: `${progressPercent}%` }}
+            />
+          </div>
+        </div>
+
+        {/* Left: Like Button & Time Display */}
         <div className="coverflow-pill-left">
+          <button
+            className={`coverflow-pill-btn ${currentSong.isLiked ? 'active' : ''}`}
+            onClick={() => onToggleLike(currentSong.id)}
+            title={currentSong.isLiked ? 'Liked' : 'Like'}
+          >
+            <Heart
+              size={20}
+              fill={currentSong.isLiked ? 'var(--accent, #10b981)' : 'none'}
+              color={currentSong.isLiked ? 'var(--accent, #10b981)' : 'currentColor'}
+            />
+          </button>
+          <span className="coverflow-pill-time">
+            {formatTime(currentTime)} / {formatTime(duration)}
+          </span>
+        </div>
+
+        {/* Center: Playback Controls (Shuffle, Prev, Play/Pause, Next, Repeat) */}
+        <div className="coverflow-pill-center">
           <button
             className={`coverflow-pill-btn sub ${isShuffle ? 'active' : ''}`}
             onClick={onToggleShuffle}
             title="Shuffle"
           >
-            <Shuffle size={16} />
+            <Shuffle size={18} />
           </button>
 
           <button className="coverflow-pill-btn" onClick={onPrev} title="Previous (Left Arrow)">
@@ -423,102 +635,43 @@ export const NowPlayingModal: React.FC<Props> = ({
             onClick={onToggleRepeat}
             title={`Repeat: ${repeatMode}`}
           >
-            {repeatMode === 'one' ? <Repeat1 size={17} /> : <Repeat size={16} />}
+            {repeatMode === 'one' ? <Repeat1 size={18} /> : <Repeat size={18} />}
           </button>
         </div>
 
-        {/* Center: Song Capsule with Integrated Scrub Bar */}
-        <div className="coverflow-pill-center">
-          <img
-            src={songCover}
-            alt={currentSong.title || 'Now Playing'}
-            className="coverflow-capsule-thumb"
-            onError={(e) => {
-              (e.target as HTMLImageElement).src = DEFAULT_COVER;
-            }}
-          />
-          <div className="coverflow-capsule-meta">
-            <div className="coverflow-capsule-title">{currentSong.title || 'Untitled'}</div>
-            <div className="coverflow-capsule-artist">{currentSong.artist || 'Unknown'}</div>
-          </div>
-
-          <div className="coverflow-soundwave">
-            <span /><span /><span /><span />
-          </div>
-
-          <button
-            className="coverflow-capsule-action-btn"
-            onClick={() => onToggleLike(currentSong.id)}
-            title="Like Song"
-          >
-            <Heart
-              size={18}
-              fill={currentSong.isLiked ? 'var(--accent, #10b981)' : 'none'}
-              color={currentSong.isLiked ? 'var(--accent, #10b981)' : 'currentColor'}
-            />
-          </button>
-
-          {/* Integrated Scrub Bar beneath Capsule with Drag Seek */}
-          <div
-            ref={scrubberRef}
-            className={`coverflow-capsule-scrub ${isScrubDragging ? 'dragging' : ''}`}
-            onMouseDown={handleScrubMouseDown}
-            title={`${formatTime(currentTime)} / ${formatTime(duration)} - Click or drag to seek`}
-          >
-            <div
-              className="coverflow-capsule-scrub-fill"
-              style={{ width: `${progressPercent}%` }}
-            />
-          </div>
-        </div>
-
-        {/* Right: Synced Lyrics, Queue Drawer Toggle, Volume Control */}
+        {/* Right: Add to Playlist and Inline Volume Control */}
         <div className="coverflow-pill-right">
-          <button
-            className={`coverflow-pill-btn ${viewMode === 'lyrics' ? 'active' : ''}`}
-            onClick={() => setViewMode((m) => (m === 'lyrics' ? 'flow' : 'lyrics'))}
-            title="Toggle Synced Lyrics"
-          >
-            <MessageSquareText size={20} />
-          </button>
+          {onAddToPlaylist && (
+            <button
+              className="coverflow-pill-btn"
+              onClick={() => onAddToPlaylist(currentSong)}
+              title="Add to Playlist"
+            >
+              <ListPlus size={20} />
+            </button>
+          )}
 
-          <button
-            className={`coverflow-pill-btn ${isQueueOpen ? 'active' : ''}`}
-            onClick={() => setIsQueueOpen((q) => !q)}
-            title="Toggle Queue"
-          >
-            <ListMusic size={20} />
-          </button>
-
-          {/* Volume Control */}
-          <div
-            className="coverflow-volume-wrapper"
-            onMouseEnter={() => setIsVolumeHovered(true)}
-            onMouseLeave={() => setIsVolumeHovered(false)}
-          >
-            <button className="coverflow-pill-btn" onClick={onToggleMute} title="Mute / Unmute">
+          {/* Reliable Inline Volume Control (never vanishes prematurely) */}
+          <div className="coverflow-volume-inline">
+            <button className="coverflow-pill-btn" onClick={onToggleMute} title={isMuted ? 'Unmute' : 'Mute'}>
               {isMuted || volume === 0 ? (
-                <VolumeX size={20} />
+                <VolumeX size={19} />
               ) : volume < 0.5 ? (
-                <Volume1 size={20} />
+                <Volume1 size={19} />
               ) : (
-                <Volume2 size={20} />
+                <Volume2 size={19} />
               )}
             </button>
-
-            {isVolumeHovered && (
-              <div className="coverflow-volume-popover">
-                <input
-                  type="range"
-                  min="0"
-                  max="1"
-                  step="0.01"
-                  value={isMuted ? 0 : volume}
-                  onChange={(e) => onVolumeChange(parseFloat(e.target.value))}
-                  className="coverflow-volume-slider"
-                />
-              </div>
-            )}
+            <input
+              type="range"
+              min="0"
+              max="1"
+              step="0.01"
+              value={isMuted ? 0 : volume}
+              onChange={(e) => onVolumeChange(parseFloat(e.target.value))}
+              className="coverflow-volume-slider"
+              title={`Volume: ${Math.round((isMuted ? 0 : volume) * 100)}%`}
+            />
           </div>
         </div>
       </footer>

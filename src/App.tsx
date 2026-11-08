@@ -18,17 +18,17 @@ import { CreatePlaylistModal } from './components/CreatePlaylistModal';
 import { PlayerBar } from './components/PlayerBar';
 import { LyricsDrawer } from './components/LyricsDrawer';
 import { QueueDrawer } from './components/QueueDrawer';
-import { MiniPlayer } from './components/MiniPlayer';
 import { NowPlayingModal } from './components/NowPlayingModal';
 import { ListenTogetherModal } from './components/ListenTogetherModal';
 import { ShortcutsModal } from './components/ShortcutsModal';
 import { SettingsModal } from './components/SettingsModal';
-import { IntroScreen } from './components/IntroScreen';
+// import { IntroScreen } from './components/IntroScreen'; // Temporarily commented out
 import { SleepTimerModal } from './components/SleepTimerModal';
 import { SleepOverlay } from './components/SleepOverlay';
 import { AuthModal } from './components/AuthModal';
 import { UserProfileModal } from './components/UserProfileModal';
 import { UpdateModal, type UpdateState } from './components/UpdateModal';
+import { SpotifyLayout } from './components/SpotifyLayout';
 import { authService, type UserProfile } from './services/authService';
 import { cloudSyncService } from './services/cloudSyncService';
 
@@ -76,7 +76,7 @@ export const App: React.FC = () => {
   const initialSession = useRef<StoredPlaybackSession | null>(getStoredPlaybackSession()).current;
 
   const [songs, setSongs] = useState<Song[]>(INITIAL_SONGS);
-  const [currentSong, setCurrentSong] = useState<Song | null>(() => (initialSession ? initialSession.song : null));
+  const [currentSong, setCurrentSong] = useState<Song | null>(() => (initialSession ? initialSession.song : INITIAL_SONGS[0]));
   const [queue, setQueue] = useState<Song[]>(() => ((initialSession?.queue && initialSession.queue.length > 0) ? initialSession.queue : INITIAL_SONGS));
   const queueRef = useRef<Song[]>((initialSession?.queue && initialSession.queue.length > 0) ? initialSession.queue : INITIAL_SONGS);
   const playbackContextRef = useRef<'radio' | 'playlist'>('radio');
@@ -86,7 +86,7 @@ export const App: React.FC = () => {
   }, [queue]);
   const [isPlaying, setIsPlaying] = useState<boolean>(false);
   const [currentTime, setCurrentTime] = useState<number>(() => (initialSession ? initialSession.currentTime : 0));
-  const [duration, setDuration] = useState<number>(() => (initialSession ? (initialSession.duration || initialSession.song.duration || 0) : 0));
+  const [duration, setDuration] = useState<number>(() => (initialSession ? (initialSession.duration || initialSession.song.duration || 0) : (INITIAL_SONGS[0]?.duration || 0)));
   const [volume, setVolume] = useState<number>(0.85);
   const [isMuted, setIsMuted] = useState<boolean>(false);
   const [isShuffle, setIsShuffle] = useState<boolean>(false);
@@ -94,10 +94,31 @@ export const App: React.FC = () => {
 
   const [activeView, setActiveView] = useState<'home' | 'explore' | 'library' | 'my-playlists' | 'playlist' | 'album'>('home');
   const [selectedAlbumId, setSelectedAlbumId] = useState<string | null>(null);
-  const [hasEntered, setHasEntered] = useState<boolean>(false);
+
+  // UI/UX Mode: 'sunona' (MetroList classic) vs 'spotify' (Spotify desktop layout)
+  const [uiMode, setUiMode] = useState<'sunona' | 'spotify'>(() => {
+    try {
+      const urlMode = new URLSearchParams(window.location.search).get('mode');
+      if (urlMode === 'spotify' || urlMode === 'sunona') return urlMode;
+      const saved = localStorage.getItem('sunona_ui_mode');
+      if (saved === 'spotify' || saved === 'sunona') return saved;
+      return 'spotify';
+    } catch {
+      return 'spotify';
+    }
+  });
+
+  const [isNowPlayingViewOpen, setIsNowPlayingViewOpen] = useState<boolean>(true);
+
+  const handleToggleUiMode = useCallback((mode: 'sunona' | 'spotify') => {
+    setUiMode(mode);
+    try {
+      localStorage.setItem('sunona_ui_mode', mode);
+    } catch {}
+  }, []);
+  // const [hasEntered, setHasEntered] = useState<boolean>(true); // Temporarily commented out
   const [activeDrawer, setActiveDrawer] = useState<'lyrics' | 'queue' | null>(null);
   const [isLoadingLyrics, setIsLoadingLyrics] = useState<boolean>(false);
-  const [isMiniPlayer, setIsMiniPlayer] = useState<boolean>(false);
   const [isNowPlayingOpen, setIsNowPlayingOpen] = useState<boolean>(false);
 
   // Persistent Liked Songs Collection (User-scoped and clean)
@@ -608,29 +629,31 @@ export const App: React.FC = () => {
 
     const isPlaylistMode = playbackContextRef.current === 'playlist';
 
-    // Record play event into local database (Metrolist MusicDatabase event logging)
-    historyService.recordPlay(song);
-    setListenAgain(historyService.getListenAgain());
-    const updatedMp = historyService.getMostPlayed();
-    const updatedTp = historyService.getTasteProfile();
-    setMostPlayed(updatedMp);
-    setTasteProfile(updatedTp.totalPlays > 0 ? updatedTp : undefined);
+    // Record play event asynchronously to keep UI thread 100% smooth at 120 FPS
+    setTimeout(() => {
+      historyService.recordPlay(song);
+      setListenAgain(historyService.getListenAgain());
+      const updatedMp = historyService.getMostPlayed();
+      const updatedTp = historyService.getTasteProfile();
+      setMostPlayed(updatedMp);
+      setTasteProfile(updatedTp.totalPlays > 0 ? updatedTp : undefined);
 
-    // Refresh recommendations for favorite artist if user has plays
-    if (updatedTp.totalPlays > 0 && updatedTp.favoriteArtist) {
-      fetch(`/api/search?q=${encodeURIComponent(updatedTp.favoriteArtist + ' top songs')}`)
-        .then((res) => res.json())
-        .then((data) => {
-          if (data.results && data.results.length > 0) {
-            setFavoriteArtistShelf({
-              title: `Because You Love ${updatedTp.favoriteArtist}`,
-              subtitle: `Curated for your ${updatedTp.primaryGenre} listening habit`,
-              songs: data.results,
-            });
-          }
-        })
-        .catch(() => {});
-    }
+      // Refresh recommendations for favorite artist if user has plays
+      if (updatedTp.totalPlays > 0 && updatedTp.favoriteArtist) {
+        fetch(`/api/search?q=${encodeURIComponent(updatedTp.favoriteArtist + ' top songs')}`)
+          .then((res) => res.json())
+          .then((data) => {
+            if (data.results && data.results.length > 0) {
+              setFavoriteArtistShelf({
+                title: `Because You Love ${updatedTp.favoriteArtist}`,
+                subtitle: `Curated for your ${updatedTp.primaryGenre} listening habit`,
+                songs: data.results,
+              });
+            }
+          })
+          .catch(() => {});
+      }
+    }, 250);
 
     // If a custom playlist queue is provided, set it as the active queue
     if (customQueue && customQueue.length > 0) {
@@ -715,9 +738,11 @@ export const App: React.FC = () => {
       })
       .catch(() => {});
 
-    // If song does not have lyrics, fetch live through 5-stage waterfall
+    // If song does not have lyrics, fetch live through 5-stage waterfall asynchronously
     if (!song.lyrics || song.lyrics.length === 0) {
-      fetchLyricsForSong(song);
+      setTimeout(() => {
+        fetchLyricsForSong(song);
+      }, 200);
     }
 
     if (song.color) {
@@ -733,8 +758,13 @@ export const App: React.FC = () => {
     const currentIndex = queue.findIndex((s) => s.id === currentSong.id);
     const isPlaylistMode = playbackContextRef.current === 'playlist';
 
-    if (isShuffle) {
-      const randomIndex = Math.floor(Math.random() * queue.length);
+    if (isShuffle && queue.length > 1) {
+      let randomIndex = Math.floor(Math.random() * queue.length);
+      let attempts = 0;
+      while (randomIndex === currentIndex && attempts < 10) {
+        randomIndex = Math.floor(Math.random() * queue.length);
+        attempts++;
+      }
       playSong(queue[randomIndex], undefined, isPlaylistMode ? 'playlist' : 'radio');
       return;
     }
@@ -794,20 +824,26 @@ export const App: React.FC = () => {
   // Previous track in queue
   const handlePrev = useCallback(() => {
     if (!currentSong || queue.length === 0) return;
-    if (currentTime > 4) {
+
+    // If track has been playing for more than 3 seconds, restart it from 0:00
+    if (currentTime > 3) {
       audioEngine.seek(0);
       setCurrentTime(0);
       return;
     }
-    const isPlaylistMode = playbackContextRef.current === 'playlist';
+
     const currentIndex = queue.findIndex((s) => s.id === currentSong.id);
-    if (isPlaylistMode && currentIndex <= 0) {
-      // First song in playlist: restart it
+
+    // If on the first song of the queue (or not found), restart it from beginning.
+    // NEVER wrap around to the end or alter the queue!
+    if (currentIndex <= 0) {
       audioEngine.seek(0);
       setCurrentTime(0);
       return;
     }
-    const prevIndex = (currentIndex - 1 + queue.length) % queue.length;
+
+    const isPlaylistMode = playbackContextRef.current === 'playlist';
+    const prevIndex = currentIndex - 1;
     playSong(queue[prevIndex], undefined, isPlaylistMode ? 'playlist' : 'radio');
   }, [currentSong, queue, currentTime, playSong]);
 
@@ -830,6 +866,53 @@ export const App: React.FC = () => {
       listenTogetherService.broadcastHostPause();
     }
   }, [currentSong, songs, playSong, currentTime]);
+
+  const repeatModeRef = useRef(repeatMode);
+  repeatModeRef.current = repeatMode;
+  const currentSongRef = useRef(currentSong);
+  currentSongRef.current = currentSong;
+
+  // Toggle Shuffle with queue reordering & instant feedback
+  const handleToggleShuffle = useCallback(() => {
+    setIsShuffle((prev) => {
+      const nextState = !prev;
+      if (nextState) {
+        setQueue((currQueue) => {
+          if (currQueue.length <= 1) return currQueue;
+          const currentId = currentSongRef.current?.id;
+          const remaining = currQueue.filter((s) => s.id !== currentId);
+          for (let i = remaining.length - 1; i > 0; i--) {
+            const j = Math.floor(Math.random() * (i + 1));
+            [remaining[i], remaining[j]] = [remaining[j], remaining[i]];
+          }
+          const newQueue = currentSongRef.current ? [currentSongRef.current, ...remaining] : remaining;
+          queueRef.current = newQueue;
+          setSongs(newQueue);
+          return newQueue;
+        });
+        showToast('Shuffle: On 🔀');
+      } else {
+        showToast('Shuffle: Off');
+      }
+      return nextState;
+    });
+  }, [showToast]);
+
+  // Toggle Repeat: 1st click = track loop ('one'), 2nd click = all queue ('all'), 3rd click = off
+  const handleToggleRepeat = useCallback(() => {
+    setRepeatMode((prev) => {
+      if (prev === 'off') {
+        showToast('Repeat: Current Track 🔂');
+        return 'one';
+      } else if (prev === 'one') {
+        showToast('Repeat: Entire Queue 🔁');
+        return 'all';
+      } else {
+        showToast('Repeat: Off');
+        return 'off';
+      }
+    });
+  }, [showToast]);
 
   // Persist current playback session so returning users resume where they left off
   const lastSavedTimeRef = useRef<number>(0);
@@ -1094,9 +1177,11 @@ export const App: React.FC = () => {
         triggerSleepMode();
         return;
       }
-      if (repeatMode === 'one' && currentSong) {
+      if (repeatModeRef.current === 'one' && currentSongRef.current) {
         audioEngine.seek(0);
         audioEngine.resume();
+        setCurrentTime(0);
+        setIsPlaying(true);
       } else {
         handleNext();
       }
@@ -1157,15 +1242,12 @@ export const App: React.FC = () => {
         setActiveDrawer((d) => (d === 'lyrics' ? null : 'lyrics'));
       } else if (e.key === 'q' || e.key === 'Q') {
         setActiveDrawer((d) => (d === 'queue' ? null : 'queue'));
-      } else if (e.key === 'p' || e.key === 'P') {
-        setIsMiniPlayer((m) => !m);
       } else if (e.key === '?' || (e.key === '/' && e.shiftKey)) {
         setIsShortcutsOpen(true);
       } else if (e.code === 'Escape') {
         setIsListenTogetherOpen(false);
         setIsShortcutsOpen(false);
         setIsSettingsOpen(false);
-        setIsMiniPlayer(false);
         setIsNowPlayingOpen(false);
       }
     };
@@ -1177,12 +1259,215 @@ export const App: React.FC = () => {
   const likedCount = likedSongs.length;
   const cachedCount = songs.filter((s) => s.isCached).length;
 
+  // Intro Screen temporarily commented out as requested (code preserved)
+  /*
   if (!hasEntered) {
     return <IntroScreen onEnter={() => setHasEntered(true)} />;
   }
+  */
 
+  // ══ SPOTIFY LAYOUT MODE ══
+  if (uiMode === 'spotify') {
+    return (
+      <>
+        <SpotifyLayout
+          currentSong={currentSong}
+          isPlaying={isPlaying}
+          currentTime={currentTime}
+          duration={duration}
+          volume={volume}
+          isMuted={isMuted}
+          isShuffle={isShuffle}
+          repeatMode={repeatMode}
+          queue={queue}
+          songs={songs}
+          albums={INITIAL_ALBUMS}
+          playlists={playlists}
+          likedSongs={likedSongs}
+          dailyDiscover={dailyDiscover}
+          listenAgain={listenAgain}
+          similarShelf={similarShelf}
+          mostPlayed={mostPlayed}
+          tasteProfile={tasteProfile}
+          favoriteArtistShelf={favoriteArtistShelf}
+          user={currentUser}
+          activeView={activeView}
+          selectedPlaylistId={selectedPlaylistId}
+          selectedAlbumId={selectedAlbumId}
+          isLyricsOpen={activeDrawer === 'lyrics'}
+          isQueueOpen={activeDrawer === 'queue'}
+          isNowPlayingViewOpen={isNowPlayingViewOpen}
+          isSleepTimerActive={sleepRemainingSeconds !== null || isSleepEndOfTrack}
+          sleepRemainingText={
+            isSleepEndOfTrack
+              ? 'Track'
+              : sleepRemainingSeconds !== null
+              ? `${Math.floor(sleepRemainingSeconds / 60)}:${sleepRemainingSeconds % 60 < 10 ? '0' : ''}${sleepRemainingSeconds % 60}`
+              : null
+          }
+          onPlaySong={playSong}
+          onTogglePlay={handleTogglePlay}
+          onNext={handleNext}
+          onPrev={handlePrev}
+          onSeek={handleSeek}
+          onVolumeChange={handleVolumeChange}
+          onToggleMute={handleToggleMute}
+          onToggleShuffle={handleToggleShuffle}
+          onToggleRepeat={handleToggleRepeat}
+          onToggleLike={handleToggleLike}
+          onAddToPlaylist={(song) => setSongToAddToPlaylist(song)}
+          onToggleLyrics={() => setActiveDrawer((d) => (d === 'lyrics' ? null : 'lyrics'))}
+          onToggleQueue={() => setActiveDrawer((d) => (d === 'queue' ? null : 'queue'))}
+          onToggleNowPlayingView={() => setIsNowPlayingViewOpen((prev) => !prev)}
+          onOpenNowPlaying={() => setIsNowPlayingOpen(true)}
+          onOpenSleepTimer={() => setIsSleepModalOpen(true)}
+          onCreatePlaylist={() => setIsCreatePlaylistOpen(true)}
+          onSelectPlaylist={handleSelectPlaylist}
+          onSelectAlbum={handleSelectAlbum}
+          setActiveView={setActiveView}
+          onOpenLibrary={handleOpenLibrary}
+          onOpenAuth={() => setIsAuthModalOpen(true)}
+          onOpenProfile={() => setIsProfileModalOpen(true)}
+          onSelectSong={playSong}
+          onOpenListenTogether={() => setIsListenTogetherOpen(true)}
+          onOpenSettings={() => setIsSettingsOpen(true)}
+          onGoSunoNa={() => handleToggleUiMode('sunona')}
+        />
+
+        {/* Fullscreen Now Playing Showcase Modal */}
+        {isNowPlayingOpen && currentSong && (
+          <NowPlayingModal
+            isOpen={isNowPlayingOpen}
+            onClose={() => setIsNowPlayingOpen(false)}
+            currentSong={currentSong}
+            queue={queue}
+            isPlaying={isPlaying}
+            currentTime={currentTime}
+            duration={duration}
+            volume={volume}
+            isMuted={isMuted}
+            isShuffle={isShuffle}
+            repeatMode={repeatMode}
+            currentTheme={currentTheme}
+            onPlaySong={playSong}
+            onTogglePlay={handleTogglePlay}
+            onNext={handleNext}
+            onPrev={handlePrev}
+            onSeek={handleSeek}
+            onVolumeChange={handleVolumeChange}
+            onToggleMute={handleToggleMute}
+            onToggleShuffle={handleToggleShuffle}
+            onToggleRepeat={handleToggleRepeat}
+            onToggleLike={handleToggleLike}
+            onAddToPlaylist={(song) => setSongToAddToPlaylist(song)}
+          />
+        )}
+
+        {/* Add To Playlist Modal */}
+        <AddToPlaylistModal
+          isOpen={Boolean(songToAddToPlaylist)}
+          song={songToAddToPlaylist}
+          playlists={playlists}
+          onClose={() => setSongToAddToPlaylist(null)}
+          onAddToPlaylist={handleAddToPlaylist}
+          onCreateAndAdd={handleCreateAndAdd}
+        />
+
+        {/* Create Playlist Modal */}
+        <CreatePlaylistModal
+          isOpen={isCreatePlaylistOpen}
+          onClose={() => setIsCreatePlaylistOpen(false)}
+          onCreate={handleCreatePlaylist}
+        />
+
+        {/* Floating Toast */}
+        {toastMessage && (
+          <div className="toast-notification">
+            <span>{toastMessage}</span>
+          </div>
+        )}
+
+        {/* Listen Together Modal */}
+        <ListenTogetherModal
+          isOpen={isListenTogetherOpen}
+          onClose={() => setIsListenTogetherOpen(false)}
+          currentSong={currentSong}
+          isPlaying={isPlaying}
+        />
+
+        {/* Settings Dialog */}
+        <SettingsModal
+          isOpen={isSettingsOpen}
+          onClose={() => setIsSettingsOpen(false)}
+          onOpenIntro={() => setIsSettingsOpen(false)}
+        />
+
+        {/* Sleep Timer Modal */}
+        <SleepTimerModal
+          isOpen={isSleepModalOpen}
+          activeRemainingSeconds={sleepRemainingSeconds}
+          isEndOfTrack={isSleepEndOfTrack}
+          onSetTimer={handleSetSleepTimer}
+          onSetEndOfTrack={handleSetSleepEndOfTrack}
+          onCancelTimer={handleCancelSleepTimer}
+          onAddMinutes={handleAddSleepMinutes}
+          onClose={() => setIsSleepModalOpen(false)}
+        />
+
+        {/* Deep Sleep Overlay */}
+        <SleepOverlay
+          isOpen={isSleepOverlayOpen}
+          onWakeUp={() => setIsSleepOverlayOpen(false)}
+        />
+
+        {/* Google Auth */}
+        <AuthModal
+          isOpen={isAuthModalOpen}
+          onClose={() => setIsAuthModalOpen(false)}
+          onSuccess={(user) => {
+            setCurrentUser(user);
+            showToast(`Welcome, ${user.displayName}! Cloud sync active.`);
+          }}
+        />
+
+        {/* Profile Modal */}
+        {currentUser && (
+          <UserProfileModal
+            isOpen={isProfileModalOpen}
+            onClose={() => setIsProfileModalOpen(false)}
+            user={currentUser}
+            likedSongsCount={likedSongs.length}
+            playlistsCount={playlists.length}
+            onSignOut={() => {
+              authService.signOut();
+              setCurrentUser(null);
+              historyService.setUser('guest');
+              historyService.clear();
+              setLikedSongs([]);
+              playlistService.setPlaylists([]);
+              setPlaylists([]);
+              setTasteProfile(undefined);
+              setMostPlayed([]);
+              setListenAgain([]);
+              setFavoriteArtistShelf(null);
+              setDailyDiscover([]);
+              setSimilarShelf(null);
+              try {
+                if (currentUser?.uid) localStorage.removeItem(`sunona_liked_songs_${currentUser.uid}`);
+                localStorage.removeItem('sunona_liked_songs_guest');
+              } catch {}
+              showToast('Signed out successfully.');
+            }}
+            onManualSync={handleManualCloudSync}
+          />
+        )}
+      </>
+    );
+  }
+
+  // ══ SUNONA CLASSIC MODE ══
   return (
-    <div className="app-container">
+    <div className={`app-container sunona-mode`} data-ui-mode={uiMode}>
       {/* Subtle Atmospheric Background Cover Glow */}
       <div className="ambient-background">
         {currentSong && (
@@ -1195,8 +1480,8 @@ export const App: React.FC = () => {
 
       {/* Top Header with Live YouTube Search & Software Updates */}
       <Header
+        onGoHome={() => setActiveView('home')}
         onSelectSong={playSong}
-        onToggleMiniPlayer={() => setIsMiniPlayer((m) => !m)}
         onOpenShortcuts={() => setIsShortcutsOpen(true)}
         onOpenUpdates={() => setIsUpdateModalOpen(true)}
         isUpdateReady={updateState.status === 'ready'}
@@ -1207,6 +1492,8 @@ export const App: React.FC = () => {
         user={currentUser}
         onOpenAuth={() => setIsAuthModalOpen(true)}
         onOpenProfile={() => setIsProfileModalOpen(true)}
+        uiMode={uiMode}
+        onToggleUiMode={handleToggleUiMode}
       />
 
       {/* Body: Sidebar + Main Viewport + Drawer */}
@@ -1226,6 +1513,7 @@ export const App: React.FC = () => {
           onSelectTheme={applyTheme}
           likedCount={likedCount}
           cachedCount={cachedCount}
+          uiMode={uiMode}
         />
 
         {activeView === 'home' && (
@@ -1289,7 +1577,8 @@ export const App: React.FC = () => {
         {activeView === 'playlist' && (
           (() => {
             const currentPlaylist = playlists.find((p) => p.id === selectedPlaylistId) || playlists[0];
-            return currentPlaylist ? (
+            if (!currentPlaylist) return null;
+            return (
               <PlaylistScreen
                 playlist={currentPlaylist}
                 currentSong={currentSong}
@@ -1302,14 +1591,15 @@ export const App: React.FC = () => {
                 onRemoveSong={handleRemoveSongFromPlaylist}
                 onToggleLike={handleToggleLike}
               />
-            ) : null;
+            );
           })()
         )}
 
         {activeView === 'album' && (
           (() => {
             const currentAlbum = INITIAL_ALBUMS.find((a) => a.id === selectedAlbumId) || INITIAL_ALBUMS[0];
-            return currentAlbum ? (
+            if (!currentAlbum) return null;
+            return (
               <AlbumScreen
                 album={currentAlbum}
                 currentSong={currentSong}
@@ -1321,7 +1611,7 @@ export const App: React.FC = () => {
                 onToggleLike={handleToggleLike}
                 onAddToPlaylist={(song) => setSongToAddToPlaylist(song)}
               />
-            ) : null;
+            );
           })()
         )}
 
@@ -1363,6 +1653,9 @@ export const App: React.FC = () => {
         isLyricsOpen={activeDrawer === 'lyrics'}
         isQueueOpen={activeDrawer === 'queue'}
         currentTheme={currentTheme}
+        uiMode={uiMode}
+        isNowPlayingViewOpen={isNowPlayingViewOpen}
+        onToggleNowPlayingView={() => setIsNowPlayingViewOpen((prev) => !prev)}
         onOpenNowPlaying={() => setIsNowPlayingOpen(true)}
         onTogglePlay={handleTogglePlay}
         onNext={handleNext}
@@ -1370,15 +1663,10 @@ export const App: React.FC = () => {
         onSeek={handleSeek}
         onVolumeChange={handleVolumeChange}
         onToggleMute={handleToggleMute}
-        onToggleShuffle={() => setIsShuffle((s) => !s)}
-        onToggleRepeat={() => {
-          if (repeatMode === 'off') setRepeatMode('all');
-          else if (repeatMode === 'all') setRepeatMode('one');
-          else setRepeatMode('off');
-        }}
+        onToggleShuffle={handleToggleShuffle}
+        onToggleRepeat={handleToggleRepeat}
         onToggleLyrics={() => setActiveDrawer((d) => (d === 'lyrics' ? null : 'lyrics'))}
         onToggleQueue={() => setActiveDrawer((d) => (d === 'queue' ? null : 'queue'))}
-        onToggleMiniPlayer={() => setIsMiniPlayer((m) => !m)}
         onToggleLike={handleToggleLike}
         onAddToPlaylist={(song) => setSongToAddToPlaylist(song)}
         isSleepTimerActive={sleepRemainingSeconds !== null || isSleepEndOfTrack}
@@ -1414,28 +1702,10 @@ export const App: React.FC = () => {
           onSeek={handleSeek}
           onVolumeChange={handleVolumeChange}
           onToggleMute={handleToggleMute}
-          onToggleShuffle={() => setIsShuffle((s) => !s)}
-          onToggleRepeat={() => {
-            if (repeatMode === 'off') setRepeatMode('all');
-            else if (repeatMode === 'all') setRepeatMode('one');
-            else setRepeatMode('off');
-          }}
+          onToggleShuffle={handleToggleShuffle}
+          onToggleRepeat={handleToggleRepeat}
           onToggleLike={handleToggleLike}
-        />
-      )}
-
-      {/* Floating Mini-Player for Laptop Multitasking */}
-      {isMiniPlayer && (
-        <MiniPlayer
-          currentSong={currentSong}
-          isPlaying={isPlaying}
-          currentTime={currentTime}
-          duration={duration}
-          onTogglePlay={handleTogglePlay}
-          onNext={handleNext}
-          onPrev={handlePrev}
-          onExpand={() => setIsMiniPlayer(false)}
-          onToggleLyrics={() => setActiveDrawer((d) => (d === 'lyrics' ? null : 'lyrics'))}
+          onAddToPlaylist={(song) => setSongToAddToPlaylist(song)}
         />
       )}
 
@@ -1477,13 +1747,13 @@ export const App: React.FC = () => {
         onClose={() => setIsShortcutsOpen(false)}
       />
 
-      {/* Settings & Equalizer Dialog */}
+      {/* Settings Dialog */}
       <SettingsModal
         isOpen={isSettingsOpen}
         onClose={() => setIsSettingsOpen(false)}
         onOpenIntro={() => {
           setIsSettingsOpen(false);
-          setHasEntered(false);
+          // setHasEntered(false); // Intro screen commented out
         }}
       />
 

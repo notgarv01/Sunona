@@ -1,11 +1,10 @@
 import React, { useState, useRef, useEffect, useCallback } from 'react';
-import { Search, Play, Keyboard, X, Loader2, Disc, ListPlus, Clock, TrendingUp, Download, RefreshCw } from 'lucide-react';
+import { Search, Keyboard, X, Loader2, Disc, Download, RefreshCw, Home, ChevronLeft, ChevronRight, MoreHorizontal, Bell, Users, Library } from 'lucide-react';
 import type { Song } from '../types';
 import type { UserProfile } from '../services/authService';
 
 interface Props {
   onSelectSong: (song: Song) => void;
-  onToggleMiniPlayer: () => void;
   onOpenShortcuts: () => void;
   onOpenUpdates?: () => void;
   isUpdateReady?: boolean;
@@ -17,47 +16,77 @@ interface Props {
   user?: UserProfile | null;
   onOpenAuth?: () => void;
   onOpenProfile?: () => void;
+  onGoHome?: () => void;
+  uiMode?: 'sunona' | 'spotify';
+  onToggleUiMode?: (mode: 'sunona' | 'spotify') => void;
 }
 
-const SEARCH_HISTORY_KEY = 'metrolist_search_history_v1';
-const TRENDING_SUGGESTIONS = [
-  'Arz Kiya Hai',
-  'Khat',
-  'Arijit Singh',
-  'Anuv Jain',
-  'Pritam Hits',
-  'Lo-Fi Hindi',
-];
+interface RecentSearchSong {
+  id: string;
+  title: string;
+  artist: string;
+  coverUrl: string;
+  duration?: number;
+}
 
-function getStoredSearchHistory(): string[] {
+const RECENT_SONGS_KEY = 'sunona_recent_search_songs_v2';
+
+function getStoredRecentSongs(): RecentSearchSong[] {
   try {
-    const raw = localStorage.getItem(SEARCH_HISTORY_KEY);
+    const raw = localStorage.getItem(RECENT_SONGS_KEY);
     if (raw) {
       const parsed = JSON.parse(raw);
-      if (Array.isArray(parsed)) return parsed.filter((s) => typeof s === 'string' && s.trim().length > 0);
+      if (Array.isArray(parsed) && parsed.length > 0) return parsed;
     }
   } catch {}
-  return [];
+  return [
+    {
+      id: 'f87jV0iK3fE',
+      title: 'Pyaar Tune Kya Kiya',
+      artist: 'Jubin Nautiyal',
+      coverUrl: 'https://images.unsplash.com/photo-1518609878373-06d740f60d8b?w=200&auto=format&fit=crop&q=80',
+    },
+    {
+      id: 'kH8a93n4k12',
+      title: 'Khuda Bhi',
+      artist: 'Tony Kakkar, Mohit Chauhan, Manoj Muntashir',
+      coverUrl: 'https://images.unsplash.com/photo-1470225620780-dba8ba36b745?w=200&auto=format&fit=crop&q=80',
+    },
+    {
+      id: 'r83nj48912j',
+      title: 'Raanjhanaa (From "Raanjhanaa")',
+      artist: 'A.R. Rahman, Jaswinder Singh, Shiraz Uppal',
+      coverUrl: 'https://images.unsplash.com/photo-1511671782779-c97d3d27a1d4?w=200&auto=format&fit=crop&q=80',
+    },
+    {
+      id: 's83nj48912j',
+      title: 'Sajde - From "Lost;Found"',
+      artist: 'Faheem Abdullah, Huzaif Nazar',
+      coverUrl: 'https://images.unsplash.com/photo-1493225457124-a3eb161ffa5f?w=200&auto=format&fit=crop&q=80',
+    },
+  ];
 }
 
 export const Header: React.FC<Props> = ({
   onSelectSong,
-  onToggleMiniPlayer: _onToggleMiniPlayer,
   onOpenShortcuts,
   onOpenUpdates,
   isUpdateReady,
   isUpdateDownloading,
   version = '1.0.9',
-  onAddToPlaylist,
-  currentSong,
+  onAddToPlaylist: _onAddToPlaylist,
+  currentSong: _currentSong,
   isPlaying,
   user,
   onOpenAuth,
   onOpenProfile,
+  onGoHome,
+  uiMode = 'sunona',
+  onToggleUiMode,
 }) => {
   const [searchQuery, setSearchQuery] = useState('');
   const [searchResults, setSearchResults] = useState<Song[]>([]);
-  const [searchHistory, setSearchHistory] = useState<string[]>(getStoredSearchHistory);
+  const [recentSongs, setRecentSongs] = useState<RecentSearchSong[]>(getStoredRecentSongs);
   const [isLoading, setIsLoading] = useState(false);
   const [isDropdownOpen, setIsDropdownOpen] = useState(false);
   const searchRef = useRef<HTMLDivElement | null>(null);
@@ -83,44 +112,44 @@ export const Header: React.FC<Props> = ({
     }
   };
 
-  const saveToHistory = useCallback((query: string) => {
-    const trimmed = query.trim();
-    if (!trimmed || trimmed.length < 2) return;
-    setSearchHistory((prev) => {
-      const filtered = prev.filter((q) => q.toLowerCase() !== trimmed.toLowerCase());
-      const updated = [trimmed, ...filtered].slice(0, 15);
+  const saveRecentSong = useCallback((song: Song | RecentSearchSong) => {
+    setRecentSongs((prev) => {
+      const filtered = prev.filter((s) => s.id !== song.id);
+      const updated: RecentSearchSong[] = [
+        {
+          id: song.id,
+          title: song.title,
+          artist: song.artist,
+          coverUrl: song.coverUrl,
+          duration: song.duration,
+        },
+        ...filtered,
+      ].slice(0, 10);
       try {
-        localStorage.setItem(SEARCH_HISTORY_KEY, JSON.stringify(updated));
+        localStorage.setItem(RECENT_SONGS_KEY, JSON.stringify(updated));
       } catch {}
       return updated;
     });
   }, []);
 
-  const removeFromHistory = useCallback((query: string, e?: React.MouseEvent) => {
+  const removeRecentSong = useCallback((id: string, e?: React.MouseEvent) => {
     e?.stopPropagation();
-    setSearchHistory((prev) => {
-      const updated = prev.filter((q) => q !== query);
+    setRecentSongs((prev) => {
+      const updated = prev.filter((s) => s.id !== id);
       try {
-        localStorage.setItem(SEARCH_HISTORY_KEY, JSON.stringify(updated));
+        localStorage.setItem(RECENT_SONGS_KEY, JSON.stringify(updated));
       } catch {}
       return updated;
     });
   }, []);
 
-  const clearAllHistory = useCallback((e?: React.MouseEvent) => {
+  const clearAllRecent = useCallback((e?: React.MouseEvent) => {
     e?.stopPropagation();
-    setSearchHistory([]);
+    setRecentSongs([]);
     try {
-      localStorage.removeItem(SEARCH_HISTORY_KEY);
+      localStorage.removeItem(RECENT_SONGS_KEY);
     } catch {}
   }, []);
-
-  const handleSelectQuery = useCallback((query: string) => {
-    setSearchQuery(query);
-    saveToHistory(query);
-    setIsDropdownOpen(true);
-    inputRef.current?.focus();
-  }, [saveToHistory]);
 
   // Global Ctrl+K shortcut listener
   useEffect(() => {
@@ -192,21 +221,45 @@ export const Header: React.FC<Props> = ({
   }, []);
 
   return (
-    <header className="app-header">
-      {/* Brand */}
+    <header className={`app-header ${uiMode === 'spotify' ? 'spotify-header' : ''}`}>
+      {/* Brand & Spotify Top Nav */}
       <div className="header-left">
-        <div className="brand-badge" onClick={() => window.location.reload()}>
-          <div className="brand-logo-icon">
-            <Disc size={20} className={isPlaying ? 'spinning-disc-icon' : ''} />
+        {uiMode === 'spotify' ? (
+          <div className="spotify-hdr-nav-cluster">
+            <button className="spotify-hdr-dots-btn" title="More options">
+              <MoreHorizontal size={18} />
+            </button>
+            <button className="spotify-hdr-nav-btn" onClick={() => window.history.back()} title="Go back">
+              <ChevronLeft size={20} />
+            </button>
+            <button className="spotify-hdr-nav-btn disabled" title="Go forward">
+              <ChevronRight size={20} />
+            </button>
+            <button className="spotify-hdr-home-btn" onClick={onGoHome} title="Home">
+              <Home size={22} />
+            </button>
           </div>
-          <div>
-            <span className="brand-title">SunoNa!!</span>
-            <div className="brand-subtitle" style={{ color: 'var(--accent)', fontWeight: 600, letterSpacing: '0.04em' }}>v{version}</div>
+        ) : (
+          <div
+            className="brand-badge"
+            style={{ cursor: 'pointer' }}
+            onClick={() => {
+              if (onGoHome) onGoHome();
+            }}
+            title="Go to Home"
+          >
+            <div className="brand-logo-icon">
+              <Disc size={20} className={isPlaying ? 'spinning-disc-icon' : ''} />
+            </div>
+            <div>
+              <span className="brand-title">SunoNa!!</span>
+              <div className="brand-subtitle" style={{ color: 'var(--accent)', fontWeight: 600, letterSpacing: '0.04em' }}>v{version}</div>
+            </div>
           </div>
-        </div>
+        )}
 
-        {/* Global Live YouTube Music Search Bar */}
-        <div className="search-container" ref={searchRef}>
+        {/* Global Live YouTube Music Search Bar (Spotify Style) */}
+        <div className={`search-container ${uiMode === 'spotify' ? 'spotify-search-container' : ''}`} ref={searchRef}>
           <div className="search-input-wrapper">
             {isLoading ? (
               <Loader2 className="search-icon" style={{ animation: 'spin 1s linear infinite' }} />
@@ -217,7 +270,7 @@ export const Header: React.FC<Props> = ({
               ref={inputRef}
               type="text"
               className="search-input"
-              placeholder="Search tracks, artists, albums..."
+              placeholder="What do you want to play?"
               value={searchQuery}
               onChange={(e) => {
                 setSearchQuery(e.target.value);
@@ -226,10 +279,8 @@ export const Header: React.FC<Props> = ({
               onFocus={() => setIsDropdownOpen(true)}
               onKeyDown={(e) => {
                 if (e.key === 'Enter') {
-                  if (searchQuery.trim()) {
-                    saveToHistory(searchQuery.trim());
-                  }
                   if (searchResults.length > 0) {
+                    saveRecentSong(searchResults[0]);
                     onSelectSong(searchResults[0]);
                     setIsDropdownOpen(false);
                   }
@@ -247,177 +298,106 @@ export const Header: React.FC<Props> = ({
                   setSearchResults([]);
                 }}
               />
+            ) : uiMode === 'spotify' ? (
+              <div className="spotify-search-browse-addon">
+                <span className="spotify-search-divider" />
+                <button
+                  type="button"
+                  className="spotify-search-browse-btn"
+                  title="Browse"
+                >
+                  <Library size={16} />
+                </button>
+              </div>
             ) : (
               <span className="search-shortcut">Ctrl+K</span>
             )}
           </div>
 
-          {/* Instant Search Results & History Dropdown */}
+          {/* Instant Search Results & Recent Searches Dropdown */}
           {isDropdownOpen && (
             <div className="search-results-dropdown">
               {searchQuery.trim() === '' ? (
-                <>
-                  {/* Recent Searches Section */}
-                  {searchHistory.length > 0 && (
-                    <div className="search-history-section">
-                      <div className="search-section-header">
-                        <div className="search-section-title">
-                          <Clock size={13} className="search-history-clock-icon" />
-                          <span>Recent Searches</span>
-                        </div>
-                        <button
-                          className="search-clear-all-btn"
-                          onClick={clearAllHistory}
-                          title="Clear all search history"
-                        >
-                          Clear all
-                        </button>
-                      </div>
-
-                      <div className="search-history-list">
-                        {searchHistory.map((item, idx) => (
-                          <div
-                            key={`hist_${idx}_${item}`}
-                            className="search-history-item"
-                            onClick={() => handleSelectQuery(item)}
-                          >
-                            <div className="search-history-item-left">
-                              <Clock size={14} className="search-history-clock-icon" />
-                              <span className="search-history-text">{item}</span>
-                            </div>
-                            <button
-                              className="search-history-remove-btn"
-                              onClick={(e) => removeFromHistory(item, e)}
-                              title="Delete search"
-                            >
-                              <X size={13} />
-                            </button>
-                          </div>
-                        ))}
-                      </div>
-                    </div>
-                  )}
-
-                  {/* Trending Suggestions Section */}
-                  <div className="search-trending-section">
-                    <div
-                      className="search-section-header"
-                      style={{ marginTop: searchHistory.length > 0 ? '8px' : '0' }}
-                    >
-                      <div className="search-section-title">
-                        <TrendingUp size={13} style={{ color: 'var(--accent)' }} />
-                        <span>Trending & Suggested</span>
-                      </div>
-                    </div>
-                    <div className="search-trending-chips">
-                      {TRENDING_SUGGESTIONS.map((item) => (
-                        <div
-                          key={`trend_${item}`}
-                          className="search-trending-chip"
-                          onClick={() => handleSelectQuery(item)}
-                        >
-                          <span>{item}</span>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                </>
-              ) : (
-                <>
-                  {/* Matching history quick-tags while typing */}
-                  {(() => {
-                    const matches = searchHistory
-                      .filter(
-                        (h) =>
-                          h.toLowerCase().includes(searchQuery.toLowerCase()) &&
-                          h.toLowerCase() !== searchQuery.toLowerCase()
-                      )
-                      .slice(0, 3);
-
-                    return matches.length > 0 ? (
-                      <div className="search-matching-history-row">
-                        {matches.map((match) => (
-                          <div
-                            key={`match_${match}`}
-                            className="search-matching-pill"
-                            onClick={() => handleSelectQuery(match)}
-                            title={`Search "${match}"`}
-                          >
-                            <Clock size={12} />
-                            <span>{match}</span>
-                          </div>
-                        ))}
-                      </div>
-                    ) : null;
-                  })()}
-
-                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '6px 12px' }}>
-                    <span style={{ fontSize: '0.72rem', color: 'var(--text-muted)', fontWeight: 700, textTransform: 'uppercase' }}>
-                      Live YouTube Music ({searchResults.length})
-                    </span>
-                    {isLoading && <span style={{ fontSize: '0.7rem', color: 'var(--primary)' }}>Searching YouTube...</span>}
+                <div className="search-history-section">
+                  <div className="search-section-header" style={{ borderBottom: 'none', padding: '10px 12px 6px' }}>
+                    <span style={{ fontSize: '0.92rem', fontWeight: 700, color: '#ffffff' }}>Recent searches</span>
+                    {recentSongs.length > 0 && (
+                      <button className="search-clear-all-btn" onClick={clearAllRecent}>
+                        Clear all
+                      </button>
+                    )}
                   </div>
 
-                  {searchResults.length > 0 ? (
-                    searchResults.map((song) => (
+                  <div className="search-history-list" style={{ padding: '0 2px' }}>
+                    {recentSongs.map((song) => (
                       <div
                         key={song.id}
                         className="search-result-item"
                         onClick={() => {
-                          if (searchQuery.trim()) {
-                            saveToHistory(searchQuery.trim());
-                          }
-                          onSelectSong(song);
+                          saveRecentSong(song);
+                          onSelectSong({
+                            ...song,
+                            album: 'YouTube Music',
+                            duration: song.duration || 210,
+                            audioUrl: '',
+                            lyrics: [],
+                          });
                           setIsDropdownOpen(false);
                         }}
                       >
                         <img src={song.coverUrl} alt={song.title} className="search-result-thumb" />
                         <div className="search-result-info">
                           <div className="search-result-title">{song.title}</div>
-                          <div className="search-result-subtitle" style={{ display: 'flex', alignItems: 'center', gap: '4px', overflow: 'hidden' }}>
-                            {/official|coke studio|vevo|t-series|sony|yrf|zee music/i.test(song.title + ' ' + song.artist) && (
-                              <span className="search-official-tag">OFFICIAL</span>
-                            )}
-                            <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                              {song.artist} • {song.views}
-                            </span>
-                          </div>
+                          <div className="search-result-subtitle">Song • {song.artist}</div>
                         </div>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexShrink: 0 }}>
-                          <button
-                            className="icon-btn"
-                            style={{ width: '28px', height: '28px', borderRadius: '50%', background: 'rgba(255, 255, 255, 0.08)' }}
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              onAddToPlaylist?.(song);
-                            }}
-                            title="Add to Playlist"
-                          >
-                            <ListPlus size={14} />
-                          </button>
-                          <div
-                            style={{
-                              width: '28px',
-                              height: '28px',
-                              borderRadius: '50%',
-                              background: 'var(--primary)',
-                              display: 'flex',
-                              alignItems: 'center',
-                              justifyContent: 'center',
-                              boxShadow: '0 2px 8px rgba(0, 0, 0, 0.4)',
-                              color: '#0b0914',
-                            }}
-                          >
-                            <Play size={13} fill="#0b0914" color="#0b0914" style={{ marginLeft: '2px' }} />
-                          </div>
-                        </div>
+                        <button
+                          className="search-history-remove-btn"
+                          onClick={(e) => removeRecentSong(song.id, e)}
+                          title="Remove from recents"
+                          style={{ opacity: 0.6, padding: '4px' }}
+                        >
+                          <X size={14} />
+                        </button>
                       </div>
-                    ))
-                  ) : !isLoading ? (
-                    <div style={{ padding: '20px', textAlign: 'center', color: 'var(--text-muted)', fontSize: '0.85rem' }}>
-                      No tracks found on YouTube for "{searchQuery}"
-                    </div>
-                  ) : null}
+                    ))}
+                  </div>
+                </div>
+              ) : (
+                <>
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '10px 12px 6px' }}>
+                    <span style={{ fontSize: '0.92rem', fontWeight: 700, color: '#ffffff' }}>Search results</span>
+                    {isLoading && (
+                      <span style={{ fontSize: '0.74rem', color: 'var(--primary)', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                        <Loader2 size={13} className="animate-spin" /> Searching...
+                      </span>
+                    )}
+                  </div>
+
+                  <div style={{ padding: '0 2px' }}>
+                    {searchResults.length > 0 ? (
+                      searchResults.map((song) => (
+                        <div
+                          key={song.id}
+                          className="search-result-item"
+                          onClick={() => {
+                            saveRecentSong(song);
+                            onSelectSong(song);
+                            setIsDropdownOpen(false);
+                          }}
+                        >
+                          <img src={song.coverUrl} alt={song.title} className="search-result-thumb" />
+                          <div className="search-result-info">
+                            <div className="search-result-title">{song.title}</div>
+                            <div className="search-result-subtitle">Song • {song.artist}</div>
+                          </div>
+                        </div>
+                      ))
+                    ) : !isLoading ? (
+                      <div style={{ padding: '24px 16px', textAlign: 'center', color: 'var(--text-muted)', fontSize: '0.86rem' }}>
+                        No songs found for "{searchQuery}"
+                      </div>
+                    ) : null}
+                  </div>
                 </>
               )}
             </div>
@@ -438,16 +418,6 @@ export const Header: React.FC<Props> = ({
             <span>Install App</span>
           </button>
         )}
-
-        {/* Playback Status Badge */}
-        <div className={`playback-status-pill ${isPlaying && currentSong ? 'playing' : 'idle'}`} title="Audio Engine Status">
-          <span className={`playback-status-dot ${isPlaying && currentSong ? 'playing' : 'idle'}`} />
-          <span>
-            {isPlaying && currentSong
-              ? `${currentSong.title}`
-              : 'Engine Ready'}
-          </span>
-        </div>
 
         {/* Check for Software Updates Button */}
         <button
@@ -473,6 +443,28 @@ export const Header: React.FC<Props> = ({
           )}
         </button>
 
+        {/* Spotify vs SunoNa UI Mode Switcher Pill */}
+        <div className="header-ui-mode-pill">
+          <button
+            className={`header-ui-mode-btn ${uiMode === 'sunona' ? 'active' : ''}`}
+            onClick={() => onToggleUiMode?.('sunona')}
+            title="Switch to SunoNa Original UI"
+          >
+            <Disc size={13} className={isPlaying && uiMode === 'sunona' ? 'spinning-disc-icon' : ''} />
+            <span>SunoNa</span>
+          </button>
+          <button
+            className={`header-ui-mode-btn ${uiMode === 'spotify' ? 'active' : ''}`}
+            onClick={() => onToggleUiMode?.('spotify')}
+            title="Switch to Spotify Desktop UI"
+          >
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="currentColor">
+              <path d="M12 0C5.4 0 0 5.4 0 12s5.4 12 12 12 12-5.4 12-12S18.66 0 12 0zm5.521 17.34c-.24.359-.66.48-1.021.24-2.82-1.74-6.36-2.101-10.561-1.141-.418.122-.779-.179-.899-.539-.12-.421.18-.78.54-.9 4.56-1.021 8.52-.6 11.64 1.32.42.18.479.659.301 1.02zm1.44-3.3c-.301.42-.841.6-1.262.3-3.239-1.98-8.159-2.58-11.939-1.38-.479.12-1.02-.12-1.14-.6-.12-.48.12-1.021.6-1.141C9.6 9.9 15 10.561 18.72 12.84c.361.181.54.78.241 1.2zm.12-3.36C15.24 8.4 8.82 8.16 5.16 9.301c-.6.179-1.2-.181-1.38-.721-.18-.601.18-1.2.72-1.381 4.26-1.26 11.28-1.02 15.721 1.621.539.3.719 1.02.419 1.56-.299.421-1.02.599-1.559.3z" />
+            </svg>
+            <span>Spotify</span>
+          </button>
+        </div>
+
         {/* Laptop Keyboard Shortcuts Dialog */}
         <button
           className="icon-btn"
@@ -482,8 +474,24 @@ export const Header: React.FC<Props> = ({
           <Keyboard size={18} />
         </button>
 
-        {/* Google Authentication & Cloud Sync Pill */}
-        {user ? (
+        {/* Spotify User Cluster (Bell, Friends, Garvgupta Avatar) */}
+        {uiMode === 'spotify' ? (
+          <div className="spotify-hdr-user-cluster">
+            <button className="spotify-hdr-icon-btn" title="What's New">
+              <Bell size={18} />
+            </button>
+            <button className="spotify-hdr-icon-btn" title="Friend Activity">
+              <Users size={18} />
+            </button>
+            <div
+              className="spotify-hdr-avatar-g"
+              onClick={onOpenProfile || onOpenAuth}
+              title={user?.displayName ? `${user.displayName} (Profile)` : 'Garvgupta (Profile)'}
+            >
+              {user?.displayName ? user.displayName.charAt(0).toUpperCase() : 'G'}
+            </div>
+          </div>
+        ) : user ? (
           <button
             onClick={onOpenProfile}
             className="header-user-profile-btn"

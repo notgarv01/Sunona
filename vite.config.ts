@@ -276,7 +276,7 @@ function youtubeStreamingPlugin(): Plugin {
 
               const qWords = qLower.split(/\s+/).filter(Boolean);
 
-              // Heavy penalty for non-songs, jukeboxes, albums, mashups
+              // 1. Heavy Penalties for Non-Original, Bootlegs, Live Concerts & Low Quality Clutter
               if (/jukebox|all songs|compilation|mashup|nonstop|full album|best of/i.test(rt)) {
                 score -= 600;
               }
@@ -286,8 +286,20 @@ function youtubeStreamingPlugin(): Plugin {
               if (/karaoke/i.test(rt) || /karaoke/i.test(a)) score -= 300;
               if (/instrumental/i.test(rt)) score -= 200;
               if (/tutorial|guitar lesson|how to play/i.test(rt)) score -= 300;
+              if (!/live/i.test(qLower) && /live performance|live concert|live show|live stage|live in concert|live at/i.test(rt)) {
+                score -= 600; // Big penalty for live performance when asking for original
+              }
+              if (!/cover/i.test(qLower) && /\b(?:cover|short cover|acoustic cover)\b/i.test(rt)) {
+                score -= 400;
+              }
+              if (!/remix/i.test(qLower) && /\b(?:remix|deep house|slowed\s*(?:\+|and)\s*reverb|bass boosted|lofi|lo-fi)\b/i.test(rt)) {
+                score -= 350;
+              }
+              if (/whatsapp status|reels? video|shorts? video|status video/i.test(rt)) {
+                score -= 450;
+              }
 
-              // 1. Exact Title Matches
+              // 2. Exact Title Matches
               if (t === qLower || tPhonetic === qPhonetic) {
                 score += 800; // Perfect exact song match!
               } else if (t.startsWith(qLower) || tPhonetic.startsWith(qPhonetic)) {
@@ -296,9 +308,10 @@ function youtubeStreamingPlugin(): Plugin {
                 score += 350; // Title contains query
               }
 
-              // 2. Word-by-word matches
+              // 3. Word-by-word matches (skip connectors like 'by', 'ka', 'ki', 'ke')
               let matchedWords = 0;
-              for (const w of qWords) {
+              const substantiveWords = qWords.filter(w => !['by', 'ka', 'ki', 'ke', 'song', 'gaana', 'play', 'the'].includes(w));
+              for (const w of substantiveWords) {
                 const wPhonetic = normalizePhonetic(w);
                 const wordRegex = new RegExp('\\b' + w + '\\b', 'i');
                 if (wordRegex.test(t) || wordRegex.test(rt)) {
@@ -308,17 +321,35 @@ function youtubeStreamingPlugin(): Plugin {
                   score += 80;
                   matchedWords++;
                 }
-                if (wordRegex.test(a)) {
-                  score += 60;
+                if (wordRegex.test(a) || a.includes(w)) {
+                  score += 180; // Big boost if artist matches
+                  matchedWords++;
                 }
               }
-              if (matchedWords === qWords.length && qWords.length > 1) {
-                score += 250; // All search words matched in song title!
+              if (matchedWords === substantiveWords.length && substantiveWords.length > 1) {
+                score += 300; // All search words matched in song title/artist!
               }
 
-              // 3. Modest official boost (tie-breaker only, never beats exact song title)
-              if (/official (video|audio|music video|lyric)/i.test(rt)) score += 20;
-              if (/vevo|topic|coke studio|t-series|sony music|yrf|zee music|speed records/i.test(a)) score += 15;
+              // 4. Strong boost for Official Studio Releases & Certified Channels
+              if (/official\s+(?:audio|video|music\s+video|lyric|lyrical\s+video)/i.test(rt)) {
+                score += 350;
+              }
+              if (/\b(?:original\s+audio|original\s+song|official)\b/i.test(rt)) {
+                score += 250;
+              }
+              if (/- Topic$|VEVO$/i.test(rt) || /t-series|sony music|zee music|speed records|yrf|saregama|tips/i.test(a)) {
+                score += 200;
+              }
+
+              // 5. Views Bonus (Genuine hit release vs tiny fan upload)
+              const rawViewsNum = parseInt((item.views || '').replace(/[^0-9]/g, ''), 10) || 0;
+              if (rawViewsNum > 500000) {
+                score += 150;
+              } else if (rawViewsNum > 100000) {
+                score += 80;
+              } else if (rawViewsNum < 30000 && !/official/i.test(rt)) {
+                score -= 120;
+              }
 
               return score;
             }

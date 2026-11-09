@@ -1,8 +1,9 @@
 import React, { useState } from 'react';
-import { Play, Pause, Heart, Download, ListPlus } from 'lucide-react';
+import { Play, Pause, Heart, Download, ListPlus, ChevronDown, ChevronUp } from 'lucide-react';
 import type { Song, Album, Playlist, DailyDiscoverItem } from '../types';
 import type { TasteProfile } from '../services/historyService';
 import { MOODS } from '../data/musicData';
+import { SwipeableSongRow } from './SwipeableSongRow';
 
 interface Props {
   songs: Song[];
@@ -22,6 +23,7 @@ interface Props {
   onSelectPlaylist?: (playlistId: string) => void;
   onSelectAlbum?: (albumId: string) => void;
   onAddToPlaylist?: (song: Song) => void;
+  onRemoveSong?: (song: Song, index: number) => void;
 }
 
 export const HomeScreen: React.FC<Props> = ({
@@ -42,8 +44,10 @@ export const HomeScreen: React.FC<Props> = ({
   onSelectPlaylist,
   onSelectAlbum,
   onAddToPlaylist,
+  onRemoveSong,
 }) => {
   const [activeMood, setActiveMood] = useState<string>('chill');
+  const [showAllSongs, setShowAllSongs] = useState<boolean>(false);
   const activeMoodItem = MOODS.find((m) => m.id === activeMood);
 
   const formatDuration = (seconds: number) => {
@@ -264,76 +268,106 @@ export const HomeScreen: React.FC<Props> = ({
         <div className="section-title">
           {activeMoodItem ? `${activeMoodItem.emoji} ${activeMoodItem.name} Quick Picks` : 'Quick Picks'}
         </div>
-        <span className="section-action">{songs.length} tracks</span>
+        <span className="section-action">
+          {showAllSongs ? `All ${songs.length} tracks (scroll active)` : `Showing 1-${Math.min(20, songs.length)} of ${songs.length} tracks`}
+        </span>
       </div>
 
-      <div className="song-list-table">
-        {songs.map((song, index) => {
-          const isThisPlaying = currentSong?.id === song.id && isPlaying;
-          const isCurrent = currentSong?.id === song.id;
+      <div className={showAllSongs ? 'queue-scroll-active-container' : ''}>
+        <div className="song-list-table">
+          {(showAllSongs ? songs : songs.slice(0, 20)).map((song, index) => {
+            const isThisPlaying = currentSong?.id === song.id && isPlaying;
+            const isCurrent = currentSong?.id === song.id;
 
-          return (
-            <div
-              key={song.id}
-              className={`song-row ${isCurrent ? 'playing' : ''}`}
-              onClick={() => onPlaySong(song)}
-            >
-              <div className="song-index">
-                {isThisPlaying ? (
-                  <div className="animated-soundwave" title="Playing now">
-                    <div className="soundwave-bar" />
-                    <div className="soundwave-bar" />
-                    <div className="soundwave-bar" />
-                  </div>
-                ) : (
-                  <span>{index + 1}</span>
-                )}
-              </div>
-              <img
-                src={song.coverUrl || 'https://images.unsplash.com/photo-1511671782779-c97d3d27a1d4?w=300&auto=format&fit=crop&q=80'}
-                alt={song.title}
-                className="song-row-thumb"
-                onError={(e) => {
-                  (e.target as HTMLImageElement).src = 'https://images.unsplash.com/photo-1511671782779-c97d3d27a1d4?w=300&auto=format&fit=crop&q=80';
-                }}
-              />
-              <div className="song-row-main">
-                <div className="song-row-title">{song.title}</div>
-                <div className="song-row-artist">{song.artist}</div>
-              </div>
-              <div className="song-row-album">{song.album}</div>
-              <div className="song-row-stats">{formatViews(song.views)}</div>
-              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: '12px' }}>
-                <button
-                  className="icon-btn add-to-pl-row-btn"
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    onAddToPlaylist?.(song);
-                  }}
-                  title="Add to Playlist"
+            return (
+              <SwipeableSongRow
+                key={`${song.id}_${index}`}
+                onDelete={() => onRemoveSong?.(song, index)}
+                deleteLabel="Remove"
+              >
+                <div
+                  className={`song-row ${isCurrent ? 'playing' : ''}`}
+                  onClick={() => onPlaySong(song)}
                 >
-                  <ListPlus size={16} />
-                </button>
-                <Heart
-                  size={16}
-                  className={`like-btn ${song.isLiked ? 'liked' : ''}`}
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    onToggleLike(song.id);
-                  }}
-                  fill={song.isLiked ? 'var(--accent)' : 'none'}
-                />
-                {song.isCached && (
-                  <span title="Offline Cached" style={{ display: 'flex' }}>
-                    <Download size={14} style={{ color: 'var(--primary)' }} />
-                  </span>
-                )}
-                <span className="song-row-duration">{formatDuration(song.duration)}</span>
-              </div>
-            </div>
-          );
-        })}
+                  <div className="song-index">
+                    {isThisPlaying ? (
+                      <div className="animated-soundwave" title="Playing now">
+                        <div className="soundwave-bar" />
+                        <div className="soundwave-bar" />
+                        <div className="soundwave-bar" />
+                      </div>
+                    ) : (
+                      <span>{index + 1}</span>
+                    )}
+                  </div>
+                  <img
+                    src={song.coverUrl || 'https://images.unsplash.com/photo-1511671782779-c97d3d27a1d4?w=300&auto=format&fit=crop&q=80'}
+                    alt={song.title}
+                    className="song-row-thumb"
+                    onError={(e) => {
+                      (e.target as HTMLImageElement).src = 'https://images.unsplash.com/photo-1511671782779-c97d3d27a1d4?w=300&auto=format&fit=crop&q=80';
+                    }}
+                  />
+                  <div className="song-row-main">
+                    <div className="song-row-title">{song.title}</div>
+                    <div className="song-row-artist">{song.artist}</div>
+                  </div>
+                  <div className="song-row-album">{song.album}</div>
+                  <div className="song-row-stats">{formatViews(song.views)}</div>
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: '12px' }}>
+                    <button
+                      className="icon-btn add-to-pl-row-btn"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        onAddToPlaylist?.(song);
+                      }}
+                      title="Add to Playlist"
+                    >
+                      <ListPlus size={16} />
+                    </button>
+                    <Heart
+                      size={16}
+                      className={`like-btn ${song.isLiked ? 'liked' : ''}`}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        onToggleLike(song.id);
+                      }}
+                      fill={song.isLiked ? 'var(--accent)' : 'none'}
+                    />
+                    {song.isCached && (
+                      <span title="Offline Cached" style={{ display: 'flex' }}>
+                        <Download size={14} style={{ color: 'var(--primary)' }} />
+                      </span>
+                    )}
+                    <span className="song-row-duration">{formatDuration(song.duration)}</span>
+                  </div>
+                </div>
+              </SwipeableSongRow>
+            );
+          })}
+        </div>
       </div>
+
+      {songs.length > 20 && (
+        <div className="queue-show-more-wrapper">
+          <button
+            className="queue-show-all-btn"
+            onClick={() => setShowAllSongs(!showAllSongs)}
+          >
+            {showAllSongs ? (
+              <>
+                <ChevronUp size={16} />
+                <span>Show Less (First 20 tracks)</span>
+              </>
+            ) : (
+              <>
+                <ChevronDown size={16} />
+                <span>Show All ({songs.length} tracks)</span>
+              </>
+            )}
+          </button>
+        </div>
+      )}
 
       {/* 6. Similar Recommendations Shelf */}
       {similarShelf && similarShelf.songs.length > 0 && (

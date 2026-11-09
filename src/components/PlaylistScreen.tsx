@@ -14,6 +14,7 @@ import {
   Music,
 } from 'lucide-react';
 import type { Playlist, Song } from '../types';
+import { SwipeableSongRow } from './SwipeableSongRow';
 
 interface Props {
   playlist: Playlist;
@@ -24,7 +25,7 @@ interface Props {
   onBack: () => void;
   onDeletePlaylist: (id: string) => void;
   onRenamePlaylist: (id: string, newTitle: string, newDesc?: string) => void;
-  onRemoveSong: (playlistId: string, songId: string) => void;
+  onRemoveSong: (playlistId: string, songId: string, index?: number) => void;
   onToggleLike: (songId: string) => void;
 }
 
@@ -283,73 +284,78 @@ export const PlaylistScreen: React.FC<Props> = ({
               const isCurrent = currentSong?.id === song.id;
 
               return (
-                <div
+                <SwipeableSongRow
                   key={`${song.id}_${idx}`}
-                  className={`song-row ${isCurrent ? 'playing' : ''}`}
-                  onClick={() => onPlaySong(song, playlist.songs)}
+                  onDelete={() => onRemoveSong(playlist.id, song.id, idx)}
+                  deleteLabel="Remove"
                 >
-                  <div className="song-index">
-                    {isThisPlaying ? (
-                      <div className="animated-soundwave" title="Playing">
-                        <div className="soundwave-bar" />
-                        <div className="soundwave-bar" />
-                        <div className="soundwave-bar" />
-                      </div>
-                    ) : (
-                      <span>{idx + 1}</span>
-                    )}
-                  </div>
-
-                  <img
-                    src={song.coverUrl || 'https://images.unsplash.com/photo-1511671782779-c97d3d27a1d4?w=300&auto=format&fit=crop&q=80'}
-                    alt={song.title}
-                    className="song-row-thumb"
-                    onError={(e) => {
-                      (e.target as HTMLImageElement).src = 'https://images.unsplash.com/photo-1511671782779-c97d3d27a1d4?w=300&auto=format&fit=crop&q=80';
-                    }}
-                  />
-
-                  <div className="song-row-main">
-                    <div className="song-row-title">{song.title}</div>
-                    <div className="song-row-artist">{song.artist}</div>
-                  </div>
-
-                  <div className="song-row-album">{song.album || 'Single'}</div>
-
                   <div
-                    style={{
-                      display: 'flex',
-                      alignItems: 'center',
-                      justifyContent: 'flex-end',
-                      gap: '14px',
-                    }}
+                    className={`song-row ${isCurrent ? 'playing' : ''}`}
+                    onClick={() => onPlaySong(song, playlist.songs)}
                   >
-                    <Heart
-                      size={16}
-                      className={`like-btn ${song.isLiked ? 'liked' : ''}`}
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        onToggleLike(song.id);
+                    <div className="song-index">
+                      {isThisPlaying ? (
+                        <div className="animated-soundwave" title="Playing">
+                          <div className="soundwave-bar" />
+                          <div className="soundwave-bar" />
+                          <div className="soundwave-bar" />
+                        </div>
+                      ) : (
+                        <span>{idx + 1}</span>
+                      )}
+                    </div>
+
+                    <img
+                      src={song.coverUrl || 'https://images.unsplash.com/photo-1511671782779-c97d3d27a1d4?w=300&auto=format&fit=crop&q=80'}
+                      alt={song.title}
+                      className="song-row-thumb"
+                      onError={(e) => {
+                        (e.target as HTMLImageElement).src = 'https://images.unsplash.com/photo-1511671782779-c97d3d27a1d4?w=300&auto=format&fit=crop&q=80';
                       }}
-                      fill={song.isLiked ? 'var(--accent)' : 'none'}
                     />
 
-                    <span className="song-row-duration">
-                      {formatSongDuration(song.duration)}
-                    </span>
+                    <div className="song-row-main">
+                      <div className="song-row-title">{song.title}</div>
+                      <div className="song-row-artist">{song.artist}</div>
+                    </div>
 
-                    <button
-                      className="icon-btn remove-track-btn"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        onRemoveSong(playlist.id, song.id);
+                    <div className="song-row-album">{song.album || 'Single'}</div>
+
+                    <div
+                      style={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'flex-end',
+                        gap: '14px',
                       }}
-                      title="Remove from this playlist"
                     >
-                      <Trash2 size={14} />
-                    </button>
+                      <Heart
+                        size={16}
+                        className={`like-btn ${song.isLiked ? 'liked' : ''}`}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          onToggleLike(song.id);
+                        }}
+                        fill={song.isLiked ? 'var(--accent)' : 'none'}
+                      />
+
+                      <span className="song-row-duration">
+                        {formatSongDuration(song.duration)}
+                      </span>
+
+                      <button
+                        className="icon-btn remove-track-btn"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          onRemoveSong(playlist.id, song.id, idx);
+                        }}
+                        title="Remove from this playlist"
+                      >
+                        <Trash2 size={14} />
+                      </button>
+                    </div>
                   </div>
-                </div>
+                </SwipeableSongRow>
               );
             })}
           </div>

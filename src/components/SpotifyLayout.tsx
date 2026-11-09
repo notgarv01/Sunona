@@ -23,6 +23,7 @@ import { SpotifyExplore } from './SpotifyExplore';
 import { SpotifyPlaylistView } from './SpotifyPlaylistView';
 import { SpotifyRightPanel } from './SpotifyRightPanel';
 import { SpotifySongView } from './SpotifySongView';
+import { SwipeableSongRow } from './SwipeableSongRow';
 import { INITIAL_ALBUMS } from '../data/musicData';
 
 interface SpotifyLayoutProps {
@@ -88,6 +89,8 @@ interface SpotifyLayoutProps {
   onOpenListenTogether: () => void;
   onOpenSettings: () => void;
   onGoSunoNa: () => void; // Switch back to SunoNa mode
+  onRemoveSong?: (playlistId: string, songId: string, index?: number) => void;
+  onRemoveFromQueue?: (index: number) => void;
 }
 
 function formatTime(secs: number) {
@@ -112,6 +115,7 @@ export const SpotifyLayout: React.FC<SpotifyLayoutProps> = ({
   onCreatePlaylist, onSelectPlaylist, onSelectAlbum,
   setActiveView, onOpenLibrary, onOpenAuth, onOpenProfile,
   onSelectSong, onOpenListenTogether, onOpenSettings, onGoSunoNa,
+  onRemoveSong, onRemoveFromQueue,
 }) => {
   const [spotifyLibTab, setSpotifyLibTab] = useState<'playlists' | 'albums' | 'artists' | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
@@ -486,6 +490,7 @@ export const SpotifyLayout: React.FC<SpotifyLayoutProps> = ({
             <span className="sp-toggle-dot sp-toggle-spotify" />
             <span className="sp-toggle-label">Spotify</span>
             <span className="sp-toggle-sep" />
+            <img src="/logo.jpg" alt="" style={{ width: '13px', height: '13px', borderRadius: '50%', objectFit: 'cover', marginRight: '4px', display: 'inline-block', verticalAlign: 'middle' }} />
             <span className="sp-toggle-label sp-toggle-label-off">SunoNa</span>
           </button>
 
@@ -742,6 +747,7 @@ export const SpotifyLayout: React.FC<SpotifyLayoutProps> = ({
                     onBack={() => setActiveView('home')}
                     onToggleLike={onToggleLike}
                     onAddToPlaylist={onAddToPlaylist}
+                    onRemoveSong={onRemoveSong}
                   />
                 );
               })()}
@@ -770,6 +776,7 @@ export const SpotifyLayout: React.FC<SpotifyLayoutProps> = ({
                     onBack={() => setActiveView('home')}
                     onToggleLike={onToggleLike}
                     onAddToPlaylist={onAddToPlaylist}
+                    onRemoveSong={onRemoveSong}
                   />
                 );
               })()}
@@ -842,19 +849,27 @@ export const SpotifyLayout: React.FC<SpotifyLayoutProps> = ({
                       {queue
                         .filter(s => s.id !== currentSong?.id)
                         .slice(0, 20)
-                        .map((song, i) => (
-                          <div
-                            key={song.id + i}
-                            className="sp-rp-queue-item"
-                            onClick={() => onPlaySong(song)}
-                          >
-                            <img src={song.coverUrl} alt={song.title} className="sp-rp-q-cover" />
-                            <div className="sp-rp-q-meta">
-                              <span className="sp-rp-q-title">{song.title}</span>
-                              <span className="sp-rp-q-artist">{song.artist}</span>
-                            </div>
-                          </div>
-                        ))}
+                        .map((song, i) => {
+                          const realIndex = queue.findIndex(s => s.id === song.id);
+                          return (
+                            <SwipeableSongRow
+                              key={song.id + i}
+                              onDelete={() => onRemoveFromQueue && realIndex >= 0 ? onRemoveFromQueue(realIndex) : null}
+                              deleteLabel="Remove"
+                            >
+                              <div
+                                className="sp-rp-queue-item"
+                                onClick={() => onPlaySong(song)}
+                              >
+                                <img src={song.coverUrl} alt={song.title} className="sp-rp-q-cover" />
+                                <div className="sp-rp-q-meta">
+                                  <span className="sp-rp-q-title">{song.title}</span>
+                                  <span className="sp-rp-q-artist">{song.artist}</span>
+                                </div>
+                              </div>
+                            </SwipeableSongRow>
+                          );
+                        })}
                     </div>
                   </>
                 )}

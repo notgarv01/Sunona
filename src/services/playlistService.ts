@@ -153,6 +153,26 @@ class PlaylistService {
     }
     return false;
   }
+
+  public insertSongAt(playlistId: string, song: Song, index: number): boolean {
+    const target = this.playlists.find((p) => p.id === playlistId);
+    if (!target) return false;
+
+    // Check if song already exists
+    const exists = target.songs.some((s) => s.id === song.id);
+    if (exists) return false;
+
+    const safeIndex = Math.max(0, Math.min(index, target.songs.length));
+    target.songs.splice(safeIndex, 0, song);
+    target.songCount = target.songs.length;
+
+    if (target.songs.length > 0 && (!target.coverUrl || target.coverUrl.includes('unsplash'))) {
+      target.coverUrl = target.songs[0].coverUrl;
+    }
+
+    this.save();
+    return true;
+  }
 }
 
 export const playlistService = new PlaylistService();

@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect, useCallback } from 'react';
-import { Search, Keyboard, X, Loader2, Disc, Download, RefreshCw, Home, ChevronLeft, ChevronRight, MoreHorizontal, Bell, Users, Library } from 'lucide-react';
+import { Search, Keyboard, X, Loader2, Download, RefreshCw, Home, ChevronLeft, ChevronRight, MoreHorizontal, Bell, Users, Library } from 'lucide-react';
 import type { Song } from '../types';
 import type { UserProfile } from '../services/authService';
 
@@ -73,7 +73,7 @@ export const Header: React.FC<Props> = ({
   onOpenUpdates,
   isUpdateReady,
   isUpdateDownloading,
-  version = '1.0.9',
+  version = '1.0.10',
   onAddToPlaylist: _onAddToPlaylist,
   currentSong: _currentSong,
   isPlaying,
@@ -248,8 +248,13 @@ export const Header: React.FC<Props> = ({
             }}
             title="Go to Home"
           >
-            <div className="brand-logo-icon">
-              <Disc size={20} className={isPlaying ? 'spinning-disc-icon' : ''} />
+            <div className="brand-logo-icon" style={{ overflow: 'hidden', padding: 0, background: 'transparent', border: 'none' }}>
+              <img
+                src="/logo.jpg"
+                alt="SunoNa Logo"
+                className={`brand-logo-img ${isPlaying ? 'spinning-disc-icon' : ''}`}
+                style={{ width: '32px', height: '32px', borderRadius: '50%', objectFit: 'cover' }}
+              />
             </div>
             <div>
               <span className="brand-title">SunoNa!!</span>
@@ -450,7 +455,12 @@ export const Header: React.FC<Props> = ({
             onClick={() => onToggleUiMode?.('sunona')}
             title="Switch to SunoNa Original UI"
           >
-            <Disc size={13} className={isPlaying && uiMode === 'sunona' ? 'spinning-disc-icon' : ''} />
+            <img
+              src="/logo.jpg"
+              alt="SunoNa"
+              className={isPlaying && uiMode === 'sunona' ? 'spinning-disc-icon' : ''}
+              style={{ width: '13px', height: '13px', borderRadius: '50%', objectFit: 'cover' }}
+            />
             <span>SunoNa</span>
           </button>
           <button

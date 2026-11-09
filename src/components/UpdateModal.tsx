@@ -130,7 +130,7 @@ export const UpdateModal: React.FC<Props> = ({
           {updateState.status === 'checking' && (
             <div style={{ display: 'flex', alignItems: 'center', gap: '12px', color: '#38bdf8' }}>
               <RefreshCw size={18} className="animate-spin" />
-              <span style={{ fontSize: '0.88rem', fontWeight: 600 }}>Checking GitHub for latest releases...</span>
+              <span style={{ fontSize: '0.88rem', fontWeight: 600 }}>Checking for latest updates...</span>
             </div>
           )}
 
@@ -242,10 +242,11 @@ export const UpdateModal: React.FC<Props> = ({
               overflowY: 'auto',
             }}
           >
-            <div style={{ marginBottom: '6px', color: '#f4f4f5' }}>• <strong>Permanent Login:</strong> Google and Gmail sessions stay logged in across app restarts.</div>
-            <div style={{ marginBottom: '6px', color: '#f4f4f5' }}>• <strong>Spotless Clean Dashboard:</strong> Fresh accounts and guests start with 0 liked songs, 0 playlists, and blank history.</div>
-            <div style={{ marginBottom: '6px', color: '#f4f4f5' }}>• <strong>Account-Isolated History:</strong> Listening records and Daily Discover recommendations are strictly private to your ID.</div>
-            <div style={{ color: '#f4f4f5' }}>• <strong>Silent Auto-Updater:</strong> Seamless background delta updates with real-time progress tracking.</div>
+            <div style={{ marginBottom: '6px', color: '#f4f4f5' }}>• <strong>Official Vinyl Branding:</strong> Sleek circular vinyl record identity with live spinning animation.</div>
+            <div style={{ marginBottom: '6px', color: '#f4f4f5' }}>• <strong>Swipe to Delete & Undo:</strong> Swipe right-to-left on any song in Queue or Playlists with a 10s instant Undo button.</div>
+            <div style={{ marginBottom: '6px', color: '#f4f4f5' }}>• <strong>Compact Dashboard:</strong> Clean 1-20 Quick Picks view with expandable scrollable queue on demand.</div>
+            <div style={{ marginBottom: '6px', color: '#f4f4f5' }}>• <strong>Studio Audio Priority:</strong> Certified original releases prioritized over bootleg live recordings.</div>
+            <div style={{ color: '#f4f4f5' }}>• <strong>Silent Auto-Updater:</strong> Seamless background updates with zero interruption to your music.</div>
           </div>
         </div>
 

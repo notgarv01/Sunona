@@ -227,27 +227,42 @@ function createServer(staticDir) {
             let score = 0;
             const t = (item.title || '').toLowerCase();
             const a = (item.artist || '').toLowerCase();
-            const qLower = q.toLowerCase();
+            const qLower = q.toLowerCase().trim();
 
-            if (t.includes(qLower)) score += 50;
-            if (a.includes(qLower)) score += 30;
-            if (/official (video|audio|music video|lyric)/i.test(t)) score += 45;
-            if (/vevo|topic|coke studio|t-series|sony music|yrf|zee music|speed records|white hill/i.test(a)) score += 35;
+            // 1. Heavy penalties for non-original, live bootlegs, covers & clutter
+            if (/jukebox|all songs|compilation|mashup|nonstop|full album|best of/i.test(t)) score -= 600;
+            if (/karaoke/i.test(t) || /karaoke/i.test(a)) score -= 300;
+            if (/instrumental/i.test(t) || /instrumental/i.test(a)) score -= 200;
+            if (!/live/i.test(qLower) && /live performance|live concert|live show|live stage|live in concert|live at/i.test(t)) {
+              score -= 600;
+            }
+            if (!/cover/i.test(qLower) && /\b(?:cover|short cover|acoustic cover)\b/i.test(t)) score -= 400;
+            if (!/remix/i.test(qLower) && /\b(?:remix|deep house|slowed|reverb|bass boosted|lofi)\b/i.test(t)) score -= 350;
+            if (/whatsapp status|reels? video|shorts? video|status video/i.test(t)) score -= 450;
+            if (/tutorial|guitar lesson|how to play/i.test(t)) score -= 300;
 
-            const vText = item.views || '';
-            if (vText.includes('B views') || vText.includes('B')) {
-              score += 40;
-            } else if (vText.includes('M views') || vText.includes('M')) {
-              const num = parseFloat(vText);
-              score += Math.min(35, isNaN(num) ? 10 : num * 1.5);
+            // 2. Direct matches
+            if (t.includes(qLower)) score += 350;
+            if (a.includes(qLower)) score += 200;
+
+            const qWords = qLower.split(/\s+/).filter(w => !['by', 'ka', 'ki', 'ke', 'song', 'gaana', 'play'].includes(w));
+            for (const w of qWords) {
+              if (new RegExp('\\b' + w + '\\b', 'i').test(t)) score += 150;
+              if (new RegExp('\\b' + w + '\\b', 'i').test(a)) score += 180;
             }
 
-            if (/karaoke/i.test(t) || /karaoke/i.test(a)) score -= 120;
-            if (/instrumental/i.test(t) || /instrumental/i.test(a)) score -= 80;
-            if (/background music|bgm/i.test(t)) score -= 70;
-            if (/slowed|reverb/i.test(t)) score -= 50;
-            if (/tutorial|guitar lesson|how to play/i.test(t)) score -= 90;
-            if (/cover/i.test(t) && !qLower.includes('cover')) score -= 40;
+            // 3. Official & Verified Releases
+            if (/official (video|audio|music video|lyric)/i.test(t)) score += 350;
+            if (/\b(?:original audio|original song|official)\b/i.test(t)) score += 250;
+            if (/vevo|topic|coke studio|t-series|sony music|yrf|zee music|speed records|white hill/i.test(a)) score += 200;
+
+            const vText = item.views || '';
+            if (vText.includes('M views') || vText.includes('M') || vText.includes('B views')) {
+              score += 150;
+            } else if (vText.includes('K views') || vText.includes('K')) {
+              const kNum = parseFloat(vText);
+              if (kNum < 30 && !/official/i.test(t)) score -= 120;
+            }
 
             return score;
           }

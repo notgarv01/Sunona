@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
+import { RotateCcw, Trash2, X } from 'lucide-react';
 import type { Song, ThemePreset, LyricLine, DailyDiscoverItem, Playlist } from './types';
 import { INITIAL_SONGS, INITIAL_ALBUMS, THEME_PRESETS, MOODS } from './data/musicData';
 import { audioEngine } from './services/audioEngine';
@@ -151,6 +152,56 @@ export const App: React.FC = () => {
   const [toastMessage, setToastMessage] = useState<string | null>(null);
   const toastTimerRef = useRef<any>(null);
 
+  // 10-Second Undo Notification State
+  interface UndoToastState {
+    id: string;
+    message: string;
+    onUndo: () => void;
+    secondsRemaining: number;
+  }
+  const [undoToast, setUndoToast] = useState<UndoToastState | null>(null);
+  const undoTimerRef = useRef<any>(null);
+  const undoIntervalRef = useRef<any>(null);
+
+  const showUndoToast = useCallback((msg: string, onUndo: () => void) => {
+    if (undoTimerRef.current) clearTimeout(undoTimerRef.current);
+    if (undoIntervalRef.current) clearInterval(undoIntervalRef.current);
+
+    const newId = Date.now().toString();
+    setUndoToast({
+      id: newId,
+      message: msg,
+      onUndo,
+      secondsRemaining: 10,
+    });
+
+    undoIntervalRef.current = setInterval(() => {
+      setUndoToast((prev) => {
+        if (!prev || prev.id !== newId) return null;
+        if (prev.secondsRemaining <= 1) {
+          if (undoIntervalRef.current) clearInterval(undoIntervalRef.current);
+          return null;
+        }
+        return {
+          ...prev,
+          secondsRemaining: prev.secondsRemaining - 1,
+        };
+      });
+    }, 1000);
+
+    undoTimerRef.current = setTimeout(() => {
+      setUndoToast((prev) => (prev?.id === newId ? null : prev));
+      if (undoIntervalRef.current) clearInterval(undoIntervalRef.current);
+    }, 10000);
+  }, []);
+
+  useEffect(() => {
+    return () => {
+      if (undoTimerRef.current) clearTimeout(undoTimerRef.current);
+      if (undoIntervalRef.current) clearInterval(undoIntervalRef.current);
+    };
+  }, []);
+
   // Google Authentication & Cloud Sync
   const [currentUser, setCurrentUser] = useState<UserProfile | null>(() => authService.getCurrentUser());
   const [isAuthModalOpen, setIsAuthModalOpen] = useState<boolean>(false);
@@ -158,7 +209,7 @@ export const App: React.FC = () => {
   const [isUpdateModalOpen, setIsUpdateModalOpen] = useState<boolean>(false);
   const [updateState, setUpdateState] = useState<UpdateState>({
     status: 'idle',
-    currentVersion: '1.0.9',
+    currentVersion: '1.0.10',
   });
 
   const showToast = useCallback((msg: string) => {
@@ -1156,10 +1207,65 @@ export const App: React.FC = () => {
     setSongToAddToPlaylist(null);
   }, [showToast]);
 
-  const handleRemoveSongFromPlaylist = useCallback((playlistId: string, songId: string) => {
+  const handleRemoveSongFromPlaylist = useCallback((playlistId: string, songId: string, index?: number) => {
+    const pl = playlists.find((p) => p.id === playlistId);
+    const songIndex = index ?? (pl?.songs.findIndex((s) => s.id === songId) ?? -1);
+    const songToRemove = pl?.songs[songIndex] || pl?.songs.find((s) => s.id === songId);
+
     playlistService.removeSongFromPlaylist(playlistId, songId);
-    showToast('Removed from playlist');
-  }, [showToast]);
+    setPlaylists(playlistService.getPlaylists());
+
+    if (songToRemove && songIndex >= 0) {
+      showUndoToast(`Removed "${songToRemove.title}" from playlist`, () => {
+        playlistService.insertSongAt(playlistId, songToRemove, songIndex);
+        setPlaylists(playlistService.getPlaylists());
+        showToast(`Restored "${songToRemove.title}" to playlist`);
+      });
+    } else {
+      showToast('Removed from playlist');
+    }
+  }, [playlists, showUndoToast, showToast]);
+
+  const handleRemoveSongFromQueue = useCallback((index: number) => {
+    const songToRemove = queue[index];
+    if (!songToRemove) return;
+
+    setQueue((prev) => prev.filter((_, i) => i !== index));
+    setSongs((prev) => prev.filter((s) => s.id !== songToRemove.id));
+
+    showUndoToast(`Removed "${songToRemove.title}" from queue`, () => {
+      setQueue((prev) => {
+        const next = [...prev];
+        next.splice(Math.min(index, next.length), 0, songToRemove);
+        return next;
+      });
+      setSongs((prev) => {
+        const next = [...prev];
+        next.splice(Math.min(index, next.length), 0, songToRemove);
+        return next;
+      });
+      showToast(`Restored "${songToRemove.title}" to queue`);
+    });
+  }, [queue, showUndoToast, showToast]);
+
+  const handleRemoveSongFromHomeScreen = useCallback((song: Song, index: number) => {
+    setSongs((prev) => prev.filter((_, i) => i !== index));
+    setQueue((prev) => prev.filter((s) => s.id !== song.id));
+
+    showUndoToast(`Removed "${song.title}" from Quick Picks`, () => {
+      setSongs((prev) => {
+        const next = [...prev];
+        next.splice(Math.min(index, next.length), 0, song);
+        return next;
+      });
+      setQueue((prev) => {
+        const next = [...prev];
+        next.splice(Math.min(index, next.length), 0, song);
+        return next;
+      });
+      showToast(`Restored "${song.title}"`);
+    });
+  }, [showUndoToast, showToast]);
 
   // Setup AudioEngine event listeners
   useEffect(() => {
@@ -1332,6 +1438,8 @@ export const App: React.FC = () => {
           onOpenListenTogether={() => setIsListenTogetherOpen(true)}
           onOpenSettings={() => setIsSettingsOpen(true)}
           onGoSunoNa={() => handleToggleUiMode('sunona')}
+          onRemoveSong={handleRemoveSongFromPlaylist}
+          onRemoveFromQueue={handleRemoveSongFromQueue}
         />
 
         {/* Fullscreen Now Playing Showcase Modal */}
@@ -1384,6 +1492,38 @@ export const App: React.FC = () => {
         {toastMessage && (
           <div className="toast-notification">
             <span>{toastMessage}</span>
+          </div>
+        )}
+
+        {/* 10-Second Undo Toast */}
+        {undoToast && (
+          <div className="toast-undo-banner">
+            <div className="toast-undo-header">
+              <div className="toast-undo-content">
+                <Trash2 size={16} className="toast-undo-icon" />
+                <span className="toast-undo-text">{undoToast.message}</span>
+              </div>
+              <div className="toast-undo-actions">
+                <button
+                  className="toast-undo-btn"
+                  onClick={() => {
+                    undoToast.onUndo();
+                    setUndoToast(null);
+                  }}
+                >
+                  <RotateCcw size={14} />
+                  <span>Undo ({undoToast.secondsRemaining}s)</span>
+                </button>
+                <button
+                  className="toast-dismiss-btn"
+                  onClick={() => setUndoToast(null)}
+                  title="Dismiss"
+                >
+                  <X size={14} />
+                </button>
+              </div>
+            </div>
+            <div className="toast-undo-progress" />
           </div>
         )}
 
@@ -1535,6 +1675,7 @@ export const App: React.FC = () => {
             onSelectPlaylist={handleSelectPlaylist}
             onSelectAlbum={handleSelectAlbum}
             onAddToPlaylist={(song) => setSongToAddToPlaylist(song)}
+            onRemoveSong={handleRemoveSongFromHomeScreen}
           />
         )}
 
@@ -1633,7 +1774,7 @@ export const App: React.FC = () => {
             queue={queue}
             currentSong={currentSong}
             onPlaySong={playSong}
-            onRemoveFromQueue={(idx) => setQueue((q) => q.filter((_, i) => i !== idx))}
+            onRemoveFromQueue={handleRemoveSongFromQueue}
             onClearQueue={() => setQueue(currentSong ? [currentSong] : [])}
             onClose={() => setActiveDrawer(null)}
           />
@@ -1730,6 +1871,38 @@ export const App: React.FC = () => {
       {toastMessage && (
         <div className="toast-notification">
           <span>{toastMessage}</span>
+        </div>
+      )}
+
+      {/* 10-Second Undo Toast */}
+      {undoToast && (
+        <div className="toast-undo-banner">
+          <div className="toast-undo-header">
+            <div className="toast-undo-content">
+              <Trash2 size={16} className="toast-undo-icon" />
+              <span className="toast-undo-text">{undoToast.message}</span>
+            </div>
+            <div className="toast-undo-actions">
+              <button
+                className="toast-undo-btn"
+                onClick={() => {
+                  undoToast.onUndo();
+                  setUndoToast(null);
+                }}
+              >
+                <RotateCcw size={14} />
+                <span>Undo ({undoToast.secondsRemaining}s)</span>
+              </button>
+              <button
+                className="toast-dismiss-btn"
+                onClick={() => setUndoToast(null)}
+                title="Dismiss"
+              >
+                <X size={14} />
+              </button>
+            </div>
+          </div>
+          <div className="toast-undo-progress" />
         </div>
       )}
 

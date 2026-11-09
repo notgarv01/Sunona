@@ -12,6 +12,7 @@ import {
   PlusCircle,
 } from 'lucide-react';
 import type { Playlist, Song } from '../types';
+import { SwipeableSongRow } from './SwipeableSongRow';
 
 interface Props {
   playlist: Playlist;
@@ -22,6 +23,7 @@ interface Props {
   onBack: () => void;
   onToggleLike: (songId: string) => void;
   onAddToPlaylist?: (song: Song) => void;
+  onRemoveSong?: (playlistId: string, songId: string, index?: number) => void;
 }
 
 export const SpotifyPlaylistView: React.FC<Props> = ({
@@ -33,6 +35,7 @@ export const SpotifyPlaylistView: React.FC<Props> = ({
   onBack,
   onToggleLike,
   onAddToPlaylist: _onAddToPlaylist,
+  onRemoveSong,
 }) => {
   const [filterQuery, setFilterQuery] = useState('');
   const [isSearchActive, setIsSearchActive] = useState(false);
@@ -209,79 +212,84 @@ export const SpotifyPlaylistView: React.FC<Props> = ({
             const isThisActive = currentSong?.id === song.id;
 
             return (
-              <div
+              <SwipeableSongRow
                 key={`${song.id}_${idx}`}
-                className={`spotify-tl-row ${isThisActive ? 'active' : ''}`}
-                onDoubleClick={() => onPlaySong(song, playlist.songs)}
+                onDelete={() => onRemoveSong?.(playlist.id, song.id, idx)}
+                deleteLabel="Remove"
               >
-                {/* Index / Play / Animated Equalizer */}
-                <div className="spotify-tl-col-index">
-                  {isThisPlaying ? (
-                    <div className="spotify-equalizer-bars">
-                      <span className="eq-bar bar-1" />
-                      <span className="eq-bar bar-2" />
-                      <span className="eq-bar bar-3" />
-                    </div>
-                  ) : (
-                    <>
-                      <span className="spotify-tl-idx-num">{idx + 1}</span>
-                      <button
-                        className="spotify-tl-idx-play"
-                        onClick={() => onPlaySong(song, playlist.songs)}
-                        title={`Play ${song.title}`}
-                      >
-                        <Play size={14} fill="#ffffff" />
-                      </button>
-                    </>
-                  )}
-                </div>
+                <div
+                  className={`spotify-tl-row ${isThisActive ? 'active' : ''}`}
+                  onDoubleClick={() => onPlaySong(song, playlist.songs)}
+                >
+                  {/* Index / Play / Animated Equalizer */}
+                  <div className="spotify-tl-col-index">
+                    {isThisPlaying ? (
+                      <div className="spotify-equalizer-bars">
+                        <span className="eq-bar bar-1" />
+                        <span className="eq-bar bar-2" />
+                        <span className="eq-bar bar-3" />
+                      </div>
+                    ) : (
+                      <>
+                        <span className="spotify-tl-idx-num">{idx + 1}</span>
+                        <button
+                          className="spotify-tl-idx-play"
+                          onClick={() => onPlaySong(song, playlist.songs)}
+                          title={`Play ${song.title}`}
+                        >
+                          <Play size={14} fill="#ffffff" />
+                        </button>
+                      </>
+                    )}
+                  </div>
 
-                {/* Title + Cover + Artist */}
-                <div className="spotify-tl-col-title">
-                  <img
-                    src={song.coverUrl || 'https://images.unsplash.com/photo-1511671782779-c97d3d27a1d4?w=600&auto=format&fit=crop&q=80'}
-                    alt={song.title}
-                    className="spotify-tl-thumb"
-                  />
-                  <div className="spotify-tl-title-wrap">
-                    <span
-                      className={`spotify-tl-track-name ${isThisActive ? 'is-playing' : ''}`}
-                      onClick={() => onPlaySong(song, playlist.songs)}
+                  {/* Title + Cover + Artist */}
+                  <div className="spotify-tl-col-title">
+                    <img
+                      src={song.coverUrl || 'https://images.unsplash.com/photo-1511671782779-c97d3d27a1d4?w=600&auto=format&fit=crop&q=80'}
+                      alt={song.title}
+                      className="spotify-tl-thumb"
+                    />
+                    <div className="spotify-tl-title-wrap">
+                      <span
+                        className={`spotify-tl-track-name ${isThisActive ? 'is-playing' : ''}`}
+                        onClick={() => onPlaySong(song, playlist.songs)}
+                      >
+                        {song.title}
+                      </span>
+                      <span className="spotify-tl-track-artist">{song.artist}</span>
+                    </div>
+                  </div>
+
+                  {/* Album */}
+                  <div className="spotify-tl-col-album">
+                    <span>{song.album || song.title}</span>
+                  </div>
+
+                  {/* Date Added */}
+                  <div className="spotify-tl-col-date">
+                    <span>Oct 14, 2023</span>
+                  </div>
+
+                  {/* Duration + Plus Action */}
+                  <div className="spotify-tl-col-duration">
+                    <button
+                      className={`spotify-tl-heart-btn ${song.isLiked ? 'liked' : ''}`}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        onToggleLike(song.id);
+                      }}
+                      title={song.isLiked ? 'Remove from Liked' : 'Save to Liked'}
                     >
-                      {song.title}
-                    </span>
-                    <span className="spotify-tl-track-artist">{song.artist}</span>
+                      <PlusCircle size={16} />
+                    </button>
+                    <span className="spotify-tl-time">{formatDuration(song.duration)}</span>
+                    <button className="spotify-tl-more-btn" title="More options">
+                      <MoreHorizontal size={16} />
+                    </button>
                   </div>
                 </div>
-
-                {/* Album */}
-                <div className="spotify-tl-col-album">
-                  <span>{song.album || song.title}</span>
-                </div>
-
-                {/* Date Added */}
-                <div className="spotify-tl-col-date">
-                  <span>Oct 14, 2023</span>
-                </div>
-
-                {/* Duration + Plus Action */}
-                <div className="spotify-tl-col-duration">
-                  <button
-                    className={`spotify-tl-heart-btn ${song.isLiked ? 'liked' : ''}`}
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      onToggleLike(song.id);
-                    }}
-                    title={song.isLiked ? 'Remove from Liked' : 'Save to Liked'}
-                  >
-                    <PlusCircle size={16} />
-                  </button>
-                  <span className="spotify-tl-time">{formatDuration(song.duration)}</span>
-                  <button className="spotify-tl-more-btn" title="More options">
-                    <MoreHorizontal size={16} />
-                  </button>
-                </div>
-              </div>
+              </SwipeableSongRow>
             );
           })}
         </div>

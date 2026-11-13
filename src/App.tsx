@@ -222,7 +222,7 @@ export const App: React.FC = () => {
 
   // Google Authentication & Cloud Sync
   const [currentUser, setCurrentUser] = useState<UserProfile | null>(() => authService.getCurrentUser());
-  const [isAuthModalOpen, setIsAuthModalOpen] = useState<boolean>(false);
+  const [isAuthModalOpen, setIsAuthModalOpen] = useState<boolean>(() => !authService.getCurrentUser());
   const [isProfileModalOpen, setIsProfileModalOpen] = useState<boolean>(false);
   const [isUpdateModalOpen, setIsUpdateModalOpen] = useState<boolean>(false);
   const [updateState, setUpdateState] = useState<UpdateState>({
@@ -300,11 +300,36 @@ export const App: React.FC = () => {
     return authService.subscribe(async (user) => {
       setCurrentUser(user);
       if (user) {
+        setIsAuthModalOpen(false);
+
+        // 1. User-isolated listening history
         historyService.setUser(user.uid);
         const tp = historyService.getTasteProfile();
         setTasteProfile(tp.totalPlays > 0 ? tp : undefined);
         setMostPlayed(historyService.getMostPlayed(8));
         setListenAgain(historyService.getListenAgain(10));
+
+        // 2. User-isolated custom playlists
+        playlistService.setUser(user.uid);
+        setPlaylists(playlistService.getPlaylists());
+
+        // 3. User-isolated liked songs
+        const userStorageKey = `sunona_liked_songs_${user.uid}`;
+        let activeLikedList: Song[] = [];
+        try {
+          const localLiked = localStorage.getItem(userStorageKey);
+          if (localLiked) {
+            const parsed = JSON.parse(localLiked);
+            if (Array.isArray(parsed)) {
+              activeLikedList = parsed;
+            }
+          }
+        } catch {}
+        setLikedSongs(activeLikedList);
+
+        // Immediately re-sync currentSong and songs list to this user's like state
+        setCurrentSong((prev) => (prev ? { ...prev, isLiked: activeLikedList.some((s) => s.id === prev.id) } : null));
+        setSongs((prev) => prev.map((s) => ({ ...s, isLiked: activeLikedList.some((l) => l.id === s.id) })));
 
         // Load Daily Discover only if user has listening seeds
         const userSeeds = historyService.getDiscoverySeeds();
@@ -319,34 +344,40 @@ export const App: React.FC = () => {
           setDailyDiscover([]);
         }
 
-        // Pull cloud data for this Gmail ID
-        const remote = await cloudSyncService.pullFromCloud(user);
-        const userStorageKey = `sunona_liked_songs_${user.uid}`;
-        if (remote) {
-          if (Array.isArray(remote.likedSongs)) {
-            const mappedLiked = remote.likedSongs.map((s) => ({ ...s, isLiked: true }));
-            setLikedSongs(mappedLiked);
-            try {
-              localStorage.setItem(userStorageKey, JSON.stringify(mappedLiked));
-            } catch {}
+        // Pull cloud data for this Gmail ID if present
+        try {
+          const remote = await cloudSyncService.pullFromCloud(user);
+          if (remote) {
+            if (Array.isArray(remote.likedSongs) && remote.likedSongs.length > 0) {
+              const mappedLiked = remote.likedSongs.map((s) => ({ ...s, isLiked: true }));
+              setLikedSongs(mappedLiked);
+              setCurrentSong((prev) => (prev ? { ...prev, isLiked: mappedLiked.some((s) => s.id === prev.id) } : null));
+              setSongs((prev) => prev.map((s) => ({ ...s, isLiked: mappedLiked.some((l) => l.id === s.id) })));
+              try {
+                localStorage.setItem(userStorageKey, JSON.stringify(mappedLiked));
+              } catch {}
+            }
+            if (Array.isArray(remote.playlists) && remote.playlists.length > 0) {
+              playlistService.setPlaylists(remote.playlists);
+              setPlaylists(remote.playlists);
+            }
+            showToast(`Library synced with ${user.email || user.displayName}`);
           }
-          if (Array.isArray(remote.playlists)) {
-            playlistService.setPlaylists(remote.playlists);
-            setPlaylists(remote.playlists);
-          }
-          showToast(`Library synced with ${user.email || user.displayName}`);
-        } else {
-          // Fresh account without prior cloud records: clean 0 slate
-          setLikedSongs([]);
-          playlistService.setPlaylists([]);
-          setPlaylists([]);
-          try {
-            localStorage.removeItem(userStorageKey);
-            localStorage.removeItem('sunona_liked_songs_v2');
-            localStorage.removeItem('sunona_liked_songs_guest');
-            localStorage.removeItem('sunona_user_playlists_v2');
-          } catch {}
-        }
+        } catch {}
+      } else {
+        // User is logged out: isolate and purge in-memory session without wiping persisted user vaults
+        historyService.setUser('guest');
+        playlistService.setUser('guest');
+        setLikedSongs([]);
+        setPlaylists([]);
+        setCurrentSong((prev) => (prev ? { ...prev, isLiked: false } : null));
+        setSongs((prev) => prev.map((s) => ({ ...s, isLiked: false })));
+        setTasteProfile(undefined);
+        setMostPlayed([]);
+        setListenAgain([]);
+        setDailyDiscover([]);
+        setSimilarShelf(null);
+        setIsAuthModalOpen(true);
       }
     });
   }, [showToast]);
@@ -1606,13 +1637,17 @@ export const App: React.FC = () => {
           onWakeUp={() => setIsSleepOverlayOpen(false)}
         />
 
-        {/* Google Auth */}
+        {/* Google & Email Auth Gate */}
         <AuthModal
-          isOpen={isAuthModalOpen}
-          onClose={() => setIsAuthModalOpen(false)}
+          isOpen={isAuthModalOpen || !currentUser}
+          onClose={() => {
+            if (currentUser) setIsAuthModalOpen(false);
+          }}
+          isMandatoryGate={!currentUser}
           onSuccess={(user) => {
             setCurrentUser(user);
-            showToast(`Welcome, ${user.displayName}! Cloud sync active.`);
+            setIsAuthModalOpen(false);
+            showToast(`Welcome, ${user.displayName}! Private library loaded.`);
           }}
         />
 
@@ -1625,12 +1660,12 @@ export const App: React.FC = () => {
             likedSongsCount={likedSongs.length}
             playlistsCount={playlists.length}
             onSignOut={() => {
+              setIsProfileModalOpen(false);
               authService.signOut();
               setCurrentUser(null);
               historyService.setUser('guest');
-              historyService.clear();
+              playlistService.setUser('guest');
               setLikedSongs([]);
-              playlistService.setPlaylists([]);
               setPlaylists([]);
               setTasteProfile(undefined);
               setMostPlayed([]);
@@ -1638,10 +1673,7 @@ export const App: React.FC = () => {
               setFavoriteArtistShelf(null);
               setDailyDiscover([]);
               setSimilarShelf(null);
-              try {
-                if (currentUser?.uid) localStorage.removeItem(`sunona_liked_songs_${currentUser.uid}`);
-                localStorage.removeItem('sunona_liked_songs_guest');
-              } catch {}
+              setIsAuthModalOpen(true);
               showToast('Signed out successfully.');
             }}
             onManualSync={handleManualCloudSync}
@@ -1692,6 +1724,7 @@ export const App: React.FC = () => {
           playlists={playlists}
           selectedPlaylistId={selectedPlaylistId}
           onSelectPlaylist={handleSelectPlaylist}
+          onSelectAlbum={handleSelectAlbum}
           onCreatePlaylist={() => setIsCreatePlaylistOpen(true)}
           onOpenListenTogether={() => setIsListenTogetherOpen(true)}
           onOpenSettings={() => setIsSettingsOpen(true)}
@@ -1700,6 +1733,7 @@ export const App: React.FC = () => {
           likedCount={likedCount}
           cachedCount={cachedCount}
           uiMode={uiMode}
+          user={currentUser}
         />
 
         {activeView === 'home' && (
@@ -1865,6 +1899,7 @@ export const App: React.FC = () => {
             : null
         }
         onOpenSleepTimer={() => setIsSleepModalOpen(true)}
+        likedSongs={likedSongs}
       />
 
       {/* Fullscreen Now Playing Showcase Modal */}
@@ -1994,17 +2029,21 @@ export const App: React.FC = () => {
         onWakeUp={() => setIsSleepOverlayOpen(false)}
       />
 
-      {/* Google Authentication Dialog */}
+      {/* Google & Email Auth Gate */}
       <AuthModal
-        isOpen={isAuthModalOpen}
-        onClose={() => setIsAuthModalOpen(false)}
+        isOpen={isAuthModalOpen || !currentUser}
+        onClose={() => {
+          if (currentUser) setIsAuthModalOpen(false);
+        }}
+        isMandatoryGate={!currentUser}
         onSuccess={(user) => {
           setCurrentUser(user);
-          showToast(`Welcome, ${user.displayName}! Cloud sync active.`);
+          setIsAuthModalOpen(false);
+          showToast(`Welcome, ${user.displayName}! Private library loaded.`);
         }}
       />
 
-      {/* Google User Profile & Cloud Backup Details */}
+      {/* User Profile & Private Cloud Backup Details */}
       {currentUser && (
         <UserProfileModal
           isOpen={isProfileModalOpen}
@@ -2013,12 +2052,12 @@ export const App: React.FC = () => {
           likedSongsCount={likedSongs.length}
           playlistsCount={playlists.length}
           onSignOut={() => {
+            setIsProfileModalOpen(false);
             authService.signOut();
             setCurrentUser(null);
             historyService.setUser('guest');
-            historyService.clear();
+            playlistService.setUser('guest');
             setLikedSongs([]);
-            playlistService.setPlaylists([]);
             setPlaylists([]);
             setTasteProfile(undefined);
             setMostPlayed([]);
@@ -2026,18 +2065,7 @@ export const App: React.FC = () => {
             setFavoriteArtistShelf(null);
             setDailyDiscover([]);
             setSimilarShelf(null);
-            try {
-              if (currentUser?.uid) {
-                localStorage.removeItem(`sunona_liked_songs_${currentUser.uid}`);
-              }
-              localStorage.removeItem('sunona_liked_songs_guest');
-              localStorage.removeItem('sunona_liked_songs_v2');
-              localStorage.removeItem('sunona_user_playlists_v2');
-              localStorage.removeItem('metrolist_daily_discover_cache_v2');
-              localStorage.removeItem('metrolist_history_v2');
-              localStorage.removeItem('metrolist_history_v1');
-              localStorage.removeItem('metrolist_search_history_v1');
-            } catch {}
+            setIsAuthModalOpen(true);
             showToast('Signed out successfully.');
           }}
           onManualSync={handleManualCloudSync}

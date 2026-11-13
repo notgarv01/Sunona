@@ -2,6 +2,8 @@ import React, { useState } from 'react';
 import { Home, Compass, Library, Users, Heart, Download, Sliders, ListMusic, Plus, FolderHeart, Maximize2, Search, ArrowUpDown } from 'lucide-react';
 import { THEME_PRESETS } from '../data/musicData';
 import type { ThemePreset, Playlist } from '../types';
+import type { UserProfile } from '../services/authService';
+import { isInvalidCoverUrl } from '../services/playlistService';
 
 interface Props {
   activeView: 'home' | 'explore' | 'library' | 'my-playlists' | 'playlist' | 'album' | 'artist';
@@ -11,6 +13,7 @@ interface Props {
   playlists: Playlist[];
   selectedPlaylistId: string | null;
   onSelectPlaylist: (playlistId: string) => void;
+  onSelectAlbum?: (albumId: string) => void;
   onCreatePlaylist: () => void;
   onOpenListenTogether: () => void;
   onOpenSettings: () => void;
@@ -19,6 +22,7 @@ interface Props {
   likedCount: number;
   cachedCount: number;
   uiMode?: 'sunona' | 'spotify';
+  user?: UserProfile | null;
 }
 
 export const Sidebar: React.FC<Props> = ({
@@ -29,6 +33,7 @@ export const Sidebar: React.FC<Props> = ({
   playlists,
   selectedPlaylistId,
   onSelectPlaylist,
+  onSelectAlbum,
   onCreatePlaylist,
   onOpenListenTogether,
   onOpenSettings,
@@ -37,6 +42,7 @@ export const Sidebar: React.FC<Props> = ({
   likedCount,
   cachedCount,
   uiMode = 'sunona',
+  user,
 }) => {
   const [spotifyLibTab, setSpotifyLibTab] = useState<'playlists' | 'albums' | 'artists' | null>(null);
 
@@ -151,7 +157,7 @@ export const Sidebar: React.FC<Props> = ({
                 <div className="spotify-library-item-meta">
                   <div className="spotify-library-item-title">Liked Songs</div>
                   <div className="spotify-library-item-subtitle">
-                    <span className="spotify-pinned-badge">📌</span> Playlist • Garvgupta
+                    <span className="spotify-pinned-badge">📌</span> Playlist • {user?.displayName || 'My Library'}
                   </div>
                 </div>
               </div>
@@ -179,9 +185,18 @@ export const Sidebar: React.FC<Props> = ({
 
             {/* International Villager */}
             {(!spotifyLibTab || spotifyLibTab === 'albums') && (
-              <div className="spotify-library-item" onClick={() => setActiveView('home')}>
+              <div
+                className="spotify-library-item"
+                onClick={() => {
+                  if (onSelectAlbum) {
+                    onSelectAlbum('alb-iv');
+                  } else {
+                    setActiveView('album');
+                  }
+                }}
+              >
                 <img
-                  src="https://images.unsplash.com/photo-1511671782779-c97d3d27a1d4?w=100&auto=format&fit=crop&q=80"
+                  src="https://i.ytimg.com/vi/12CeaxLiMgE/hqdefault.jpg"
                   alt="International Villager"
                   className="spotify-playlist-thumb"
                 />
@@ -194,9 +209,18 @@ export const Sidebar: React.FC<Props> = ({
 
             {/* Desi Kalakaar */}
             {(!spotifyLibTab || spotifyLibTab === 'albums') && (
-              <div className="spotify-library-item" onClick={() => setActiveView('home')}>
+              <div
+                className="spotify-library-item"
+                onClick={() => {
+                  if (onSelectAlbum) {
+                    onSelectAlbum('alb-dk');
+                  } else {
+                    setActiveView('album');
+                  }
+                }}
+              >
                 <img
-                  src="https://images.unsplash.com/photo-1509198397868-475647b2a1e5?w=100&auto=format&fit=crop&q=80"
+                  src="https://i.ytimg.com/vi/KhnVcAC5bIM/hqdefault.jpg"
                   alt="Desi Kalakaar"
                   className="spotify-playlist-thumb"
                 />
@@ -207,26 +231,11 @@ export const Sidebar: React.FC<Props> = ({
               </div>
             )}
 
-            {/* Another */}
-            {(!spotifyLibTab || spotifyLibTab === 'playlists') && (
-              <div className="spotify-library-item" onClick={() => setActiveView('my-playlists')}>
-                <img
-                  src="https://images.unsplash.com/photo-1470225620780-dba8ba36b745?w=100&auto=format&fit=crop&q=80"
-                  alt="Another"
-                  className="spotify-playlist-thumb"
-                />
-                <div className="spotify-library-item-meta">
-                  <div className="spotify-library-item-title">Another</div>
-                  <div className="spotify-library-item-subtitle">Playlist • Garvgupta</div>
-                </div>
-              </div>
-            )}
-
             {/* Imran Khan (Artist - Circular Avatar) */}
             {(!spotifyLibTab || spotifyLibTab === 'artists') && (
               <div className="spotify-library-item" onClick={() => setActiveView('home')}>
                 <img
-                  src="https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=100&auto=format&fit=crop&q=80"
+                  src="https://i.ytimg.com/vi/uuCFRaFWjwY/hqdefault.jpg"
                   alt="Imran Khan"
                   className="spotify-playlist-thumb circular"
                 />
@@ -241,7 +250,7 @@ export const Sidebar: React.FC<Props> = ({
             {(!spotifyLibTab || spotifyLibTab === 'artists') && (
               <div className="spotify-library-item" onClick={() => setActiveView('home')}>
                 <img
-                  src="https://images.unsplash.com/photo-1500648767791-00dcc994a43e?w=100&auto=format&fit=crop&q=80"
+                  src="https://i.ytimg.com/vi/v6F7Bw9cXFg/hqdefault.jpg"
                   alt="Yo Yo Honey Singh"
                   className="spotify-playlist-thumb circular"
                 />
@@ -256,7 +265,7 @@ export const Sidebar: React.FC<Props> = ({
             {(!spotifyLibTab || spotifyLibTab === 'artists') && (
               <div className="spotify-library-item" onClick={() => setActiveView('home')}>
                 <img
-                  src="https://images.unsplash.com/photo-1492562080023-ab3db95bfbce?w=100&auto=format&fit=crop&q=80"
+                  src="https://i.ytimg.com/vi/cl0a3i2wFcc/hqdefault.jpg"
                   alt="Diljit Dosanjh"
                   className="spotify-playlist-thumb circular"
                 />
@@ -268,25 +277,31 @@ export const Sidebar: React.FC<Props> = ({
             )}
 
             {/* User Custom Playlists */}
-            {playlists.map((pl) => (
-              <div
-                key={pl.id}
-                className={`spotify-library-item ${activeView === 'playlist' && selectedPlaylistId === pl.id ? 'active' : ''}`}
-                onClick={() => onSelectPlaylist(pl.id)}
-              >
-                <img
-                  src={pl.coverUrl || 'https://images.unsplash.com/photo-1514525253161-7a46d19cd819?w=100'}
-                  alt={pl.title}
-                  className="spotify-playlist-thumb"
-                />
-                <div className="spotify-library-item-meta">
-                  <div className="spotify-library-item-title">{pl.title}</div>
-                  <div className="spotify-library-item-subtitle">
-                    Playlist • {pl.songs.length} songs
+            {playlists.map((pl) => {
+              const validSongCover = pl.songs?.find(s => !isInvalidCoverUrl(s.coverUrl))?.coverUrl;
+              const cleanCover = !isInvalidCoverUrl(pl.coverUrl)
+                ? pl.coverUrl
+                : (validSongCover || 'https://images.unsplash.com/photo-1514525253161-7a46d19cd819?w=100');
+              return (
+                <div
+                  key={pl.id}
+                  className={`spotify-library-item ${activeView === 'playlist' && selectedPlaylistId === pl.id ? 'active' : ''}`}
+                  onClick={() => onSelectPlaylist(pl.id)}
+                >
+                  <img
+                    src={cleanCover}
+                    alt={pl.title}
+                    className="spotify-playlist-thumb"
+                  />
+                  <div className="spotify-library-item-meta">
+                    <div className="spotify-library-item-title">{pl.title}</div>
+                    <div className="spotify-library-item-subtitle">
+                      Playlist • {pl.songs.length} songs
+                    </div>
                   </div>
                 </div>
-              </div>
-            ))}
+              );
+            })}
           </div>
         </div>
       </aside>

@@ -1,6 +1,6 @@
-import React, { useState } from 'react';
-import { X, CloudCheck, LogOut, RefreshCw, Heart, ListMusic } from 'lucide-react';
-import type { UserProfile } from '../services/authService';
+import React, { useState, useRef } from 'react';
+import { X, CloudCheck, LogOut, RefreshCw, Heart, ListMusic, Camera } from 'lucide-react';
+import { authService, type UserProfile } from '../services/authService';
 import { cloudSyncService } from '../services/cloudSyncService';
 
 interface Props {
@@ -24,8 +24,29 @@ export const UserProfileModal: React.FC<Props> = ({
 }) => {
   const [isSyncing, setIsSyncing] = useState<boolean>(false);
   const [syncSuccessMsg, setSyncSuccessMsg] = useState<string | null>(null);
+  const fileInputRef = useRef<HTMLInputElement | null>(null);
 
   if (!isOpen) return null;
+
+  const handleAvatarUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      if (file.size > 2 * 1024 * 1024) {
+        setSyncSuccessMsg('Image too large. Please choose an image under 2MB.');
+        setTimeout(() => setSyncSuccessMsg(null), 3500);
+        return;
+      }
+      const reader = new FileReader();
+      reader.onload = () => {
+        if (typeof reader.result === 'string') {
+          authService.updateUserProfile({ photoURL: reader.result });
+          setSyncSuccessMsg('Profile picture updated successfully!');
+          setTimeout(() => setSyncSuccessMsg(null), 3000);
+        }
+      };
+      reader.readAsDataURL(file);
+    }
+  };
 
   const handleSync = async () => {
     setIsSyncing(true);
@@ -95,18 +116,50 @@ export const UserProfileModal: React.FC<Props> = ({
         </button>
 
         {/* User Profile Card */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: '16px', marginBottom: '22px' }}>
-          <img
-            src={user.photoURL || `https://api.dicebear.com/7.x/identicon/svg?seed=${user.uid}`}
-            alt={user.displayName || 'User'}
-            style={{
-              width: '56px',
-              height: '56px',
-              borderRadius: '50%',
-              border: '2px solid rgba(16, 185, 129, 0.4)',
-              objectFit: 'cover',
-            }}
-          />
+        <div style={{ display: 'flex', alignItems: 'center', gap: '16px', marginBottom: '18px' }}>
+          <div style={{ position: 'relative' }}>
+            <img
+              src={user.photoURL || `https://ui-avatars.com/api/?name=${encodeURIComponent(user.displayName || 'User')}&background=1ed760&color=000&bold=true`}
+              alt={user.displayName || 'User'}
+              style={{
+                width: '60px',
+                height: '60px',
+                borderRadius: '50%',
+                border: '2px solid rgba(30, 215, 96, 0.5)',
+                objectFit: 'cover',
+                display: 'block',
+              }}
+            />
+            <button
+              onClick={() => fileInputRef.current?.click()}
+              title="Upload your custom profile photo"
+              style={{
+                position: 'absolute',
+                bottom: '-2px',
+                right: '-2px',
+                width: '24px',
+                height: '24px',
+                borderRadius: '50%',
+                background: '#1ed760',
+                border: '2px solid #0e1015',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                color: '#000',
+                cursor: 'pointer',
+                padding: 0,
+              }}
+            >
+              <Camera size={12} />
+            </button>
+            <input
+              type="file"
+              ref={fileInputRef}
+              onChange={handleAvatarUpload}
+              accept="image/*"
+              style={{ display: 'none' }}
+            />
+          </div>
           <div style={{ flex: 1, minWidth: 0 }}>
             <div style={{ fontSize: '16px', fontWeight: 700, color: '#ffffff', marginBottom: '2px' }}>
               {user.displayName}
@@ -114,9 +167,25 @@ export const UserProfileModal: React.FC<Props> = ({
             <div style={{ fontSize: '12px', color: '#a1a1aa', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
               {user.email || 'Google Connected'}
             </div>
-            <div style={{ display: 'inline-flex', alignItems: 'center', gap: '5px', marginTop: '6px' }}>
-              <span style={{ width: '7px', height: '7px', borderRadius: '50%', background: '#10b981' }} />
-              <span style={{ fontSize: '11px', color: '#10b981', fontWeight: 600 }}>Cloud Sync Active</span>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginTop: '6px' }}>
+              <div style={{ display: 'inline-flex', alignItems: 'center', gap: '5px' }}>
+                <span style={{ width: '7px', height: '7px', borderRadius: '50%', background: '#10b981' }} />
+                <span style={{ fontSize: '11px', color: '#10b981', fontWeight: 600 }}>Cloud Sync Active</span>
+              </div>
+              <button
+                onClick={() => fileInputRef.current?.click()}
+                style={{
+                  background: 'none',
+                  border: 'none',
+                  color: '#38bdf8',
+                  fontSize: '11px',
+                  cursor: 'pointer',
+                  textDecoration: 'underline',
+                  padding: 0,
+                }}
+              >
+                Change photo
+              </button>
             </div>
           </div>
         </div>

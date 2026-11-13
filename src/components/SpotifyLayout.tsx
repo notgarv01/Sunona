@@ -13,7 +13,7 @@ import {
   Play, Pause, SkipBack, SkipForward, Shuffle, Repeat, Repeat1, Volume2, VolumeX, Volume1,
   Heart, Mic2, ListMusic, PlusCircle, Moon, X, ArrowUpDown,
   Compass, MoreHorizontal, Laptop, PictureInPicture2,
-  Minus, Square
+  Minus, Square, User
 } from 'lucide-react';
 import type { Song, Playlist, Album, DailyDiscoverItem } from '../types';
 import type { TasteProfile } from '../services/historyService';
@@ -28,6 +28,7 @@ import { SpotifyArtistView } from './SpotifyArtistView';
 import { SpotifyQueuePanel } from './SpotifyQueuePanel';
 import { RosePinkLyricsView } from './RosePinkLyricsView';
 import { LyricReelExportModal } from './LyricReelExportModal';
+import { isInvalidCoverUrl } from '../services/playlistService';
 import '../rose-pink-lyrics.css';
 
 interface SpotifyLayoutProps {
@@ -129,23 +130,33 @@ export const SpotifyLayout: React.FC<SpotifyLayoutProps> = ({
   const [focusedNavIndex, setFocusedNavIndex] = useState<number>(-1);
   const [isSearching, setIsSearching] = useState(false);
   const [showSearchDropdown, setShowSearchDropdown] = useState(false);
+  const getRecentSearchesKey = (uid?: string) => `spotify_recent_searches_${uid || 'guest'}`;
+
   const [recentSearches, setRecentSearches] = useState<{ id: string; title: string; artist: string; coverUrl: string; explicit?: boolean }[]>(() => {
     try {
-      const stored = localStorage.getItem('spotify_recent_searches_list');
+      const stored = localStorage.getItem(`spotify_recent_searches_${user?.uid || 'guest'}`);
       if (stored) {
         const parsed = JSON.parse(stored);
         if (Array.isArray(parsed) && parsed.length > 0) return parsed;
       }
     } catch {}
-    return [
-      { id: 'rec-1', title: 'Dilruba Dilnasheen', artist: 'Rito Riba, Siddhant Kaushal', coverUrl: '/images/onboarding-card-save-playlist.webp' },
-      { id: 'rec-2', title: 'Pyaar Tune Kya Kiya', artist: 'Jubin Nautiyal', coverUrl: '/images/onboarding-card-browse-listen.webp' },
-      { id: 'rec-3', title: 'Khuda Bhi', artist: 'Tony Kakkar, Mohit Chauhan, Manoj Muntashir', coverUrl: '/images/onboarding-card-create-music.webp' },
-      { id: 'rec-4', title: 'C.R.E.A.M POSSE', artist: 'Baggh-e SMG, Farmaan SMG, BIG KAY SMG', coverUrl: '/images/onboarding-card-share-friends.webp', explicit: true },
-      { id: 'rec-5', title: 'Raanjhanaa (From "Raanjhanaa")', artist: 'A.R. Rahman, Jaswinder Singh, Shiraz Uppal', coverUrl: '/images/onboarding-card-start-playing.webp' },
-      { id: 'rec-6', title: 'Sajde - From "Lost;Found"', artist: 'Faheem Abdullah', coverUrl: '/images/onboarding-card-sync-devices.webp' },
-    ];
+    return [];
   });
+
+  // Re-sync recent searches when active user changes
+  useEffect(() => {
+    try {
+      const stored = localStorage.getItem(getRecentSearchesKey(user?.uid));
+      if (stored) {
+        const parsed = JSON.parse(stored);
+        if (Array.isArray(parsed)) {
+          setRecentSearches(parsed);
+          return;
+        }
+      }
+    } catch {}
+    setRecentSearches([]);
+  }, [user?.uid]);
 
   const saveRecentSearch = useCallback((song: { id: string; title: string; artist: string; coverUrl?: string; explicit?: boolean }) => {
     setRecentSearches(prev => {
@@ -154,26 +165,26 @@ export const SpotifyLayout: React.FC<SpotifyLayoutProps> = ({
         id: song.id,
         title: song.title,
         artist: song.artist,
-        coverUrl: song.coverUrl || '/images/onboarding-card-save-playlist.webp',
+        coverUrl: song.coverUrl || 'https://images.unsplash.com/photo-1511671782779-c97d3d27a1d4?w=500&auto=format&fit=crop&q=80',
         explicit: song.explicit || false,
       };
       const updated = [newEntry, ...filtered].slice(0, 8);
       try {
-        localStorage.setItem('spotify_recent_searches_list', JSON.stringify(updated));
+        localStorage.setItem(getRecentSearchesKey(user?.uid), JSON.stringify(updated));
       } catch {}
       return updated;
     });
-  }, []);
+  }, [user?.uid]);
 
   const removeRecentSearch = useCallback((songId: string) => {
     setRecentSearches(prev => {
       const updated = prev.filter(item => item.id !== songId);
       try {
-        localStorage.setItem('spotify_recent_searches_list', JSON.stringify(updated));
+        localStorage.setItem(getRecentSearchesKey(user?.uid), JSON.stringify(updated));
       } catch {}
       return updated;
     });
-  }, []);
+  }, [user?.uid]);
   const [showTopMenu, setShowTopMenu] = useState(false);
   const [isMiniPlayerOpen, setIsMiniPlayerOpen] = useState(false);
   const [isSongViewActive, setIsSongViewActive] = useState(false);
@@ -388,7 +399,7 @@ export const SpotifyLayout: React.FC<SpotifyLayoutProps> = ({
       artist: song.artist,
       album: (song as any).album || 'Single',
       duration: (song as any).duration || 210,
-      coverUrl: song.coverUrl || '/images/onboarding-card-save-playlist.webp',
+      coverUrl: song.coverUrl || 'https://images.unsplash.com/photo-1511671782779-c97d3d27a1d4?w=500&auto=format&fit=crop&q=80',
       audioUrl: (song as any).audioUrl || '',
       lyrics: (song as any).lyrics || [],
     };
@@ -424,11 +435,12 @@ export const SpotifyLayout: React.FC<SpotifyLayoutProps> = ({
 
   const VolumeIcon = isMuted || volume === 0 ? VolumeX : volume < 0.5 ? Volume1 : Volume2;
   const RepeatIcon = repeatMode === 'one' ? Repeat1 : Repeat;
+  const isCurrentSongLiked = currentSong ? likedSongs.some((s) => s.id === currentSong.id) : false;
 
   const likedSongsPlaylist: Playlist = {
     id: 'liked-songs',
     title: 'Liked Songs',
-    description: `${user?.displayName || 'Garvgupta'} • ${likedSongs.length} songs`,
+    description: `${user?.displayName || 'My Library'} • ${likedSongs.length} songs`,
     coverUrl: '',
     songs: likedSongs,
     songCount: likedSongs.length,
@@ -449,7 +461,7 @@ export const SpotifyLayout: React.FC<SpotifyLayoutProps> = ({
     {
       id: 'liked-songs',
       title: 'Liked Songs',
-      sub: `Playlist • ${user?.displayName || 'Garvgupta'}`,
+      sub: `Playlist • ${user?.displayName || 'My Library'}`,
       coverUrl: '',
       isLiked: true,
       type: 'playlist',
@@ -458,35 +470,28 @@ export const SpotifyLayout: React.FC<SpotifyLayoutProps> = ({
       id: 'best-bollywood-love',
       title: 'Best Bollywood Love Songs',
       sub: 'Playlist • Revibe',
-      coverUrl: '/images/onboarding-card-save-playlist.webp',
+      coverUrl: 'https://images.unsplash.com/photo-1518495973542-4542c06a5843?w=300&auto=format&fit=crop&q=80',
       type: 'playlist',
     },
     {
       id: 'alb-iv',
       title: 'International Villager',
       sub: 'Album • Yo Yo Honey Singh',
-      coverUrl: '/images/onboarding-card-keyboard-shortcuts.webp',
+      coverUrl: 'https://i.ytimg.com/vi/12CeaxLiMgE/hqdefault.jpg',
       type: 'album',
     },
     {
       id: 'alb-dk',
       title: 'Desi Kalakaar',
       sub: 'Album • Yo Yo Honey Singh',
-      coverUrl: '/images/onboarding-card-queue-it-up.webp',
+      coverUrl: 'https://i.ytimg.com/vi/KhnVcAC5bIM/hqdefault.jpg',
       type: 'album',
-    },
-    {
-      id: 'pl-another',
-      title: 'Another',
-      sub: `Playlist • ${user?.displayName || 'Garvgupta'}`,
-      coverUrl: '/images/onboarding-card-miniplayer.webp',
-      type: 'playlist',
     },
     {
       id: 'art-imran',
       title: 'Imran Khan',
       sub: 'Artist',
-      coverUrl: '/images/producer.webp',
+      coverUrl: 'https://i.ytimg.com/vi/uuCFRaFWjwY/hqdefault.jpg',
       isArtist: true,
       type: 'artist',
     },
@@ -494,7 +499,7 @@ export const SpotifyLayout: React.FC<SpotifyLayoutProps> = ({
       id: 'art-yyhs',
       title: 'Yo Yo Honey Singh',
       sub: 'Artist',
-      coverUrl: '/images/kit-avatar-body.png',
+      coverUrl: 'https://i.ytimg.com/vi/v6F7Bw9cXFg/hqdefault.jpg',
       isArtist: true,
       type: 'artist',
     },
@@ -502,17 +507,23 @@ export const SpotifyLayout: React.FC<SpotifyLayoutProps> = ({
       id: 'art-diljit',
       title: 'Diljit Dosanjh',
       sub: 'Artist',
-      coverUrl: '/images/ylx-artist-row-placeholder.webp',
+      coverUrl: 'https://i.ytimg.com/vi/cl0a3i2wFcc/hqdefault.jpg',
       isArtist: true,
       type: 'artist',
     },
-    ...playlists.filter(p => p.id !== 'liked-songs').map(p => ({
-      id: p.id,
-      title: p.title,
-      sub: `Playlist • ${user?.displayName || 'Garvgupta'}`,
-      coverUrl: p.coverUrl || '/images/onboarding-card-create-playlist.webp',
-      type: 'playlist' as const,
-    })),
+    ...playlists.filter(p => p.id !== 'liked-songs').map(p => {
+      const validSongCover = p.songs?.find(s => !isInvalidCoverUrl(s.coverUrl))?.coverUrl;
+      const cleanCover = !isInvalidCoverUrl(p.coverUrl)
+        ? p.coverUrl
+        : (validSongCover || 'https://images.unsplash.com/photo-1511671782779-c97d3d27a1d4?w=300&auto=format&fit=crop&q=80');
+      return {
+        id: p.id,
+        title: p.title,
+        sub: `Playlist • ${user?.displayName || 'My Library'}`,
+        coverUrl: cleanCover,
+        type: 'playlist' as const,
+      };
+    }),
   ];
 
   const filteredLibrary = spotifyLibTab
@@ -534,9 +545,6 @@ export const SpotifyLayout: React.FC<SpotifyLayoutProps> = ({
       const foundAlbum = INITIAL_ALBUMS.find(a => a.id === item.id || a.title.toLowerCase() === item.title.toLowerCase());
       if (foundAlbum) {
         onSelectAlbum(foundAlbum.id);
-        if (foundAlbum.songs && foundAlbum.songs.length > 0) {
-          onPlaySong(foundAlbum.songs[0], foundAlbum.songs);
-        }
       } else {
         onSelectAlbum(item.id);
       }
@@ -551,17 +559,11 @@ export const SpotifyLayout: React.FC<SpotifyLayoutProps> = ({
     const foundAlbum = INITIAL_ALBUMS.find(a => a.id === item.id || a.title.toLowerCase() === item.title.toLowerCase());
     if (foundAlbum) {
       onSelectAlbum(foundAlbum.id);
-      if (foundAlbum.songs && foundAlbum.songs.length > 0) {
-        onPlaySong(foundAlbum.songs[0], foundAlbum.songs);
-      }
       return;
     }
     const foundPlaylist = playlists.find(p => p.id === item.id);
     if (foundPlaylist) {
       onSelectPlaylist(foundPlaylist.id);
-      if (foundPlaylist.songs && foundPlaylist.songs.length > 0) {
-        onPlaySong(foundPlaylist.songs[0], foundPlaylist.songs);
-      }
     } else {
       onSelectPlaylist(item.id);
     }
@@ -706,7 +708,7 @@ export const SpotifyLayout: React.FC<SpotifyLayoutProps> = ({
                             alt={item.title}
                             className="sp-recent-search-cover"
                             onError={(e) => {
-                              (e.target as HTMLImageElement).src = '/images/onboarding-card-save-playlist.webp';
+                              (e.target as HTMLImageElement).src = 'https://images.unsplash.com/photo-1511671782779-c97d3d27a1d4?w=500&auto=format&fit=crop&q=80';
                             }}
                           />
                           <div className="sp-recent-search-meta">
@@ -784,12 +786,12 @@ export const SpotifyLayout: React.FC<SpotifyLayoutProps> = ({
                             >
                               <div className="sp-search-result-thumb-wrapper">
                                 <img
-                                  src={song.coverUrl || '/images/onboarding-card-start-playing.webp'}
+                                  src={song.coverUrl || 'https://images.unsplash.com/photo-1511671782779-c97d3d27a1d4?w=500&auto=format&fit=crop&q=80'}
                                   alt={song.title}
                                   className="sp-search-result-img"
                                   onError={(e) => {
                                     const img = e.target as HTMLImageElement;
-                                    img.src = '/images/onboarding-card-start-playing.webp';
+                                    img.src = 'https://images.unsplash.com/photo-1511671782779-c97d3d27a1d4?w=500&auto=format&fit=crop&q=80';
                                   }}
                                 />
                                 <div className="sp-search-play-overlay">
@@ -877,18 +879,25 @@ export const SpotifyLayout: React.FC<SpotifyLayoutProps> = ({
           <button className="sp-icon-btn" title="What's New / Notifications"><Bell size={18} /></button>
           <button className="sp-icon-btn" title="Friend Activity" onClick={onOpenListenTogether}><Users size={18} /></button>
 
-          {/* Profile Avatar (Purple #532b88 with 'G') */}
+          {/* Profile Avatar */}
           {user ? (
             <button className="sp-avatar-btn" onClick={onOpenProfile} title={user.displayName || 'Profile'}>
               {user.photoURL ? (
-                <img src={user.photoURL} alt="avatar" className="sp-avatar-img" />
+                <img
+                  src={user.photoURL}
+                  alt={user.displayName || 'avatar'}
+                  className="sp-avatar-img"
+                  onError={(e) => {
+                    (e.currentTarget as HTMLElement).style.display = 'none';
+                  }}
+                />
               ) : (
-                <span className="sp-avatar-letter">{(user.displayName || 'G')[0].toUpperCase()}</span>
+                <span className="sp-avatar-letter">{(user.displayName || 'U')[0].toUpperCase()}</span>
               )}
             </button>
           ) : (
-            <button className="sp-avatar-btn" onClick={onOpenAuth} title="Profile: Garvgupta">
-              <span className="sp-avatar-letter">G</span>
+            <button className="sp-avatar-btn" onClick={onOpenAuth} title="Sign In">
+              <User size={15} />
             </button>
           )}
 
@@ -1005,9 +1014,15 @@ export const SpotifyLayout: React.FC<SpotifyLayoutProps> = ({
                           <img
                             src={item.coverUrl}
                             alt={item.title}
+                            onLoad={(e) => {
+                              const img = e.target as HTMLImageElement;
+                              if (img.naturalWidth === 120 && img.naturalHeight === 90) {
+                                img.src = item.isArtist ? '/images/ylx-artist-row-placeholder.webp' : 'https://images.unsplash.com/photo-1511671782779-c97d3d27a1d4?w=500&auto=format&fit=crop&q=80';
+                              }
+                            }}
                             onError={(e) => {
                               const img = e.target as HTMLImageElement;
-                              img.src = item.isArtist ? '/images/ylx-artist-row-placeholder.webp' : '/images/onboarding-card-save-playlist.webp';
+                              img.src = item.isArtist ? '/images/ylx-artist-row-placeholder.webp' : 'https://images.unsplash.com/photo-1511671782779-c97d3d27a1d4?w=500&auto=format&fit=crop&q=80';
                             }}
                           />
                         ) : (
@@ -1169,6 +1184,7 @@ export const SpotifyLayout: React.FC<SpotifyLayoutProps> = ({
                     onToggleLike={onToggleLike}
                     onAddToPlaylist={onAddToPlaylist}
                     onRemoveSong={onRemoveSong}
+                    user={user}
                   />
                 );
               })()}
@@ -1198,6 +1214,7 @@ export const SpotifyLayout: React.FC<SpotifyLayoutProps> = ({
                     onToggleLike={onToggleLike}
                     onAddToPlaylist={onAddToPlaylist}
                     onRemoveSong={onRemoveSong}
+                    user={user}
                   />
                 );
               })()}
@@ -1327,10 +1344,10 @@ export const SpotifyLayout: React.FC<SpotifyLayoutProps> = ({
               <span className="sp-pip-artist">{currentSong.artist}</span>
             </div>
             <button
-              className={`sp-pip-like-btn ${currentSong.isLiked ? 'active' : ''}`}
+              className={`sp-pip-like-btn ${isCurrentSongLiked ? 'active' : ''}`}
               onClick={() => onToggleLike(currentSong.id)}
             >
-              <PlusCircle size={18} color={currentSong.isLiked ? '#1ed760' : '#fff'} />
+              <PlusCircle size={18} color={isCurrentSongLiked ? '#1ed760' : '#fff'} />
             </button>
           </div>
         </div>
@@ -1353,12 +1370,18 @@ export const SpotifyLayout: React.FC<SpotifyLayoutProps> = ({
                 title="Open song view"
               >
                 <img
-                  src={currentSong.coverUrl || '/images/onboarding-card-start-playing.webp'}
+                  src={currentSong.coverUrl || 'https://images.unsplash.com/photo-1511671782779-c97d3d27a1d4?w=500&auto=format&fit=crop&q=80'}
                   alt={currentSong.title}
                   className="sp-pb-cover"
+                  onLoad={(e) => {
+                    const img = e.target as HTMLImageElement;
+                    if (img.naturalWidth === 120 && img.naturalHeight === 90) {
+                      img.src = 'https://images.unsplash.com/photo-1511671782779-c97d3d27a1d4?w=500&auto=format&fit=crop&q=80';
+                    }
+                  }}
                   onError={(e) => {
                     const img = e.target as HTMLImageElement;
-                    img.src = '/images/onboarding-card-start-playing.webp';
+                    img.src = 'https://images.unsplash.com/photo-1511671782779-c97d3d27a1d4?w=500&auto=format&fit=crop&q=80';
                   }}
                 />
               </div>
@@ -1385,11 +1408,11 @@ export const SpotifyLayout: React.FC<SpotifyLayoutProps> = ({
                 </span>
               </div>
               <button
-                className={`sp-pb-icon-btn ${currentSong.isLiked ? 'active-green' : ''}`}
+                className={`sp-pb-icon-btn ${isCurrentSongLiked ? 'active-green' : ''}`}
                 onClick={() => onToggleLike(currentSong.id)}
-                title={currentSong.isLiked ? 'Remove from Liked Songs' : 'Add to Liked Songs'}
+                title={isCurrentSongLiked ? 'Remove from Liked Songs' : 'Add to Liked Songs'}
               >
-                <Heart size={16} fill={currentSong.isLiked ? '#1ed760' : 'none'} color={currentSong.isLiked ? '#1ed760' : 'currentColor'} />
+                <Heart size={16} fill={isCurrentSongLiked ? '#1ed760' : 'none'} color={isCurrentSongLiked ? '#1ed760' : 'currentColor'} />
               </button>
               <button
                 className="sp-pb-icon-btn"

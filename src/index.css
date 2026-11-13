@@ -7016,6 +7016,26 @@ body.is-electron .coverflow-header {
   overflow: hidden;
   box-shadow: 0 8px 36px rgba(0, 0, 0, 0.6);
   flex-shrink: 0;
+  position: relative;
+}
+
+.spotify-pl-cover-box.editable:hover .spotify-pl-cover-hover-overlay {
+  opacity: 1;
+}
+
+.spotify-pl-cover-hover-overlay {
+  position: absolute;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.72);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  color: #ffffff;
+  opacity: 0;
+  transition: opacity 0.2s ease;
+  pointer-events: none;
 }
 
 .spotify-pl-cover-img {

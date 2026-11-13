@@ -1,20 +1,46 @@
 import React, { useState } from 'react';
-import { X, ShieldCheck, Cloud, RefreshCw, Loader2, Sparkles } from 'lucide-react';
+import { X, Headphones, Loader2, Lock, Mail, User, Camera } from 'lucide-react';
 import { authService, type UserProfile } from '../services/authService';
 
 interface Props {
   isOpen: boolean;
   onClose: () => void;
   onSuccess: (user: UserProfile) => void;
+  isMandatoryGate?: boolean;
 }
 
-export const AuthModal: React.FC<Props> = ({ isOpen, onClose, onSuccess }) => {
+export const AuthModal: React.FC<Props> = ({
+  isOpen,
+  onClose,
+  onSuccess,
+  isMandatoryGate = false,
+}) => {
   const [isLoading, setIsLoading] = useState<boolean>(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
+  const [customName, setCustomName] = useState<string>('');
   const [customEmail, setCustomEmail] = useState<string>('');
-  const [showEmailInput, setShowEmailInput] = useState<boolean>(false);
+  const [avatarPreview, setAvatarPreview] = useState<string>('');
+  const [authMode, setAuthMode] = useState<'google_first' | 'email_form'>('google_first');
+  const fileInputRef = React.useRef<HTMLInputElement | null>(null);
 
   if (!isOpen) return null;
+
+  const handlePhotoSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      if (file.size > 2 * 1024 * 1024) {
+        setErrorMsg('Image size too large. Please select an image under 2MB.');
+        return;
+      }
+      const reader = new FileReader();
+      reader.onload = () => {
+        if (typeof reader.result === 'string') {
+          setAvatarPreview(reader.result);
+        }
+      };
+      reader.readAsDataURL(file);
+    }
+  };
 
   const handleGoogleSignIn = async () => {
     setIsLoading(true);
@@ -25,22 +51,24 @@ export const AuthModal: React.FC<Props> = ({ isOpen, onClose, onSuccess }) => {
       onClose();
     } catch (err: any) {
       console.error('Google Sign In failed:', err);
-      setErrorMsg('Could not open Google popup. You can sign in using your Gmail directly below.');
-      setShowEmailInput(true);
+      setErrorMsg('Could not launch Google popup. You can sign in using your Email directly below.');
+      setAuthMode('email_form');
     } finally {
       setIsLoading(false);
     }
   };
 
-  const handleDirectEmailSignIn = (e: React.FormEvent) => {
+  const handleEmailSignIn = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!customEmail.trim() || !customEmail.includes('@')) {
-      setErrorMsg('Please enter a valid Gmail address.');
+    const email = customEmail.trim();
+    if (!email || !email.includes('@') || !email.includes('.')) {
+      setErrorMsg('Please enter a valid email address.');
       return;
     }
     setIsLoading(true);
+    setErrorMsg(null);
     try {
-      const user = authService.signInWithCustomGmail(customEmail.trim());
+      const user = authService.signInWithCustomGmail(email, customName.trim(), avatarPreview || null);
       onSuccess(user);
       onClose();
     } catch (err) {
@@ -55,106 +83,106 @@ export const AuthModal: React.FC<Props> = ({ isOpen, onClose, onSuccess }) => {
       style={{
         position: 'fixed',
         inset: 0,
-        zIndex: 9999,
+        zIndex: 99999,
         display: 'flex',
         alignItems: 'center',
         justifyContent: 'center',
-        backgroundColor: 'rgba(0, 0, 0, 0.75)',
-        backdropFilter: 'blur(8px)',
+        backgroundColor: 'rgba(0, 0, 0, 0.82)',
+        backdropFilter: 'blur(12px)',
         padding: '20px',
       }}
-      onClick={onClose}
+      onClick={isMandatoryGate ? undefined : onClose}
     >
       <div
         style={{
           width: '100%',
           maxWidth: '440px',
-          background: '#0e1015',
-          border: '1px solid rgba(255, 255, 255, 0.12)',
+          background: 'linear-gradient(180deg, #181818 0%, #121212 100%)',
+          border: '1px solid rgba(255, 255, 255, 0.14)',
           borderRadius: '16px',
           padding: '32px 28px',
           position: 'relative',
-          boxShadow: '0 24px 60px rgba(0, 0, 0, 0.8)',
+          boxShadow: '0 28px 70px rgba(0, 0, 0, 0.9)',
           color: '#ffffff',
-          fontFamily: 'system-ui, -apple-system, sans-serif',
+          fontFamily: 'system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif',
         }}
         onClick={(e) => e.stopPropagation()}
       >
-        {/* Close Button */}
-        <button
-          onClick={onClose}
-          style={{
-            position: 'absolute',
-            top: '18px',
-            right: '18px',
-            background: 'rgba(255, 255, 255, 0.06)',
-            border: 'none',
-            borderRadius: '50%',
-            width: '32px',
-            height: '32px',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            color: '#a1a1aa',
-            cursor: 'pointer',
-            transition: 'all 0.15s ease',
-          }}
-          title="Close (Esc)"
-        >
-          <X size={16} />
-        </button>
+        {/* Close Button (Hidden if Mandatory Gate) */}
+        {!isMandatoryGate && (
+          <button
+            onClick={onClose}
+            style={{
+              position: 'absolute',
+              top: '18px',
+              right: '18px',
+              background: 'rgba(255, 255, 255, 0.08)',
+              border: 'none',
+              borderRadius: '50%',
+              width: '32px',
+              height: '32px',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              color: '#a1a1aa',
+              cursor: 'pointer',
+              transition: 'all 0.15s ease',
+            }}
+            title="Close"
+          >
+            <X size={16} />
+          </button>
+        )}
 
         {/* Brand Header */}
-        <div style={{ textAlign: 'center', marginBottom: '24px' }}>
+        <div style={{ textAlign: 'center', marginBottom: '22px' }}>
           <div
             style={{
-              width: '52px',
-              height: '52px',
-              borderRadius: '14px',
-              background: 'linear-gradient(135deg, rgba(16, 185, 129, 0.2), rgba(59, 130, 246, 0.2))',
-              border: '1px solid rgba(16, 185, 129, 0.3)',
+              width: '56px',
+              height: '56px',
+              borderRadius: '16px',
+              background: 'linear-gradient(135deg, rgba(30, 215, 96, 0.25), rgba(59, 130, 246, 0.25))',
+              border: '1px solid rgba(30, 215, 96, 0.35)',
               display: 'inline-flex',
               alignItems: 'center',
               justifyContent: 'center',
-              color: '#10b981',
+              color: '#1ed760',
               marginBottom: '14px',
+              boxShadow: '0 8px 24px rgba(30, 215, 96, 0.2)',
             }}
           >
-            <Cloud size={28} />
+            <Headphones size={28} />
           </div>
 
-          <h2 style={{ fontSize: '20px', fontWeight: 700, margin: '0 0 6px 0', letterSpacing: '-0.02em' }}>
-            Sync With Google Account
+          <h2 style={{ fontSize: '22px', fontWeight: 700, margin: '0 0 6px 0', letterSpacing: '-0.02em' }}>
+            {isMandatoryGate ? 'Welcome to SunoNa & Spotify' : 'Account & Cloud Backup'}
           </h2>
           <p style={{ fontSize: '13px', color: '#a1a1aa', margin: 0, lineHeight: 1.5 }}>
-            Save your liked songs, custom playlists, and listening history safely to your Gmail ID.
+            {isMandatoryGate
+              ? 'Sign in to access your private library, liked songs, and personalized music stream.'
+              : 'Sign in to sync your liked songs and playlists privately across all your devices.'}
           </p>
         </div>
 
-        {/* Value Points */}
+        {/* Strict Privacy Guarantee Box */}
         <div
           style={{
-            background: 'rgba(255, 255, 255, 0.03)',
-            border: '1px solid rgba(255, 255, 255, 0.06)',
-            borderRadius: '10px',
-            padding: '14px 16px',
-            marginBottom: '24px',
+            background: 'rgba(255, 255, 255, 0.04)',
+            border: '1px solid rgba(255, 255, 255, 0.08)',
+            borderRadius: '12px',
+            padding: '12px 14px',
+            marginBottom: '20px',
             display: 'flex',
             flexDirection: 'column',
-            gap: '10px',
+            gap: '8px',
           }}
         >
-          <div style={{ display: 'flex', alignItems: 'center', gap: '10px', fontSize: '12px', color: '#d4d4d8' }}>
-            <ShieldCheck size={16} color="#10b981" />
-            <span>Permanent backup: Reinstall without losing your library</span>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '12px', color: '#10b981', fontWeight: 600 }}>
+            <Lock size={14} />
+            <span>100% Isolated Data Privacy</span>
           </div>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '10px', fontSize: '12px', color: '#d4d4d8' }}>
-            <RefreshCw size={15} color="#3b82f6" />
-            <span>Multi-device sync across laptops and PCs</span>
-          </div>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '10px', fontSize: '12px', color: '#d4d4d8' }}>
-            <Sparkles size={15} color="#a855f7" />
-            <span>Personalized AI mixes tailored to your listening habit</span>
+          <div style={{ fontSize: '11px', color: '#a1a1aa', lineHeight: 1.45 }}>
+            Your liked songs, playlists, and listening history remain strictly bound to your account and will never leak into other users' accounts.
           </div>
         </div>
 
@@ -162,12 +190,12 @@ export const AuthModal: React.FC<Props> = ({ isOpen, onClose, onSuccess }) => {
           <div
             style={{
               padding: '10px 12px',
-              background: 'rgba(239, 68, 68, 0.12)',
-              border: '1px solid rgba(239, 68, 68, 0.25)',
+              background: 'rgba(239, 68, 68, 0.14)',
+              border: '1px solid rgba(239, 68, 68, 0.3)',
               borderRadius: '8px',
               color: '#f87171',
               fontSize: '12px',
-              marginBottom: '18px',
+              marginBottom: '16px',
               lineHeight: 1.4,
             }}
           >
@@ -175,26 +203,26 @@ export const AuthModal: React.FC<Props> = ({ isOpen, onClose, onSuccess }) => {
           </div>
         )}
 
-        {/* Primary Google Sign In Button */}
+        {/* Primary 1-Click Google Sign In */}
         <button
           onClick={handleGoogleSignIn}
           disabled={isLoading}
           style={{
             width: '100%',
             height: '46px',
-            borderRadius: '10px',
+            borderRadius: '24px',
             background: '#ffffff',
-            color: '#1f2937',
+            color: '#121212',
             border: 'none',
             fontSize: '14px',
-            fontWeight: 600,
+            fontWeight: 700,
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'center',
             gap: '12px',
             cursor: isLoading ? 'not-allowed' : 'pointer',
             transition: 'all 0.15s ease',
-            boxShadow: '0 4px 14px rgba(0, 0, 0, 0.3)',
+            boxShadow: '0 4px 16px rgba(0, 0, 0, 0.4)',
           }}
         >
           {isLoading ? (
@@ -225,69 +253,167 @@ export const AuthModal: React.FC<Props> = ({ isOpen, onClose, onSuccess }) => {
           )}
         </button>
 
-        {/* Direct Gmail Input Alternative */}
-        {showEmailInput ? (
-          <form onSubmit={handleDirectEmailSignIn} style={{ marginTop: '16px' }}>
-            <div style={{ display: 'flex', gap: '8px' }}>
+        {/* Divider */}
+        <div style={{ display: 'flex', alignItems: 'center', margin: '18px 0', gap: '12px' }}>
+          <div style={{ flex: 1, height: '1px', background: 'rgba(255, 255, 255, 0.1)' }} />
+          <span style={{ fontSize: '11px', color: '#71717a', textTransform: 'uppercase', letterSpacing: '0.08em' }}>or</span>
+          <div style={{ flex: 1, height: '1px', background: 'rgba(255, 255, 255, 0.1)' }} />
+        </div>
+
+        {/* Email & Name Sign In Form */}
+        {authMode === 'email_form' ? (
+          <form onSubmit={handleEmailSignIn} style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+            <div style={{ position: 'relative' }}>
+              <User size={15} style={{ position: 'absolute', left: '12px', top: '12px', color: '#71717a' }} />
               <input
-                type="email"
-                placeholder="yourname@gmail.com"
-                value={customEmail}
-                onChange={(e) => setCustomEmail(e.target.value)}
-                autoFocus
+                type="text"
+                placeholder="Your Name (e.g. Alex Sharma)"
+                value={customName}
+                onChange={(e) => setCustomName(e.target.value)}
                 style={{
-                  flex: 1,
+                  width: '100%',
+                  boxSizing: 'border-box',
                   background: 'rgba(255, 255, 255, 0.06)',
                   border: '1px solid rgba(255, 255, 255, 0.14)',
-                  borderRadius: '8px',
-                  padding: '10px 14px',
+                  borderRadius: '10px',
+                  padding: '10px 14px 10px 36px',
                   color: '#ffffff',
                   fontSize: '13px',
                   outline: 'none',
                 }}
               />
-              <button
-                type="submit"
+            </div>
+            <div style={{ position: 'relative' }}>
+              <Mail size={15} style={{ position: 'absolute', left: '12px', top: '12px', color: '#71717a' }} />
+              <input
+                type="email"
+                placeholder="Email Address (e.g. name@gmail.com)"
+                value={customEmail}
+                onChange={(e) => setCustomEmail(e.target.value)}
+                required
                 style={{
-                  background: 'var(--primary, #10b981)',
-                  color: '#09090b',
-                  border: 'none',
-                  borderRadius: '8px',
-                  padding: '0 16px',
+                  width: '100%',
+                  boxSizing: 'border-box',
+                  background: 'rgba(255, 255, 255, 0.06)',
+                  border: '1px solid rgba(255, 255, 255, 0.14)',
+                  borderRadius: '10px',
+                  padding: '10px 14px 10px 36px',
+                  color: '#ffffff',
                   fontSize: '13px',
-                  fontWeight: 600,
+                  outline: 'none',
+                }}
+              />
+            </div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+              <input
+                type="file"
+                ref={fileInputRef}
+                onChange={handlePhotoSelect}
+                accept="image/*"
+                style={{ display: 'none' }}
+              />
+              <button
+                type="button"
+                onClick={() => fileInputRef.current?.click()}
+                style={{
+                  flex: 1,
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  gap: '8px',
+                  background: 'rgba(255, 255, 255, 0.05)',
+                  border: '1px dashed rgba(255, 255, 255, 0.2)',
+                  borderRadius: '10px',
+                  padding: '8px 12px',
+                  color: '#d4d4d8',
+                  fontSize: '12px',
                   cursor: 'pointer',
                 }}
               >
-                Sign In
+                {avatarPreview ? (
+                  <>
+                    <img
+                      src={avatarPreview}
+                      alt="avatar preview"
+                      style={{ width: '22px', height: '22px', borderRadius: '50%', objectFit: 'cover' }}
+                    />
+                    <span style={{ color: '#1ed760', fontWeight: 600 }}>Photo Selected (Click to change)</span>
+                  </>
+                ) : (
+                  <>
+                    <Camera size={14} color="#a1a1aa" />
+                    <span>Upload Profile Picture (Optional)</span>
+                  </>
+                )}
+              </button>
+            </div>
+            <button
+              type="submit"
+              disabled={isLoading}
+              style={{
+                width: '100%',
+                height: '42px',
+                borderRadius: '24px',
+                background: '#1ed760',
+                color: '#000000',
+                border: 'none',
+                fontSize: '13px',
+                fontWeight: 700,
+                cursor: isLoading ? 'not-allowed' : 'pointer',
+                transition: 'all 0.15s ease',
+              }}
+            >
+              {isLoading ? <Loader2 size={16} className="animate-spin" /> : 'Sign In / Sign Up'}
+            </button>
+            <div style={{ textAlign: 'center', marginTop: '4px' }}>
+              <button
+                type="button"
+                onClick={() => setAuthMode('google_first')}
+                style={{
+                  background: 'transparent',
+                  border: 'none',
+                  color: '#a1a1aa',
+                  fontSize: '11px',
+                  cursor: 'pointer',
+                  textDecoration: 'underline',
+                }}
+              >
+                Back to Google sign in
               </button>
             </div>
           </form>
         ) : (
-          <div style={{ textAlign: 'center', marginTop: '14px' }}>
+          <div style={{ textAlign: 'center' }}>
             <button
-              onClick={() => setShowEmailInput(true)}
+              onClick={() => setAuthMode('email_form')}
               style={{
-                background: 'transparent',
-                border: 'none',
-                color: '#71717a',
-                fontSize: '12px',
+                width: '100%',
+                height: '42px',
+                borderRadius: '24px',
+                background: 'rgba(255, 255, 255, 0.06)',
+                border: '1px solid rgba(255, 255, 255, 0.15)',
+                color: '#ffffff',
+                fontSize: '13px',
+                fontWeight: 600,
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                gap: '8px',
                 cursor: 'pointer',
-                textDecoration: 'underline',
               }}
             >
-              Sign in with custom Gmail ID instead
+              <Mail size={16} />
+              <span>Continue with Email & Name</span>
             </button>
           </div>
         )}
 
-        <div style={{ textAlign: 'center', marginTop: '22px' }}>
+        <div style={{ textAlign: 'center', marginTop: '20px' }}>
           <span style={{ fontSize: '11px', color: '#71717a' }}>
-            SunoNa stores only your playlists & preferences. We never access your emails or Google Drive.
+            Once signed in, your session stays active automatically. You won't be asked to log in again.
           </span>
         </div>
       </div>
     </div>
   );
 };
-

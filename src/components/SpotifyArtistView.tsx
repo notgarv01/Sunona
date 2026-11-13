@@ -217,12 +217,12 @@ export const SpotifyArtistView: React.FC<SpotifyArtistViewProps> = ({
 
                   <div style={{ display: 'flex', alignItems: 'center', gap: '12px', flex: 1, minWidth: 0 }}>
                     <img
-                      src={song.coverUrl || '/images/onboarding-card-start-playing.webp'}
+                      src={song.coverUrl || 'https://images.unsplash.com/photo-1511671782779-c97d3d27a1d4?w=500&auto=format&fit=crop&q=80'}
                       alt={song.title}
                       style={{ width: '40px', height: '40px', borderRadius: '4px', objectFit: 'cover' }}
                       onError={(e) => {
                         const img = e.target as HTMLImageElement;
-                        img.src = '/images/onboarding-card-start-playing.webp';
+                        img.src = 'https://images.unsplash.com/photo-1511671782779-c97d3d27a1d4?w=500&auto=format&fit=crop&q=80';
                       }}
                     />
                     <div style={{ display: 'flex', flexDirection: 'column' }}>
@@ -310,12 +310,12 @@ export const SpotifyArtistView: React.FC<SpotifyArtistViewProps> = ({
               onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = '#181818')}
             >
               <img
-                src={album.coverUrl || '/images/onboarding-card-save-playlist.webp'}
+                src={album.coverUrl || 'https://images.unsplash.com/photo-1511671782779-c97d3d27a1d4?w=500&auto=format&fit=crop&q=80'}
                 alt={album.title}
                 style={{ width: '100%', aspectRatio: '1/1', borderRadius: '6px', objectFit: 'cover', marginBottom: '12px' }}
                 onError={(e) => {
                   const img = e.target as HTMLImageElement;
-                  img.src = '/images/onboarding-card-save-playlist.webp';
+                  img.src = 'https://images.unsplash.com/photo-1511671782779-c97d3d27a1d4?w=500&auto=format&fit=crop&q=80';
                 }}
               />
               <div style={{ fontWeight: 700, fontSize: '15px', color: '#fff', marginBottom: '4px' }}>

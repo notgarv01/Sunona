@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useRef } from 'react';
 import {
   Play,
   Pause,
@@ -10,8 +10,11 @@ import {
   Shuffle,
   CheckCircle,
   PlusCircle,
+  Camera,
 } from 'lucide-react';
 import type { Playlist, Song } from '../types';
+import type { UserProfile } from '../services/authService';
+import { playlistService, isInvalidCoverUrl } from '../services/playlistService';
 import { SwipeableSongRow } from './SwipeableSongRow';
 
 interface Props {
@@ -24,6 +27,7 @@ interface Props {
   onToggleLike: (songId: string) => void;
   onAddToPlaylist?: (song: Song) => void;
   onRemoveSong?: (playlistId: string, songId: string, index?: number) => void;
+  user?: UserProfile | null;
 }
 
 export const SpotifyPlaylistView: React.FC<Props> = ({
@@ -36,10 +40,35 @@ export const SpotifyPlaylistView: React.FC<Props> = ({
   onToggleLike,
   onAddToPlaylist,
   onRemoveSong,
+  user,
 }) => {
   const [filterQuery, setFilterQuery] = useState('');
   const [isSearchActive, setIsSearchActive] = useState(false);
   const [contextMenu, setContextMenu] = useState<{ x: number; y: number; song: Song } | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const [customCover, setCustomCover] = useState<string | null>(null);
+
+  const validSongCover = playlist.songs?.find(s => !isInvalidCoverUrl(s.coverUrl))?.coverUrl;
+  const cleanCoverUrl = !isInvalidCoverUrl(playlist.coverUrl)
+    ? playlist.coverUrl
+    : (validSongCover || 'https://images.unsplash.com/photo-1511671782779-c97d3d27a1d4?w=500&auto=format&fit=crop&q=80');
+
+  const handleCoverUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      if (file.size > 5 * 1024 * 1024) {
+        alert('Please choose an image under 5MB');
+        return;
+      }
+      const reader = new FileReader();
+      reader.onload = () => {
+        const base64 = reader.result as string;
+        setCustomCover(base64);
+        playlistService.updatePlaylistCover(playlist.id, base64);
+      };
+      reader.readAsDataURL(file);
+    }
+  };
 
   React.useEffect(() => {
     const handleWindowClick = () => setContextMenu(null);
@@ -108,15 +137,43 @@ export const SpotifyPlaylistView: React.FC<Props> = ({
             </svg>
           </div>
         ) : (
-          <div className="spotify-pl-cover-box">
+          <div
+            className={`spotify-pl-cover-box ${!isLikedSongs && !playlist.isCurated ? 'editable' : ''}`}
+            onClick={() => {
+              if (!isLikedSongs && !playlist.isCurated) {
+                fileInputRef.current?.click();
+              }
+            }}
+            title={!isLikedSongs && !playlist.isCurated ? 'Click to choose custom photo' : undefined}
+            style={{ position: 'relative', cursor: !isLikedSongs && !playlist.isCurated ? 'pointer' : 'default' }}
+          >
             <img
-              src={playlist.coverUrl || '/images/onboarding-card-save-playlist.webp'}
+              src={customCover || cleanCoverUrl || 'https://images.unsplash.com/photo-1511671782779-c97d3d27a1d4?w=500&auto=format&fit=crop&q=80'}
               alt={playlist.title}
               className="spotify-pl-cover-img"
+              onLoad={(e) => {
+                const img = e.target as HTMLImageElement;
+                if (img.naturalWidth === 120 && img.naturalHeight === 90) {
+                  img.src = 'https://images.unsplash.com/photo-1511671782779-c97d3d27a1d4?w=500&auto=format&fit=crop&q=80';
+                }
+              }}
               onError={(e) => {
                 const img = e.target as HTMLImageElement;
-                img.src = '/images/onboarding-card-save-playlist.webp';
+                img.src = 'https://images.unsplash.com/photo-1511671782779-c97d3d27a1d4?w=500&auto=format&fit=crop&q=80';
               }}
+            />
+            {!isLikedSongs && !playlist.isCurated && (
+              <div className="spotify-pl-cover-hover-overlay">
+                <Camera size={40} color="#ffffff" />
+                <span style={{ fontSize: '13px', fontWeight: 600 }}>Choose photo</span>
+              </div>
+            )}
+            <input
+              type="file"
+              ref={fileInputRef}
+              onChange={handleCoverUpload}
+              accept="image/*"
+              style={{ display: 'none' }}
             />
           </div>
         )}
@@ -130,7 +187,9 @@ export const SpotifyPlaylistView: React.FC<Props> = ({
             <p className="spotify-pl-desc">{playlist.description}</p>
           )}
           <div className="spotify-pl-creator-row">
-            <span className="spotify-pl-author-bold">Garvgupta</span>
+            <span className="spotify-pl-author-bold">
+              {playlist.isCurated ? 'SunoNa Curated' : (user?.displayName || 'My Library')}
+            </span>
             <span className="spotify-pl-dot">•</span>
             <span>{playlist.songs.length} songs</span>
             <span className="spotify-pl-dot">•</span>
@@ -271,12 +330,18 @@ export const SpotifyPlaylistView: React.FC<Props> = ({
                   {/* Title + Cover + Artist */}
                   <div className="spotify-tl-col-title">
                     <img
-                      src={song.coverUrl || '/images/onboarding-card-save-playlist.webp'}
+                      src={song.coverUrl || 'https://images.unsplash.com/photo-1511671782779-c97d3d27a1d4?w=500&auto=format&fit=crop&q=80'}
                       alt={song.title}
                       className="spotify-tl-thumb"
+                      onLoad={(e) => {
+                        const img = e.target as HTMLImageElement;
+                        if (img.naturalWidth === 120 && img.naturalHeight === 90) {
+                          img.src = 'https://images.unsplash.com/photo-1511671782779-c97d3d27a1d4?w=500&auto=format&fit=crop&q=80';
+                        }
+                      }}
                       onError={(e) => {
                         const img = e.target as HTMLImageElement;
-                        img.src = '/images/onboarding-card-save-playlist.webp';
+                        img.src = 'https://images.unsplash.com/photo-1511671782779-c97d3d27a1d4?w=500&auto=format&fit=crop&q=80';
                       }}
                     />
                     <div className="spotify-tl-title-wrap">

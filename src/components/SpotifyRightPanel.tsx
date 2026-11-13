@@ -137,16 +137,22 @@ export const SpotifyRightPanel: React.FC<Props> = ({
         <div className="spotify-rp-cover-wrap">
           <div
             className="spotify-rp-cover-blur-bg"
-            style={{ backgroundImage: `url(${currentSong.coverUrl || '/images/onboarding-card-start-playing.webp'})` }}
+            style={{ backgroundImage: `url(${currentSong.coverUrl || 'https://images.unsplash.com/photo-1511671782779-c97d3d27a1d4?w=500&auto=format&fit=crop&q=80'})` }}
             aria-hidden="true"
           />
           <img
-            src={currentSong.coverUrl || '/images/onboarding-card-start-playing.webp'}
+            src={currentSong.coverUrl || 'https://images.unsplash.com/photo-1511671782779-c97d3d27a1d4?w=500&auto=format&fit=crop&q=80'}
             alt={currentSong.title}
             className="spotify-rp-cover-img"
+            onLoad={(e) => {
+              const img = e.target as HTMLImageElement;
+              if (img.naturalWidth === 120 && img.naturalHeight === 90) {
+                img.src = 'https://images.unsplash.com/photo-1511671782779-c97d3d27a1d4?w=500&auto=format&fit=crop&q=80';
+              }
+            }}
             onError={(e) => {
               const img = e.target as HTMLImageElement;
-              img.src = '/images/onboarding-card-start-playing.webp';
+              img.src = 'https://images.unsplash.com/photo-1511671782779-c97d3d27a1d4?w=500&auto=format&fit=crop&q=80';
             }}
           />
         </div>

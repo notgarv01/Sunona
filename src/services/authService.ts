@@ -34,15 +34,18 @@ class AuthService {
       try {
         onAuthStateChanged(auth, (fbUser: FirebaseUser | null) => {
           if (fbUser) {
+            const displayName = fbUser.displayName || fbUser.email?.split('@')[0] || 'Listener';
+            const email = fbUser.email || '';
+            const fallbackAvatar = `https://unavatar.io/${encodeURIComponent(email)}?fallback=${encodeURIComponent(`https://ui-avatars.com/api/?name=${encodeURIComponent(displayName)}&background=1ed760&color=000&bold=true`)}`;
             const profile: UserProfile = {
               uid: fbUser.uid,
               email: fbUser.email,
-              displayName: fbUser.displayName || fbUser.email?.split('@')[0] || 'SunoNa Listener',
-              photoURL: fbUser.photoURL || `https://api.dicebear.com/7.x/identicon/svg?seed=${fbUser.uid}`,
+              displayName,
+              photoURL: fbUser.photoURL || fallbackAvatar,
             };
             this.setUser(profile);
           }
-          // Note: If fbUser is null, do NOT wipe custom Gmail session. 
+          // Note: If fbUser is null, do NOT wipe custom session.
           // Session is only wiped when user explicitly clicks "Sign Out".
         });
       } catch (err) {
@@ -89,11 +92,14 @@ class AuthService {
       try {
         const result = await signInWithPopup(auth, googleProvider);
         const fbUser = result.user;
+        const displayName = fbUser.displayName || fbUser.email?.split('@')[0] || 'Listener';
+        const email = fbUser.email || '';
+        const fallbackAvatar = `https://unavatar.io/${encodeURIComponent(email)}?fallback=${encodeURIComponent(`https://ui-avatars.com/api/?name=${encodeURIComponent(displayName)}&background=1ed760&color=000&bold=true`)}`;
         const profile: UserProfile = {
           uid: fbUser.uid,
           email: fbUser.email,
-          displayName: fbUser.displayName || 'SunoNa Listener',
-          photoURL: fbUser.photoURL || `https://api.dicebear.com/7.x/identicon/svg?seed=${fbUser.uid}`,
+          displayName,
+          photoURL: fbUser.photoURL || fallbackAvatar,
         };
         this.setUser(profile);
         return profile;
@@ -109,20 +115,50 @@ class AuthService {
     return this.signInWithCustomGmail(null);
   }
 
-  // Fallback sign in with custom Gmail ID
-  public signInWithCustomGmail(customEmail: string | null): UserProfile {
+  // Fallback sign in with custom Gmail / Email ID & Name
+  public signInWithCustomGmail(
+    customEmail: string | null,
+    customDisplayName?: string | null,
+    customPhotoURL?: string | null
+  ): UserProfile {
     const email = customEmail?.trim() || 'listener@gmail.com';
-    const name = email.split('@')[0];
-    const capitalized = name.charAt(0).toUpperCase() + name.slice(1);
+    const rawName = customDisplayName?.trim() || email.split('@')[0];
+    const displayName = rawName.charAt(0).toUpperCase() + rawName.slice(1);
+    
+    // Compute clean email avatar: custom photo if provided, else unavatar with clean 2-letter initials fallback
+    const initials = displayName
+      .split(' ')
+      .map((w) => w[0])
+      .filter(Boolean)
+      .slice(0, 2)
+      .join('')
+      .toUpperCase() || 'U';
+    const photoURL =
+      customPhotoURL?.trim() ||
+      `https://unavatar.io/${encodeURIComponent(email)}?fallback=${encodeURIComponent(
+        `https://ui-avatars.com/api/?name=${encodeURIComponent(initials)}&length=2&background=1ed760&color=000&bold=true&size=128`
+      )}`;
+    
+    // Normalize safe user ID from email
+    const safeUid = `usr_${encodeURIComponent(email.toLowerCase().replace(/[^a-z0-9]/g, '_'))}`;
+
     const profile: UserProfile = {
-      uid: `user_${btoa(email).replace(/=/g, '').toLowerCase()}`,
+      uid: safeUid,
       email,
-      displayName: capitalized,
-      photoURL: `https://api.dicebear.com/7.x/identicon/svg?seed=${email}`,
+      displayName,
+      photoURL,
       isAnonymous: false,
     };
     this.setUser(profile);
     return profile;
+  }
+
+  // Update active profile photo or display name
+  public updateUserProfile(partial: Partial<UserProfile>): UserProfile | null {
+    if (!this.currentUser) return null;
+    const updated: UserProfile = { ...this.currentUser, ...partial };
+    this.setUser(updated);
+    return updated;
   }
 
   public async signOut(): Promise<void> {

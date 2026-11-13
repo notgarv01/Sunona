@@ -92,38 +92,42 @@ function youtubeStreamingPlugin(): Plugin {
               }
             }
 
-            // Security: Strictly validate YouTube Video ID format (fallback to verified ID if invalid)
-            if (!videoId || !YOUTUBE_ID_REGEX.test(videoId)) {
-              videoId = 'kPtn26x8TZM';
-            }
-
             // Check cache
             let directUrl = '';
-            const cached = streamCache.get(videoId);
+            const cached = videoId ? streamCache.get(videoId) : null;
             if (cached && Date.now() - cached.timestamp < 3600000) {
               directUrl = cached.url;
             } else {
-              try {
-                const info = await ytdl.getInfo(videoId);
-                const format = chooseFormat(info.formats, {
-                  filter: (f: any) => f.hasAudio && !f.hasVideo,
-                });
-
-                if (format && format.url) {
-                  directUrl = format.url;
-                  streamCache.set(videoId, { url: directUrl, timestamp: Date.now() });
-                }
-              } catch (_) {}
-
-              // Resilient fallback to verified stream if primary video format fails
-              if (!directUrl) {
+              if (videoId && YOUTUBE_ID_REGEX.test(videoId)) {
                 try {
-                  const fallbackInfo = await ytdl.getInfo('kPtn26x8TZM');
-                  const fbFormat = chooseFormat(fallbackInfo.formats, {
+                  const info = await ytdl.getInfo(videoId);
+                  const format = chooseFormat(info.formats, {
                     filter: (f: any) => f.hasAudio && !f.hasVideo,
                   });
-                  if (fbFormat && fbFormat.url) directUrl = fbFormat.url;
-                } catch {}
+
+                  if (format && format.url) {
+                    directUrl = format.url;
+                    streamCache.set(videoId, { url: directUrl, timestamp: Date.now() });
+                  }
+                } catch (_) {}
+              }
+
+              // Resilient dynamic resolution: If initial videoId failed or was invalid, search YouTube for title + artist
+              if (!directUrl && (titleParam || artistParam)) {
+                try {
+                  const dynamicId = await resolveYouTubeAudioId(`${titleParam} ${artistParam}`.trim());
+                  if (dynamicId) {
+                    const dynamicInfo = await ytdl.getInfo(dynamicId);
+                    const dynFormat = chooseFormat(dynamicInfo.formats, {
+                      filter: (f: any) => f.hasAudio && !f.hasVideo,
+                    });
+                    if (dynFormat && dynFormat.url) {
+                      directUrl = dynFormat.url;
+                      if (videoId) streamCache.set(videoId, { url: directUrl, timestamp: Date.now() });
+                      streamCache.set(dynamicId, { url: directUrl, timestamp: Date.now() });
+                    }
+                  }
+                } catch (_) {}
               }
 
               if (!directUrl) {
@@ -304,6 +308,9 @@ function youtubeStreamingPlugin(): Plugin {
               let coverUrl = thumbnails.length ? thumbnails[thumbnails.length - 1].url : '';
               if (coverUrl) {
                 coverUrl = coverUrl.replace(/=w\d+-h\d+.*$/, '=w544-h544-l90-rj');
+              }
+              if (coverUrl && coverUrl.includes('Ej74Baox')) {
+                coverUrl = 'https://i.ytimg.com/vi/v6F7Bw9cXFg/hqdefault.jpg';
               }
 
               const id = videoId || ('ytm_' + Math.random().toString(36).slice(2));

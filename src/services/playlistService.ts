@@ -1,13 +1,68 @@
 import type { Playlist, Song } from '../types';
+import { authService } from './authService';
 
-const STORAGE_KEY = 'sunona_user_playlists_v2';
+export function isInvalidCoverUrl(url?: string | null): boolean {
+  if (!url || typeof url !== 'string') return true;
+  const s = url.trim().toLowerCase();
+  return (
+    s === '' ||
+    s.includes('keyboard-shortcuts') ||
+    s.includes('onboarding-card') ||
+    s.includes('producer.webp') ||
+    s.includes('producer-thumbnail-bg') ||
+    s.includes('ej74baox') ||
+    s.includes('library-import') ||
+    s.includes('mando_helmet') ||
+    s.includes('podcasts-following-empty-state')
+  );
+}
+
+export function sanitizeCoverUrl(url?: string | null, fallback?: string): string {
+  if (isInvalidCoverUrl(url)) {
+    return fallback || 'https://images.unsplash.com/photo-1511671782779-c97d3d27a1d4?w=500&auto=format&fit=crop&q=80';
+  }
+  return url!;
+}
 
 class PlaylistService {
   private playlists: Playlist[] = [];
   private listeners: (() => void)[] = [];
+  private currentUserId: string = 'guest';
 
   constructor() {
+    try {
+      const activeUser = authService.getCurrentUser();
+      if (activeUser?.uid) {
+        this.currentUserId = activeUser.uid;
+      }
+    } catch {}
     this.load();
+  }
+
+  private getStorageKey(): string {
+    return `sunona_playlists_${this.currentUserId}`;
+  }
+
+  public setUser(userId: string | null) {
+    this.currentUserId = userId?.trim() || 'guest';
+    this.load();
+    this.notify();
+  }
+
+  private sanitizePlaylist(pl: Playlist): Playlist {
+    if (pl.songs && Array.isArray(pl.songs)) {
+      pl.songs = pl.songs.map((s: Song) => {
+        if (isInvalidCoverUrl(s.coverUrl)) {
+          s.coverUrl = s.id ? `https://i.ytimg.com/vi/${s.id}/hqdefault.jpg` : 'https://images.unsplash.com/photo-1511671782779-c97d3d27a1d4?w=500&auto=format&fit=crop&q=80';
+        }
+        return s;
+      });
+    }
+    if (isInvalidCoverUrl(pl.coverUrl)) {
+      const firstValidSong = pl.songs?.find(s => !isInvalidCoverUrl(s.coverUrl));
+      pl.coverUrl = firstValidSong?.coverUrl || 'https://images.unsplash.com/photo-1511671782779-c97d3d27a1d4?w=500&auto=format&fit=crop&q=80';
+    }
+    return pl;
   }
 
   private load() {
@@ -16,11 +71,29 @@ class PlaylistService {
         // Clean up legacy hardcoded key if present
         localStorage.removeItem('metrolist_playlists_v1');
 
-        const data = localStorage.getItem(STORAGE_KEY);
+        // Global sweep: Clean up ANY stale playlist or recent searches key across all accounts in this browser
+        for (let i = 0; i < localStorage.length; i++) {
+          const k = localStorage.key(i);
+          if (k && (k.startsWith('sunona_playlists_') || k.startsWith('metrolist_playlists_'))) {
+            try {
+              const raw = localStorage.getItem(k);
+              if (raw && (raw.includes('onboarding-card') || raw.includes('keyboard-shortcuts') || raw.includes('Ej74Baox') || raw.includes('producer.webp'))) {
+                const arr = JSON.parse(raw);
+                if (Array.isArray(arr)) {
+                  const cleaned = arr.map((item: Playlist) => this.sanitizePlaylist(item));
+                  localStorage.setItem(k, JSON.stringify(cleaned));
+                }
+              }
+            } catch {}
+          }
+        }
+
+        const data = localStorage.getItem(this.getStorageKey());
         if (data) {
           const parsed = JSON.parse(data);
           if (Array.isArray(parsed)) {
-            this.playlists = parsed;
+            this.playlists = parsed.map(pl => this.sanitizePlaylist(pl));
+            this.save();
             return;
           }
         }
@@ -29,15 +102,14 @@ class PlaylistService {
       console.warn('Failed to load playlists from localStorage', e);
     }
 
-    // Default: Clean start with 0 playlists
+    // Default: Clean start with 0 playlists for new/unseeded user
     this.playlists = [];
-    this.save();
   }
 
   private save() {
     try {
       if (typeof window !== 'undefined' && window.localStorage) {
-        localStorage.setItem(STORAGE_KEY, JSON.stringify(this.playlists));
+        localStorage.setItem(this.getStorageKey(), JSON.stringify(this.playlists));
       }
     } catch (e) {
       console.warn('Failed to save playlists to localStorage', e);
@@ -114,6 +186,14 @@ class PlaylistService {
     return target;
   }
 
+  public updatePlaylistCover(id: string, coverUrl: string): boolean {
+    const target = this.playlists.find((p) => p.id === id);
+    if (!target) return false;
+    target.coverUrl = coverUrl;
+    this.save();
+    return true;
+  }
+
   public addSongToPlaylist(playlistId: string, song: Song): { success: boolean; alreadyExists?: boolean } {
     const target = this.playlists.find((p) => p.id === playlistId);
     if (!target) return { success: false };
@@ -123,12 +203,17 @@ class PlaylistService {
       return { success: false, alreadyExists: true };
     }
 
-    target.songs.push(song);
+    const cleanCover = isInvalidCoverUrl(song.coverUrl)
+      ? (song.id ? `https://i.ytimg.com/vi/${song.id}/hqdefault.jpg` : 'https://images.unsplash.com/photo-1511671782779-c97d3d27a1d4?w=500&auto=format&fit=crop&q=80')
+      : song.coverUrl;
+
+    const safeSong = { ...song, coverUrl: cleanCover };
+    target.songs.push(safeSong);
     target.songCount = target.songs.length;
 
-    // Auto-update playlist cover from first song if default or empty
-    if (target.songs.length === 1 || !target.coverUrl || target.coverUrl.includes('unsplash')) {
-      target.coverUrl = song.coverUrl;
+    // Auto-update playlist cover from first song if default, empty or invalid
+    if (target.songs.length === 1 || isInvalidCoverUrl(target.coverUrl) || target.coverUrl.includes('unsplash')) {
+      target.coverUrl = cleanCover;
     }
 
     this.save();

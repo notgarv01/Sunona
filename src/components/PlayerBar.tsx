@@ -56,6 +56,7 @@ interface Props {
   isSleepTimerActive?: boolean;
   sleepRemainingText?: string | null;
   onOpenSleepTimer?: () => void;
+  likedSongs?: Song[];
 }
 
 export const PlayerBar: React.FC<Props> = ({
@@ -89,7 +90,11 @@ export const PlayerBar: React.FC<Props> = ({
   isSleepTimerActive = false,
   sleepRemainingText = null,
   onOpenSleepTimer,
+  likedSongs = [],
 }) => {
+  const isCurrentSongLiked = currentSong
+    ? likedSongs.some((s) => s.id === currentSong.id)
+    : false;
   const progressBarRef = useRef<HTMLDivElement | null>(null);
   const [isDragging, setIsDragging] = useState(false);
   const [dragProgressRatio, setDragProgressRatio] = useState<number | null>(null);
@@ -226,12 +231,12 @@ export const PlayerBar: React.FC<Props> = ({
                 <span className="spotify-pb-artist">{currentSong.artist}</span>
               </div>
               <button
-                className={`spotify-pb-icon-btn ${currentSong.isLiked ? 'liked' : ''}`}
+                className={`spotify-pb-icon-btn ${isCurrentSongLiked ? 'liked' : ''}`}
                 onClick={() => {
                   onToggleLike(currentSong.id);
                   if (onAddToPlaylist) onAddToPlaylist(currentSong);
                 }}
-                title={currentSong.isLiked ? 'Saved to Your Library' : 'Save to Your Library'}
+                title={isCurrentSongLiked ? 'Saved to Your Library' : 'Save to Your Library'}
               >
                 <PlusCircle size={20} />
               </button>
@@ -436,6 +441,12 @@ export const PlayerBar: React.FC<Props> = ({
               src={currentSong.coverUrl || 'https://images.unsplash.com/photo-1511671782779-c97d3d27a1d4?w=600&auto=format&fit=crop&q=80'}
               alt={currentSong.title || 'Track'}
               className="player-track-thumb"
+              onLoad={(e) => {
+                const img = e.target as HTMLImageElement;
+                if (img.naturalWidth === 120 && img.naturalHeight === 90) {
+                  img.src = 'https://images.unsplash.com/photo-1511671782779-c97d3d27a1d4?w=600&auto=format&fit=crop&q=80';
+                }
+              }}
               onError={(e) => {
                 (e.target as HTMLImageElement).src = 'https://images.unsplash.com/photo-1511671782779-c97d3d27a1d4?w=600&auto=format&fit=crop&q=80';
               }}
@@ -449,12 +460,12 @@ export const PlayerBar: React.FC<Props> = ({
           </div>
           <Heart
             size={18}
-            className={`like-btn ${currentSong.isLiked ? 'liked' : ''}`}
+            className={`like-btn ${isCurrentSongLiked ? 'liked' : ''}`}
             onClick={(e) => {
               e.stopPropagation();
               onToggleLike(currentSong.id);
             }}
-            fill={currentSong.isLiked ? 'var(--accent)' : 'none'}
+            fill={isCurrentSongLiked ? 'var(--accent)' : 'none'}
           />
           <button
             className="icon-btn"

@@ -159,7 +159,7 @@ export const SettingsModal: React.FC<Props> = ({ isOpen, onClose, onOpenIntro })
             </button>
           </div>
 
-          {/* Garv's Intro Screen Shortcut */}
+          {/* SunoNa Tour Shortcut */}
           {onOpenIntro && (
             <div
               style={{
@@ -176,10 +176,10 @@ export const SettingsModal: React.FC<Props> = ({ isOpen, onClose, onOpenIntro })
                 <Smile size={16} style={{ color: '#38bdf8' }} />
                 <div>
                   <div style={{ fontSize: '0.86rem', fontWeight: 700, color: '#fff' }}>
-                    Garv's Intro Screen ("SunoNa!!")
+                    SunoNa Intro & Tour ("SunoNa!!")
                   </div>
                   <div style={{ fontSize: '0.74rem', color: 'var(--text-secondary)' }}>
-                    Revisit funny confessions, rules & personality notes
+                    Revisit welcome tour, features & audio guide
                   </div>
                 </div>
               </div>

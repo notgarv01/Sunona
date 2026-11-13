@@ -51,11 +51,11 @@ export const QueueDrawer: React.FC<Props> = ({
                 onClick={() => onPlaySong(song)}
               >
                 <img
-                  src={song.coverUrl || '/images/onboarding-card-save-playlist.webp'}
+                  src={song.coverUrl || 'https://images.unsplash.com/photo-1511671782779-c97d3d27a1d4?w=500&auto=format&fit=crop&q=80'}
                   alt={song.title || 'Song'}
                   className="queue-item-thumb"
                   onError={(e) => {
-                    (e.target as HTMLImageElement).src = '/images/onboarding-card-save-playlist.webp';
+                    (e.target as HTMLImageElement).src = 'https://images.unsplash.com/photo-1511671782779-c97d3d27a1d4?w=500&auto=format&fit=crop&q=80';
                   }}
                 />
                 <div style={{ flex: 1, minWidth: 0, overflow: 'hidden' }}>

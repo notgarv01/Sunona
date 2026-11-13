@@ -39,7 +39,7 @@ export const SleepOverlay: React.FC<Props> = ({ isOpen, onWakeUp }) => {
 
         <h1 className="sleep-title">Shhh... SunoNa is asleep 💤</h1>
         <p className="sleep-quote">
-          Music gently faded out and streaming data halted. Zero internet used. Goodnight, Garv! 😴
+          Music gently faded out and streaming data halted. Zero internet used. Goodnight! 😴
         </p>
 
         <div className="sleep-status-pills">

@@ -2,6 +2,7 @@ import React, { useState, useMemo } from 'react';
 import { Play } from 'lucide-react';
 import type { Song, Album, Playlist, DailyDiscoverItem } from '../types';
 import type { TasteProfile } from '../services/historyService';
+import { isInvalidCoverUrl } from '../services/playlistService';
 
 interface Props {
   songs: Song[];
@@ -100,23 +101,33 @@ export const SpotifyHome: React.FC<Props> = ({
 
     // Rich Spotify curated defaults with local extracted artwork
     const defaultTiles: { id: string; title: string; coverUrl: string; type: 'playlist' | 'album' | 'song'; data?: Song | Playlist | Album }[] = [
-      { id: 'qa-val-hits', title: "Trending Valentine's Hits", coverUrl: '/images/onboarding-card-start-playing.webp', type: 'playlist' },
-      { id: 'qa-bolly-mush', title: 'Bollywood Mush', coverUrl: '/images/onboarding-card-save-playlist.webp', type: 'playlist' },
-      { id: 'qa-bolly-chill', title: 'Bollywood & Chill', coverUrl: '/images/onboarding-card-queue-it-up.webp', type: 'playlist' },
-      { id: 'qa-1am-feels', title: '1 AM Feels Hindi', coverUrl: '/images/onboarding-card-miniplayer.webp', type: 'playlist' },
-      { id: 'qa-ipop-icons', title: 'I-Pop Icons', coverUrl: '/images/onboarding-card-keyboard-shortcuts.webp', type: 'playlist' },
+      { id: 'qa-val-hits', title: "Trending Valentine's Hits", coverUrl: 'https://images.unsplash.com/photo-1493225457124-a3eb161ffa5f?w=500&auto=format&fit=crop&q=80', type: 'playlist' },
+      { id: 'qa-bolly-mush', title: 'Bollywood Mush', coverUrl: 'https://images.unsplash.com/photo-1518495973542-4542c06a5843?w=500&auto=format&fit=crop&q=80', type: 'playlist' },
+      { id: 'qa-bolly-chill', title: 'Bollywood & Chill', coverUrl: 'https://images.unsplash.com/photo-1470225620780-dba8ba36b745?w=500&auto=format&fit=crop&q=80', type: 'playlist' },
+      { id: 'qa-1am-feels', title: '1 AM Feels Hindi', coverUrl: 'https://images.unsplash.com/photo-1508700115892-45ecd05ae2ad?w=500&auto=format&fit=crop&q=80', type: 'playlist' },
+      { id: 'qa-ipop-icons', title: 'I-Pop Icons', coverUrl: 'https://images.unsplash.com/photo-1511671782779-c97d3d27a1d4?w=500&auto=format&fit=crop&q=80', type: 'playlist' },
     ];
 
     // Priority user items (custom playlists, albums, songs)
     const userPool: { id: string; title: string; coverUrl: string; type: 'song' | 'playlist' | 'album'; data?: Song | Playlist | Album }[] = [];
     for (const pl of playlists.filter(p => p.id !== 'liked-songs')) {
-      userPool.push({ id: pl.id, title: pl.title, coverUrl: pl.coverUrl || '/images/onboarding-card-save-playlist.webp', type: 'playlist', data: pl });
+      const validSongCover = pl.songs?.find(s => !isInvalidCoverUrl(s.coverUrl))?.coverUrl;
+      const cover = !isInvalidCoverUrl(pl.coverUrl)
+        ? pl.coverUrl
+        : (validSongCover || 'https://images.unsplash.com/photo-1518495973542-4542c06a5843?w=500&auto=format&fit=crop&q=80');
+      userPool.push({ id: pl.id, title: pl.title, coverUrl: cover, type: 'playlist', data: pl });
     }
     for (const alb of albums) {
-      userPool.push({ id: alb.id, title: alb.title, coverUrl: alb.coverUrl || '/images/onboarding-card-keyboard-shortcuts.webp', type: 'album', data: alb });
+      const cover = !isInvalidCoverUrl(alb.coverUrl)
+        ? alb.coverUrl
+        : 'https://images.unsplash.com/photo-1511671782779-c97d3d27a1d4?w=500&auto=format&fit=crop&q=80';
+      userPool.push({ id: alb.id, title: alb.title, coverUrl: cover, type: 'album', data: alb });
     }
     for (const s of songs) {
-      userPool.push({ id: s.id, title: s.title, coverUrl: s.coverUrl || '/images/onboarding-card-start-playing.webp', type: 'song', data: s });
+      const cover = !isInvalidCoverUrl(s.coverUrl)
+        ? s.coverUrl
+        : (s.id ? `https://i.ytimg.com/vi/${s.id}/hqdefault.jpg` : 'https://images.unsplash.com/photo-1493225457124-a3eb161ffa5f?w=500&auto=format&fit=crop&q=80');
+      userPool.push({ id: s.id, title: s.title, coverUrl: cover, type: 'song', data: s });
     }
 
     let userIdx = 0;
@@ -145,14 +156,14 @@ export const SpotifyHome: React.FC<Props> = ({
       id: 'val-hits',
       title: "Trending Valentine's Hits",
       subtitle: 'Songs India is falling in love with right now...',
-      coverUrl: '/images/onboarding-card-start-playing.webp',
+      coverUrl: 'https://images.unsplash.com/photo-1493225457124-a3eb161ffa5f?w=500&auto=format&fit=crop&q=80',
       titleOnCover: true,
     },
     {
       id: 'bollywood-mush',
       title: 'Bollywood Mush',
       subtitle: 'Let these songs be the background score...',
-      coverUrl: '/images/onboarding-card-save-playlist.webp',
+      coverUrl: 'https://images.unsplash.com/photo-1518495973542-4542c06a5843?w=500&auto=format&fit=crop&q=80',
       badge: 'Limited ads',
       titleOnCover: true,
     },
@@ -160,21 +171,21 @@ export const SpotifyHome: React.FC<Props> = ({
       id: 'bolly-chill',
       title: 'Bollywood & Chill',
       subtitle: "Sit back, and chill with Bollywood's...",
-      coverUrl: '/images/onboarding-card-queue-it-up.webp',
+      coverUrl: 'https://images.unsplash.com/photo-1470225620780-dba8ba36b745?w=500&auto=format&fit=crop&q=80',
       titleOnCover: true,
     },
     {
       id: '1am-feels',
       title: '1 AM Feels Hindi',
       subtitle: 'Late night cool, & these soothing tunes.',
-      coverUrl: '/images/onboarding-card-miniplayer.webp',
+      coverUrl: 'https://images.unsplash.com/photo-1508700115892-45ecd05ae2ad?w=500&auto=format&fit=crop&q=80',
       titleOnCover: true,
     },
     {
       id: 'ipop-icons',
       title: 'I-Pop Icons',
       subtitle: 'Hottest tracks from your favourite I-Pop...',
-      coverUrl: '/images/onboarding-card-keyboard-shortcuts.webp',
+      coverUrl: 'https://images.unsplash.com/photo-1511671782779-c97d3d27a1d4?w=500&auto=format&fit=crop&q=80',
       titleOnCover: true,
     },
   ];
@@ -244,31 +255,31 @@ export const SpotifyHome: React.FC<Props> = ({
       id: 'ek-villain',
       title: 'Ek Villain',
       subtitle: 'Mithoon, Ankit Tiwari, Pritam',
-      coverUrl: '/images/onboarding-card-start-playing.webp',
+      coverUrl: 'https://images.unsplash.com/photo-1493225457124-a3eb161ffa5f?w=500&auto=format&fit=crop&q=80',
     },
     {
       id: 'ramaiya',
       title: 'Ramaiya Vastavaiya',
       subtitle: '(Original Motion Picture Soundtrack)',
-      coverUrl: '/images/onboarding-card-save-playlist.webp',
+      coverUrl: 'https://images.unsplash.com/photo-1518495973542-4542c06a5843?w=500&auto=format&fit=crop&q=80',
     },
     {
       id: 'best-romance',
       title: 'Best of Romance: Atif Aslam',
       subtitle: 'Atif Aslam',
-      coverUrl: '/images/producer.webp',
+      coverUrl: 'https://images.unsplash.com/photo-1598488035139-bdbb2231ce04?w=500&auto=format&fit=crop&q=80',
     },
     {
       id: 'blood-money',
       title: 'Blood Money',
       subtitle: '(Original Motion Picture Soundtrack)',
-      coverUrl: '/images/onboarding-card-miniplayer.webp',
+      coverUrl: 'https://images.unsplash.com/photo-1508700115892-45ecd05ae2ad?w=500&auto=format&fit=crop&q=80',
     },
     {
       id: 'bollywood-years',
       title: 'Bollywood Through The Years',
       subtitle: 'Timeless classic chartbusters',
-      coverUrl: '/images/onboarding-card-queue-it-up.webp',
+      coverUrl: 'https://images.unsplash.com/photo-1470225620780-dba8ba36b745?w=500&auto=format&fit=crop&q=80',
     },
   ];
 
@@ -278,35 +289,35 @@ export const SpotifyHome: React.FC<Props> = ({
       id: 'ipop-icons-2',
       title: 'I-Pop Icons',
       subtitle: 'Hottest tracks from your favourite I-Pop...',
-      coverUrl: '/images/onboarding-card-keyboard-shortcuts.webp',
+      coverUrl: 'https://images.unsplash.com/photo-1511671782779-c97d3d27a1d4?w=500&auto=format&fit=crop&q=80',
       titleOnCover: true,
     },
     {
       id: 'sad-hindi',
       title: 'Sad Hindi Melodies',
       subtitle: 'Soulful tunes for the heart that has loved...',
-      coverUrl: '/images/onboarding-card-miniplayer.webp',
+      coverUrl: 'https://images.unsplash.com/photo-1508700115892-45ecd05ae2ad?w=500&auto=format&fit=crop&q=80',
       titleOnCover: true,
     },
     {
       id: 'pov-love',
       title: "pov: you're in love",
       subtitle: "Uff, you've fallen! 💜",
-      coverUrl: '/images/onboarding-card-start-playing.webp',
+      coverUrl: 'https://images.unsplash.com/photo-1493225457124-a3eb161ffa5f?w=500&auto=format&fit=crop&q=80',
       titleOnCover: true,
     },
     {
       id: 'filmy-hangover',
       title: 'Filmy Hangover',
       subtitle: 'Soothe your hangover with these chill tracks.',
-      coverUrl: '/images/onboarding-card-save-playlist.webp',
+      coverUrl: 'https://images.unsplash.com/photo-1518495973542-4542c06a5843?w=500&auto=format&fit=crop&q=80',
       titleOnCover: true,
     },
     {
       id: 'bollywood-central',
       title: 'Bollywood Central',
       subtitle: 'Bollywood Central, jab baje toh sab...',
-      coverUrl: '/images/onboarding-card-queue-it-up.webp',
+      coverUrl: 'https://images.unsplash.com/photo-1470225620780-dba8ba36b745?w=500&auto=format&fit=crop&q=80',
       badge: 'Limited ads',
       titleOnCover: true,
     },
@@ -376,7 +387,7 @@ export const SpotifyHome: React.FC<Props> = ({
     {
       id: 'art-imran',
       name: 'Imran Khan',
-      avatarUrl: '/images/producer.webp',
+      avatarUrl: 'https://images.unsplash.com/photo-1598488035139-bdbb2231ce04?w=500&auto=format&fit=crop&q=80',
     },
     {
       id: 'art-yyhs',
@@ -396,7 +407,7 @@ export const SpotifyHome: React.FC<Props> = ({
     {
       id: 'art-king',
       name: 'King',
-      avatarUrl: '/images/producer.webp',
+      avatarUrl: 'https://images.unsplash.com/photo-1598488035139-bdbb2231ce04?w=500&auto=format&fit=crop&q=80',
     },
     {
       id: 'art-mankirt',
@@ -406,7 +417,7 @@ export const SpotifyHome: React.FC<Props> = ({
     {
       id: 'art-sidhu',
       name: 'Sidhu Moose Wala',
-      avatarUrl: '/images/producer.webp',
+      avatarUrl: 'https://images.unsplash.com/photo-1598488035139-bdbb2231ce04?w=500&auto=format&fit=crop&q=80',
     },
     {
       id: 'art-kk',
@@ -422,8 +433,8 @@ export const SpotifyHome: React.FC<Props> = ({
       category: 'Based on your recent listening',
       title: "Trending Valentine's Hits",
       source: 'Playlist • Spotify',
-      bgUrl: '/images/onboarding-card-start-playing.webp',
-      thumbUrl: '/images/onboarding-card-start-playing.webp',
+      bgUrl: 'https://images.unsplash.com/photo-1493225457124-a3eb161ffa5f?w=500&auto=format&fit=crop&q=80',
+      thumbUrl: 'https://images.unsplash.com/photo-1493225457124-a3eb161ffa5f?w=500&auto=format&fit=crop&q=80',
       description: 'Songs India is falling in love with right now...',
     },
     {
@@ -431,8 +442,8 @@ export const SpotifyHome: React.FC<Props> = ({
       category: 'Based on your recent listening',
       title: 'Sad Hindi Melodies',
       source: 'Playlist • Spotify',
-      bgUrl: '/images/onboarding-card-miniplayer.webp',
-      thumbUrl: '/images/onboarding-card-miniplayer.webp',
+      bgUrl: 'https://images.unsplash.com/photo-1508700115892-45ecd05ae2ad?w=500&auto=format&fit=crop&q=80',
+      thumbUrl: 'https://images.unsplash.com/photo-1508700115892-45ecd05ae2ad?w=500&auto=format&fit=crop&q=80',
       description: 'Soulful tunes for the heart that has loved...',
     },
     {
@@ -440,8 +451,8 @@ export const SpotifyHome: React.FC<Props> = ({
       category: 'More like Tegi Pannu',
       title: 'Talwiinder Radio',
       source: 'Playlist • Spotify',
-      bgUrl: '/images/onboarding-card-save-playlist.webp',
-      thumbUrl: '/images/onboarding-card-save-playlist.webp',
+      bgUrl: 'https://images.unsplash.com/photo-1518495973542-4542c06a5843?w=500&auto=format&fit=crop&q=80',
+      thumbUrl: 'https://images.unsplash.com/photo-1518495973542-4542c06a5843?w=500&auto=format&fit=crop&q=80',
       description: 'With AP Dhillon, Shubh, Karan Aujla...',
     },
     {
@@ -449,8 +460,8 @@ export const SpotifyHome: React.FC<Props> = ({
       category: 'Based on your recent listening',
       title: 'Jhakaas Mumbai',
       source: 'Playlist • Spotify',
-      bgUrl: '/images/onboarding-card-queue-it-up.webp',
-      thumbUrl: '/images/onboarding-card-queue-it-up.webp',
+      bgUrl: 'https://images.unsplash.com/photo-1470225620780-dba8ba36b745?w=500&auto=format&fit=crop&q=80',
+      thumbUrl: 'https://images.unsplash.com/photo-1470225620780-dba8ba36b745?w=500&auto=format&fit=crop&q=80',
       description: 'Check out the songs Mumbai is vibing to.',
     },
     {
@@ -458,8 +469,8 @@ export const SpotifyHome: React.FC<Props> = ({
       category: 'Made for you',
       title: 'Sad Mix',
       source: 'Playlist • Spotify',
-      bgUrl: '/images/onboarding-card-create-playlist.webp',
-      thumbUrl: '/images/onboarding-card-create-playlist.webp',
+      bgUrl: 'https://images.unsplash.com/photo-1514525253161-7a46d19cd819?w=500&auto=format&fit=crop&q=80',
+      thumbUrl: 'https://images.unsplash.com/photo-1514525253161-7a46d19cd819?w=500&auto=format&fit=crop&q=80',
       description: 'Gurnazar, Pritam, Anuradha Paudwal and more',
     },
     {
@@ -467,8 +478,8 @@ export const SpotifyHome: React.FC<Props> = ({
       category: 'Episodes to try',
       title: 'Proposal Icks, Dream Rings & How to Get Her to Say Yes',
       source: 'Episode • Moment of Silence',
-      bgUrl: '/images/onboarding-card-keyboard-shortcuts.webp',
-      thumbUrl: '/images/onboarding-card-keyboard-shortcuts.webp',
+      bgUrl: 'https://images.unsplash.com/photo-1511671782779-c97d3d27a1d4?w=500&auto=format&fit=crop&q=80',
+      thumbUrl: 'https://images.unsplash.com/photo-1511671782779-c97d3d27a1d4?w=500&auto=format&fit=crop&q=80',
       description: 'Nov 6 • 51 min 53 sec • Hiii MOSSIES, hope you’re ready for the weekend!',
       isPodcast: true,
       podcastDate: 'Nov 6',
@@ -550,19 +561,25 @@ export const SpotifyHome: React.FC<Props> = ({
                   ) : (
                     <img
                       src={
-                        item.coverUrl && !item.coverUrl.startsWith('http')
+                        !isInvalidCoverUrl(item.coverUrl)
                           ? item.coverUrl
                           : item.type === 'album'
-                          ? '/images/onboarding-card-save-playlist.webp'
+                          ? 'https://images.unsplash.com/photo-1518495973542-4542c06a5843?w=500&auto=format&fit=crop&q=80'
                           : item.type === 'song'
-                          ? '/images/onboarding-card-start-playing.webp'
-                          : '/images/onboarding-card-queue-it-up.webp'
+                          ? 'https://images.unsplash.com/photo-1493225457124-a3eb161ffa5f?w=500&auto=format&fit=crop&q=80'
+                          : 'https://images.unsplash.com/photo-1470225620780-dba8ba36b745?w=500&auto=format&fit=crop&q=80'
                       }
                       alt={item.title}
                       loading="eager"
+                      onLoad={(e) => {
+                        const img = e.target as HTMLImageElement;
+                        if (img.naturalWidth === 120 && img.naturalHeight === 90) {
+                          img.src = 'https://images.unsplash.com/photo-1511671782779-c97d3d27a1d4?w=500&auto=format&fit=crop&q=80';
+                        }
+                      }}
                       onError={(e) => {
                         const img = e.target as HTMLImageElement;
-                        img.src = '/images/onboarding-card-start-playing.webp';
+                        img.src = 'https://images.unsplash.com/photo-1493225457124-a3eb161ffa5f?w=500&auto=format&fit=crop&q=80';
                       }}
                     />
                   )}
@@ -888,7 +905,7 @@ export const SpotifyHome: React.FC<Props> = ({
                     onError={(e) => {
                       const img = e.target as HTMLImageElement;
                       if (!img.src.includes('/images/')) {
-                        img.src = '/images/producer.webp';
+                        img.src = 'https://images.unsplash.com/photo-1598488035139-bdbb2231ce04?w=500&auto=format&fit=crop&q=80';
                       }
                     }}
                   />

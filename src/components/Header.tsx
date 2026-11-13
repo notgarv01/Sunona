@@ -30,42 +30,17 @@ interface RecentSearchSong {
   duration?: number;
 }
 
-const RECENT_SONGS_KEY = 'sunona_recent_search_songs_v2';
+const getRecentSongsKey = (uid?: string) => `sunona_recent_search_songs_${uid || 'guest'}`;
 
-function getStoredRecentSongs(): RecentSearchSong[] {
+function getStoredRecentSongs(uid?: string): RecentSearchSong[] {
   try {
-    const raw = localStorage.getItem(RECENT_SONGS_KEY);
+    const raw = localStorage.getItem(getRecentSongsKey(uid));
     if (raw) {
       const parsed = JSON.parse(raw);
       if (Array.isArray(parsed) && parsed.length > 0) return parsed;
     }
   } catch {}
-  return [
-    {
-      id: 'f87jV0iK3fE',
-      title: 'Pyaar Tune Kya Kiya',
-      artist: 'Jubin Nautiyal',
-      coverUrl: 'https://images.unsplash.com/photo-1518609878373-06d740f60d8b?w=200&auto=format&fit=crop&q=80',
-    },
-    {
-      id: 'kH8a93n4k12',
-      title: 'Khuda Bhi',
-      artist: 'Tony Kakkar, Mohit Chauhan, Manoj Muntashir',
-      coverUrl: 'https://images.unsplash.com/photo-1470225620780-dba8ba36b745?w=200&auto=format&fit=crop&q=80',
-    },
-    {
-      id: 'r83nj48912j',
-      title: 'Raanjhanaa (From "Raanjhanaa")',
-      artist: 'A.R. Rahman, Jaswinder Singh, Shiraz Uppal',
-      coverUrl: 'https://images.unsplash.com/photo-1511671782779-c97d3d27a1d4?w=200&auto=format&fit=crop&q=80',
-    },
-    {
-      id: 's83nj48912j',
-      title: 'Sajde - From "Lost;Found"',
-      artist: 'Faheem Abdullah, Huzaif Nazar',
-      coverUrl: 'https://images.unsplash.com/photo-1493225457124-a3eb161ffa5f?w=200&auto=format&fit=crop&q=80',
-    },
-  ];
+  return [];
 }
 
 export const Header: React.FC<Props> = ({
@@ -87,8 +62,13 @@ export const Header: React.FC<Props> = ({
 }) => {
   const [searchQuery, setSearchQuery] = useState('');
   const [searchResults, setSearchResults] = useState<Song[]>([]);
-  const [recentSongs, setRecentSongs] = useState<RecentSearchSong[]>(getStoredRecentSongs);
+  const [recentSongs, setRecentSongs] = useState<RecentSearchSong[]>(() => getStoredRecentSongs(user?.uid));
   const [isLoading, setIsLoading] = useState(false);
+
+  // Sync recent search songs when active user changes
+  useEffect(() => {
+    setRecentSongs(getStoredRecentSongs(user?.uid));
+  }, [user?.uid]);
   const [isDropdownOpen, setIsDropdownOpen] = useState(false);
   const searchRef = useRef<HTMLDivElement | null>(null);
   const inputRef = useRef<HTMLInputElement | null>(null);
@@ -128,30 +108,30 @@ export const Header: React.FC<Props> = ({
         ...filtered,
       ].slice(0, 10);
       try {
-        localStorage.setItem(RECENT_SONGS_KEY, JSON.stringify(updated));
+        localStorage.setItem(getRecentSongsKey(user?.uid), JSON.stringify(updated));
       } catch {}
       return updated;
     });
-  }, []);
+  }, [user?.uid]);
 
   const removeRecentSong = useCallback((id: string, e?: React.MouseEvent) => {
     e?.stopPropagation();
     setRecentSongs((prev) => {
       const updated = prev.filter((s) => s.id !== id);
       try {
-        localStorage.setItem(RECENT_SONGS_KEY, JSON.stringify(updated));
+        localStorage.setItem(getRecentSongsKey(user?.uid), JSON.stringify(updated));
       } catch {}
       return updated;
     });
-  }, []);
+  }, [user?.uid]);
 
   const clearAllRecent = useCallback((e?: React.MouseEvent) => {
     e?.stopPropagation();
     setRecentSongs([]);
     try {
-      localStorage.removeItem(RECENT_SONGS_KEY);
+      localStorage.removeItem(getRecentSongsKey(user?.uid));
     } catch {}
-  }, []);
+  }, [user?.uid]);
 
   // Global Ctrl+K shortcut listener
   useEffect(() => {
@@ -486,7 +466,7 @@ export const Header: React.FC<Props> = ({
           <Keyboard size={18} />
         </button>
 
-        {/* Spotify User Cluster (Bell, Friends, Garvgupta Avatar) */}
+        {/* Spotify User Cluster (Bell, Friends, Profile Avatar) */}
         {uiMode === 'spotify' ? (
           <div className="spotify-hdr-user-cluster">
             <button className="spotify-hdr-icon-btn" title="What's New">
@@ -498,9 +478,21 @@ export const Header: React.FC<Props> = ({
             <div
               className="spotify-hdr-avatar-g"
               onClick={onOpenProfile || onOpenAuth}
-              title={user?.displayName ? `${user.displayName} (Profile)` : 'Garvgupta (Profile)'}
+              title={user?.displayName ? `${user.displayName} (Profile)` : 'My Profile'}
+              style={{ overflow: 'hidden', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
             >
-              {user?.displayName ? user.displayName.charAt(0).toUpperCase() : 'G'}
+              {user?.photoURL ? (
+                <img
+                  src={user.photoURL}
+                  alt={user.displayName || 'Profile'}
+                  style={{ width: '100%', height: '100%', borderRadius: '50%', objectFit: 'cover' }}
+                  onError={(e) => {
+                    (e.currentTarget as HTMLElement).style.display = 'none';
+                  }}
+                />
+              ) : (
+                <span>{user?.displayName ? user.displayName.charAt(0).toUpperCase() : 'U'}</span>
+              )}
             </div>
           </div>
         ) : user ? (

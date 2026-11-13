@@ -190,10 +190,16 @@ export const SpotifyExplore: React.FC<Props> = ({
                 >
                   <div className="spotify-media-card-cover-wrap">
                     <img
-                      src={song.coverUrl || 'https://images.unsplash.com/photo-1511671782779-c97d3d27a1d4?w=600&auto=format&fit=crop&q=80'}
+                      src={song.coverUrl || '/images/onboarding-card-queue-it-up.webp'}
                       alt={song.title}
                       className="spotify-media-card-cover"
                       loading="lazy"
+                      onError={(e) => {
+                        const img = e.target as HTMLImageElement;
+                        if (!img.src.includes('/images/')) {
+                          img.src = '/images/onboarding-card-queue-it-up.webp';
+                        }
+                      }}
                     />
                     <button
                       className="spotify-floating-play-btn"
@@ -242,6 +248,12 @@ export const SpotifyExplore: React.FC<Props> = ({
                 alt={cat.title}
                 className="spotify-genre-peeking-art"
                 loading="lazy"
+                onError={(e) => {
+                  const img = e.target as HTMLImageElement;
+                  if (!img.src.includes('/images/')) {
+                    img.src = '/images/onboarding-card-start-playing.webp';
+                  }
+                }}
               />
             </div>
           ))}

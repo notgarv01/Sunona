@@ -60,11 +60,6 @@ export const LyricsDrawer: React.FC<Props> = ({
           <span style={{ fontFamily: 'var(--font-heading)', fontWeight: 700, fontSize: '0.96rem' }}>
             Live Lyrics
           </span>
-          {currentSong?.lyricsSource && lyrics.length > 0 && (
-            <span className="lyrics-source-badge" title="Source of lyrics">
-              ⚡ {currentSong.lyricsSource}
-            </span>
-          )}
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
           {currentSong?.geniusUrl && (

@@ -80,8 +80,8 @@ class AudioEngine {
     this.currentSong = song;
     this.updateMediaSession(song);
 
-    // Stream directly through local proxy endpoint
-    const streamUrl = `/api/stream?id=${encodeURIComponent(song.id)}`;
+    // Stream directly through local proxy endpoint (with title & artist for seamless on-the-fly resolution)
+    const streamUrl = `/api/stream?id=${encodeURIComponent(song.id)}&title=${encodeURIComponent(song.title || '')}&artist=${encodeURIComponent(song.artist || '')}`;
     
     if (this.audio.src !== streamUrl) {
       this.audio.src = streamUrl;

@@ -34,11 +34,18 @@ export const SpotifyPlaylistView: React.FC<Props> = ({
   onTogglePlay,
   onBack,
   onToggleLike,
-  onAddToPlaylist: _onAddToPlaylist,
+  onAddToPlaylist,
   onRemoveSong,
 }) => {
   const [filterQuery, setFilterQuery] = useState('');
   const [isSearchActive, setIsSearchActive] = useState(false);
+  const [contextMenu, setContextMenu] = useState<{ x: number; y: number; song: Song } | null>(null);
+
+  React.useEffect(() => {
+    const handleWindowClick = () => setContextMenu(null);
+    window.addEventListener('click', handleWindowClick);
+    return () => window.removeEventListener('click', handleWindowClick);
+  }, []);
 
   const isCurrentPlaylistPlaying =
     isPlaying &&
@@ -103,9 +110,13 @@ export const SpotifyPlaylistView: React.FC<Props> = ({
         ) : (
           <div className="spotify-pl-cover-box">
             <img
-              src={playlist.coverUrl || 'https://images.unsplash.com/photo-1518495973542-4542c06a5843?w=600&auto=format&fit=crop&q=80'}
+              src={playlist.coverUrl || '/images/onboarding-card-save-playlist.webp'}
               alt={playlist.title}
               className="spotify-pl-cover-img"
+              onError={(e) => {
+                const img = e.target as HTMLImageElement;
+                img.src = '/images/onboarding-card-save-playlist.webp';
+              }}
             />
           </div>
         )}
@@ -219,22 +230,36 @@ export const SpotifyPlaylistView: React.FC<Props> = ({
               >
                 <div
                   className={`spotify-tl-row ${isThisActive ? 'active' : ''}`}
+                  onClick={() => onPlaySong(song, playlist.songs)}
                   onDoubleClick={() => onPlaySong(song, playlist.songs)}
+                  onContextMenu={(e) => {
+                    e.preventDefault();
+                    setContextMenu({
+                      x: Math.min(e.clientX, window.innerWidth - 220),
+                      y: Math.min(e.clientY, window.innerHeight - 200),
+                      song,
+                    });
+                  }}
                 >
-                  {/* Index / Play / Animated Equalizer */}
+                  {/* Index / Play / Official Extracted Animated Equalizer */}
                   <div className="spotify-tl-col-index">
                     {isThisPlaying ? (
-                      <div className="spotify-equalizer-bars">
-                        <span className="eq-bar bar-1" />
-                        <span className="eq-bar bar-2" />
-                        <span className="eq-bar bar-3" />
-                      </div>
+                      <img
+                        src="/images/equaliser-animated-green.gif"
+                        alt="Playing"
+                        width={14}
+                        height={14}
+                        style={{ display: 'inline-block', verticalAlign: 'middle' }}
+                      />
                     ) : (
                       <>
                         <span className="spotify-tl-idx-num">{idx + 1}</span>
                         <button
                           className="spotify-tl-idx-play"
-                          onClick={() => onPlaySong(song, playlist.songs)}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            onPlaySong(song, playlist.songs);
+                          }}
                           title={`Play ${song.title}`}
                         >
                           <Play size={14} fill="#ffffff" />
@@ -246,9 +271,13 @@ export const SpotifyPlaylistView: React.FC<Props> = ({
                   {/* Title + Cover + Artist */}
                   <div className="spotify-tl-col-title">
                     <img
-                      src={song.coverUrl || 'https://images.unsplash.com/photo-1511671782779-c97d3d27a1d4?w=600&auto=format&fit=crop&q=80'}
+                      src={song.coverUrl || '/images/onboarding-card-save-playlist.webp'}
                       alt={song.title}
                       className="spotify-tl-thumb"
+                      onError={(e) => {
+                        const img = e.target as HTMLImageElement;
+                        img.src = '/images/onboarding-card-save-playlist.webp';
+                      }}
                     />
                     <div className="spotify-tl-title-wrap">
                       <span
@@ -294,6 +323,65 @@ export const SpotifyPlaylistView: React.FC<Props> = ({
           })}
         </div>
       </div>
+
+      {/* Floating Spotify Dark Context Menu */}
+      {contextMenu && (
+        <div
+          className="spotify-context-menu"
+          style={{
+            position: 'fixed',
+            top: contextMenu.y,
+            left: contextMenu.x,
+            backgroundColor: '#282828',
+            borderRadius: 6,
+            padding: 4,
+            boxShadow: '0 16px 32px rgba(0,0,0,0.6)',
+            zIndex: 1000,
+            display: 'flex',
+            flexDirection: 'column',
+            minWidth: 200,
+            border: '1px solid rgba(255,255,255,0.1)',
+          }}
+          onClick={(e) => e.stopPropagation()}
+        >
+          <div
+            className="context-menu-item"
+            style={{ padding: '10px 12px', fontSize: 13, color: '#fff', cursor: 'pointer', borderRadius: 4 }}
+            onMouseEnter={(e) => (e.currentTarget.style.backgroundColor = 'rgba(255,255,255,0.1)')}
+            onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = 'transparent')}
+            onClick={() => {
+              onAddToPlaylist?.(contextMenu.song);
+              setContextMenu(null);
+            }}
+          >
+            ➕ Add to playlist
+          </div>
+          <div
+            className="context-menu-item"
+            style={{ padding: '10px 12px', fontSize: 13, color: '#fff', cursor: 'pointer', borderRadius: 4 }}
+            onMouseEnter={(e) => (e.currentTarget.style.backgroundColor = 'rgba(255,255,255,0.1)')}
+            onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = 'transparent')}
+            onClick={() => {
+              onToggleLike(contextMenu.song.id);
+              setContextMenu(null);
+            }}
+          >
+            {contextMenu.song.isLiked ? '💔 Remove from Liked Songs' : '💚 Save to Liked Songs'}
+          </div>
+          <div
+            className="context-menu-item"
+            style={{ padding: '10px 12px', fontSize: 13, color: '#fff', cursor: 'pointer', borderRadius: 4 }}
+            onMouseEnter={(e) => (e.currentTarget.style.backgroundColor = 'rgba(255,255,255,0.1)')}
+            onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = 'transparent')}
+            onClick={() => {
+              navigator.clipboard?.writeText?.(`${contextMenu.song.title} by ${contextMenu.song.artist}`);
+              setContextMenu(null);
+            }}
+          >
+            🔗 Copy Song Info
+          </div>
+        </div>
+      )}
     </div>
   );
 };

@@ -1,0 +1,551 @@
+/* ==========================================================================
+   Rose Pink 3D Lyrics & Reel Exporter Theme
+   Inspired by @thatsalariedwoman.ai Pink Lyric Video Guide (ROSE)
+   ========================================================================== */
+
+.rose-pink-viewport {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  min-height: 400px;
+  background: radial-gradient(circle at 75% 20%, rgba(255, 45, 117, 0.18), transparent 50%),
+              radial-gradient(circle at 20% 80%, rgba(255, 105, 180, 0.12), transparent 45%),
+              #12040b;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  border-radius: 8px;
+  user-select: none;
+}
+
+/* Ambient Background Light & Petals */
+.rose-ambient-glow {
+  position: absolute;
+  top: 10%;
+  right: 15%;
+  width: 350px;
+  height: 350px;
+  background: radial-gradient(circle, rgba(255, 45, 117, 0.25) 0%, transparent 70%);
+  filter: blur(60px);
+  pointer-events: none;
+}
+
+.rose-petals-layer {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  overflow: hidden;
+}
+
+.petal {
+  position: absolute;
+  width: 14px;
+  height: 20px;
+  background: linear-gradient(135deg, rgba(255, 105, 180, 0.6), rgba(255, 45, 117, 0.3));
+  border-radius: 50% 0 50% 50%;
+  filter: drop-shadow(0 0 6px rgba(255, 45, 117, 0.5));
+  animation: floatPetal 12s infinite linear;
+}
+.petal.p1 { top: -10%; left: 20%; animation-duration: 14s; animation-delay: 0s; transform: scale(0.8) rotate(20deg); }
+.petal.p2 { top: -10%; left: 60%; animation-duration: 11s; animation-delay: 3s; transform: scale(1.1) rotate(45deg); }
+.petal.p3 { top: -10%; left: 80%; animation-duration: 16s; animation-delay: 1s; transform: scale(0.7) rotate(15deg); }
+.petal.p4 { top: -10%; left: 35%; animation-duration: 13s; animation-delay: 6s; transform: scale(0.9) rotate(-30deg); }
+.petal.p5 { top: -10%; left: 5%; animation-duration: 15s; animation-delay: 4s; transform: scale(1) rotate(60deg); }
+
+@keyframes floatPetal {
+  0% { transform: translateY(0) rotate(0deg); opacity: 0; }
+  10% { opacity: 0.8; }
+  90% { opacity: 0.8; }
+  100% { transform: translateY(110vh) rotate(360deg); opacity: 0; }
+}
+
+/* Header Bar */
+.rose-fl-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 16px 28px;
+  z-index: 10;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+.rose-fl-header-left {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.rose-pill-tag {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  background: rgba(255, 45, 117, 0.15);
+  border: 1px solid rgba(255, 45, 117, 0.4);
+  color: #ff69b4;
+  padding: 4px 10px;
+  border-radius: 20px;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.5px;
+}
+
+.sparkle-spin {
+  animation: spinSlow 6s infinite linear;
+}
+@keyframes spinSlow {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+
+.rose-fl-title {
+  color: #ffffff;
+  font-weight: 700;
+  font-size: 16px;
+}
+
+.rose-fl-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.rose-header-action-btn {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  padding: 7px 14px;
+  border-radius: 20px;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.export-reel-btn {
+  background: linear-gradient(135deg, #ff2d75, #ff69b4);
+  color: #ffffff;
+  border: none;
+  box-shadow: 0 4px 14px rgba(255, 45, 117, 0.4);
+}
+.export-reel-btn:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 6px 18px rgba(255, 45, 117, 0.6);
+}
+
+.switch-theme-btn {
+  background: rgba(255, 255, 255, 0.08);
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  color: #d1d5db;
+}
+.switch-theme-btn:hover {
+  background: rgba(255, 255, 255, 0.14);
+  color: #ffffff;
+}
+
+.rose-close-btn {
+  background: none;
+  border: none;
+  color: #b3b3b3;
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+.rose-close-btn:hover {
+  background: rgba(255, 255, 255, 0.1);
+  color: #fff;
+}
+
+/* 3D Floating Stage */
+.rose-stage-3d {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 20px 40px 60px;
+  gap: 40px;
+  perspective: 1200px;
+}
+
+/* Left Neon Rose Graphic */
+.neon-rose-container {
+  position: relative;
+  width: 140px;
+  height: 200px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.neon-rose-svg {
+  width: 100%;
+  height: 100%;
+  filter: drop-shadow(0 0 10px rgba(255, 45, 117, 0.8)) drop-shadow(0 0 25px rgba(255, 45, 117, 0.4));
+  animation: pulseGlow 3s ease-in-out infinite alternate;
+}
+
+@keyframes pulseGlow {
+  0% { filter: drop-shadow(0 0 8px rgba(255, 45, 117, 0.7)) drop-shadow(0 0 18px rgba(255, 45, 117, 0.3)); }
+  100% { filter: drop-shadow(0 0 14px rgba(255, 45, 117, 1)) drop-shadow(0 0 32px rgba(255, 45, 117, 0.6)); }
+}
+
+/* 3D Tilted Pink Spotify Card */
+.rose-card-3d {
+  position: relative;
+  width: 100%;
+  max-width: 640px;
+  height: 480px;
+  background: linear-gradient(135deg, rgba(255, 45, 117, 0.14) 0%, rgba(20, 5, 14, 0.7) 100%);
+  border: 1px solid rgba(255, 105, 180, 0.35);
+  border-radius: 20px;
+  box-shadow: 0 30px 80px rgba(0, 0, 0, 0.8),
+              0 0 50px rgba(255, 45, 117, 0.2);
+  backdrop-filter: blur(16px);
+  transform: perspective(1200px) rotateX(4deg) rotateY(-6deg) rotateZ(1deg);
+  transform-style: preserve-3d;
+  transition: transform 0.5s cubic-bezier(0.2, 0.8, 0.2, 1);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  animation: cardFloating 8s ease-in-out infinite alternate;
+}
+
+@keyframes cardFloating {
+  0% { transform: perspective(1200px) rotateX(4deg) rotateY(-6deg) rotateZ(1deg) translateY(0px); }
+  100% { transform: perspective(1200px) rotateX(6deg) rotateY(-4deg) rotateZ(1.5deg) translateY(-8px); }
+}
+
+.rose-card-3d:hover {
+  transform: perspective(1200px) rotateX(0deg) rotateY(0deg) rotateZ(0deg) translateY(-4px);
+  border-color: rgba(255, 105, 180, 0.6);
+  box-shadow: 0 35px 90px rgba(0, 0, 0, 0.9), 0 0 60px rgba(255, 45, 117, 0.35);
+}
+
+/* Card Top Metadata */
+.rose-card-topbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 20px 24px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.rose-card-track-info {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  min-width: 0;
+}
+
+.rose-card-cover {
+  width: 46px;
+  height: 46px;
+  border-radius: 8px;
+  object-fit: cover;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.5);
+  flex-shrink: 0;
+}
+.rose-card-cover-ph {
+  width: 46px;
+  height: 46px;
+  border-radius: 8px;
+  background: #333;
+  flex-shrink: 0;
+}
+
+.rose-card-meta {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.rose-card-title {
+  color: #ffffff;
+  font-weight: 700;
+  font-size: 16px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.rose-card-artist {
+  color: #ff99bb;
+  font-size: 13px;
+  font-weight: 500;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.rose-card-badge {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 1px;
+  color: #ffffff;
+  padding: 6px 12px;
+  background: rgba(255, 45, 117, 0.2);
+  border: 1px solid rgba(255, 45, 117, 0.4);
+  border-radius: 20px;
+}
+
+/* Scrolling Lyrics Inside 3D Card */
+.rose-card-lyrics-scroll {
+  flex: 1;
+  overflow-y: auto;
+  padding: 30px 32px 80px;
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+  scrollbar-width: none;
+}
+.rose-card-lyrics-scroll::-webkit-scrollbar {
+  display: none;
+}
+
+.rose-lyric-line {
+  font-size: 24px;
+  font-weight: 700;
+  line-height: 1.35;
+  color: rgba(255, 255, 255, 0.35);
+  transition: all 0.25s cubic-bezier(0.2, 0.8, 0.2, 1);
+  cursor: pointer;
+  transform-origin: left center;
+}
+
+.rose-lyric-line:hover {
+  color: rgba(255, 255, 255, 0.7);
+}
+
+.rose-lyric-line.active {
+  color: #ffffff;
+  font-size: 28px;
+  font-weight: 800;
+  text-shadow: 0 0 16px rgba(255, 45, 117, 0.9), 0 0 32px rgba(255, 105, 180, 0.5);
+  transform: scale(1.03);
+}
+
+.rose-lyric-line.past {
+  color: rgba(255, 255, 255, 0.2);
+}
+
+.rose-card-blur-top {
+  position: absolute;
+  top: 86px;
+  left: 0;
+  right: 0;
+  height: 30px;
+  background: linear-gradient(to bottom, rgba(20, 5, 14, 0.8), transparent);
+  pointer-events: none;
+  z-index: 2;
+}
+
+.rose-card-blur-bottom {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  height: 50px;
+  background: linear-gradient(to top, rgba(20, 5, 14, 0.9), transparent);
+  pointer-events: none;
+  z-index: 2;
+}
+
+/* ==========================================================================
+   Export Reel Modal Styles
+   ========================================================================== */
+
+.rose-modal-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.85);
+  backdrop-filter: blur(12px);
+  z-index: 10000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+}
+
+.rose-modal-card {
+  width: 100%;
+  max-width: 780px;
+  background: #180611;
+  border: 1px solid rgba(255, 45, 117, 0.35);
+  border-radius: 20px;
+  box-shadow: 0 24px 60px rgba(0, 0, 0, 0.8), 0 0 40px rgba(255, 45, 117, 0.2);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.rose-modal-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 18px 24px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.rose-modal-title-wrap {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.rose-modal-title-wrap h3 {
+  color: #ffffff;
+  font-size: 18px;
+  font-weight: 700;
+  margin: 0;
+}
+
+.rose-modal-close {
+  background: none;
+  border: none;
+  color: #999;
+  cursor: pointer;
+  padding: 6px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.15s ease;
+}
+.rose-modal-close:hover {
+  background: rgba(255, 255, 255, 0.1);
+  color: #fff;
+}
+
+.rose-modal-body {
+  display: flex;
+  padding: 24px;
+  gap: 28px;
+  align-items: center;
+}
+
+/* 9:16 Canvas Viewport */
+.rose-preview-viewport {
+  width: 270px;
+  height: 480px;
+  border-radius: 16px;
+  overflow: hidden;
+  box-shadow: 0 12px 36px rgba(0, 0, 0, 0.7), 0 0 20px rgba(255, 45, 117, 0.3);
+  border: 2px solid rgba(255, 45, 117, 0.4);
+  flex-shrink: 0;
+  background: #000;
+}
+
+.rose-preview-canvas {
+  width: 100%;
+  height: 100%;
+  display: block;
+}
+
+/* Controls Column */
+.rose-modal-controls {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+.rose-control-group {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.rose-control-group label {
+  color: #d1d5db;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.rose-pill-selector {
+  display: flex;
+  gap: 10px;
+}
+
+.rose-time-pill {
+  flex: 1;
+  padding: 10px 14px;
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  border-radius: 12px;
+  color: #b3b3b3;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+.rose-time-pill.active {
+  background: rgba(255, 45, 117, 0.2);
+  border-color: #ff2d75;
+  color: #ffffff;
+}
+
+.rose-range-slider {
+  width: 100%;
+  accent-color: #ff2d75;
+  cursor: pointer;
+}
+
+.rose-render-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  padding: 14px 20px;
+  background: linear-gradient(135deg, #ff2d75, #ff69b4);
+  color: #ffffff;
+  border: none;
+  border-radius: 14px;
+  font-size: 15px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  box-shadow: 0 6px 20px rgba(255, 45, 117, 0.4);
+}
+.rose-render-btn:hover:not(:disabled) {
+  transform: translateY(-2px);
+  box-shadow: 0 8px 24px rgba(255, 45, 117, 0.6);
+}
+.rose-render-btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.rose-download-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  padding: 14px 20px;
+  background: #1ed760;
+  color: #000000;
+  text-decoration: none;
+  border-radius: 14px;
+  font-size: 15px;
+  font-weight: 700;
+  transition: all 0.2s ease;
+  box-shadow: 0 6px 20px rgba(30, 215, 96, 0.4);
+}
+.rose-download-btn:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 8px 24px rgba(30, 215, 96, 0.6);
+}
+
+.rose-disclaimer {
+  color: #888;
+  font-size: 12px;
+  line-height: 1.4;
+  margin: 0;
+}
+

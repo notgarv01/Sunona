@@ -135,17 +135,19 @@ export const SpotifyRightPanel: React.FC<Props> = ({
       <div className="spotify-rp-scroll-content">
         {/* Large Portrait/Square Artwork with Ambient Glow */}
         <div className="spotify-rp-cover-wrap">
-          {currentSong.coverUrl && (
-            <div
-              className="spotify-rp-cover-blur-bg"
-              style={{ backgroundImage: `url(${currentSong.coverUrl})` }}
-              aria-hidden="true"
-            />
-          )}
+          <div
+            className="spotify-rp-cover-blur-bg"
+            style={{ backgroundImage: `url(${currentSong.coverUrl || '/images/onboarding-card-start-playing.webp'})` }}
+            aria-hidden="true"
+          />
           <img
-            src={currentSong.coverUrl || 'https://images.unsplash.com/photo-1511671782779-c97d3d27a1d4?w=600&auto=format&fit=crop&q=80'}
+            src={currentSong.coverUrl || '/images/onboarding-card-start-playing.webp'}
             alt={currentSong.title}
             className="spotify-rp-cover-img"
+            onError={(e) => {
+              const img = e.target as HTMLImageElement;
+              img.src = '/images/onboarding-card-start-playing.webp';
+            }}
           />
         </div>
 
@@ -189,9 +191,13 @@ export const SpotifyRightPanel: React.FC<Props> = ({
           <div className="spotify-rp-artist-card-box">
             <div className="spotify-rp-artist-avatar-wrap">
               <img
-                src={currentSong.coverUrl || 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=200'}
+                src={currentSong.coverUrl || '/images/producer.webp'}
                 alt={currentSong.artist}
                 className="spotify-rp-artist-avatar"
+                onError={(e) => {
+                  const img = e.target as HTMLImageElement;
+                  img.src = '/images/producer.webp';
+                }}
               />
             </div>
             <div className="spotify-rp-artist-name-row">

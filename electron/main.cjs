@@ -1,4 +1,4 @@
-const { app, BrowserWindow, globalShortcut, ipcMain, Menu } = require('electron');
+const { app, BrowserWindow, globalShortcut, ipcMain, Menu, nativeImage } = require('electron');
 const path = require('path');
 const { autoUpdater } = require('electron-updater');
 const { startServer } = require('./server.cjs');
@@ -36,6 +36,10 @@ autoUpdater.on('download-progress', (progressObj) => {
 
 autoUpdater.on('error', (err) => {
   console.warn('[AutoUpdater] Warning:', err ? err.message : 'Unknown error');
+  if (process.platform === 'darwin') {
+    checkMacUpdates();
+    return;
+  }
   if (mainWindow && !mainWindow.isDestroyed()) {
     mainWindow.webContents.send('update-error', err ? err.message : 'Update check failed');
   }
@@ -48,13 +52,69 @@ autoUpdater.on('update-downloaded', (info) => {
   }
 });
 
+function compareVersions(v1, v2) {
+  const p1 = (v1 || '').split('.').map(n => parseInt(n, 10) || 0);
+  const p2 = (v2 || '').split('.').map(n => parseInt(n, 10) || 0);
+  for (let i = 0; i < Math.max(p1.length, p2.length); i++) {
+    const num1 = p1[i] || 0;
+    const num2 = p2[i] || 0;
+    if (num1 > num2) return 1;
+    if (num1 < num2) return -1;
+  }
+  return 0;
+}
+
+async function checkMacUpdates() {
+  if (mainWindow && !mainWindow.isDestroyed()) {
+    mainWindow.webContents.send('update-checking');
+  }
+  try {
+    const res = await fetch('https://api.github.com/repos/notgarv01/Sunona/releases/latest', {
+      headers: { 'User-Agent': 'SunoNa-Desktop' }
+    });
+    if (!res.ok) throw new Error(`GitHub check returned status ${res.status}`);
+    const data = await res.json();
+    
+    const latestTag = data.tag_name || '';
+    const cleanLatest = latestTag.replace(/^v/, '').replace(/-.*$/, '').trim();
+    const currentVer = app.getVersion().trim();
+
+    const isNewer = compareVersions(cleanLatest, currentVer) > 0;
+    
+    if (isNewer) {
+      const dmgAsset = (data.assets || []).find(a => a.name && a.name.endsWith('.dmg')) || {};
+      const downloadUrl = dmgAsset.browser_download_url || 'https://github.com/notgarv01/Sunona/releases/latest';
+      if (mainWindow && !mainWindow.isDestroyed()) {
+        mainWindow.webContents.send('update-available', {
+          version: cleanLatest,
+          downloadUrl,
+          releaseNotes: data.body || 'New SunoNa desktop update available.'
+        });
+      }
+    } else {
+      if (mainWindow && !mainWindow.isDestroyed()) {
+        mainWindow.webContents.send('update-not-available', { version: currentVer });
+      }
+    }
+  } catch (err) {
+    console.warn('[AutoUpdater-Mac] Check error:', err ? err.message : err);
+    if (mainWindow && !mainWindow.isDestroyed()) {
+      mainWindow.webContents.send('update-error', 'Unable to check for updates. Please try again later.');
+    }
+  }
+}
+
 // Manual update trigger from UI
 ipcMain.on('check-for-updates', () => {
-  autoUpdater.checkForUpdatesAndNotify().catch((err) => {
-    if (mainWindow && !mainWindow.isDestroyed()) {
-      mainWindow.webContents.send('update-error', err ? err.message : 'Update check failed');
-    }
-  });
+  if (process.platform === 'darwin') {
+    checkMacUpdates();
+  } else {
+    autoUpdater.checkForUpdatesAndNotify().catch((err) => {
+      if (mainWindow && !mainWindow.isDestroyed()) {
+        mainWindow.webContents.send('update-error', err ? err.message : 'Update check failed');
+      }
+    });
+  }
 });
 
 // Prevent multiple instances of SunoNa running simultaneously
@@ -182,9 +242,13 @@ async function createWindow() {
   // Check for auto-updates from GitHub in production mode
   if (!isDev) {
     setTimeout(() => {
-      autoUpdater.checkForUpdatesAndNotify().catch((err) => {
-        console.warn('[AutoUpdater] Initial check error:', err ? err.message : err);
-      });
+      if (process.platform === 'darwin') {
+        checkMacUpdates();
+      } else {
+        autoUpdater.checkForUpdatesAndNotify().catch((err) => {
+          console.warn('[AutoUpdater] Initial check error:', err ? err.message : err);
+        });
+      }
     }, 4000); // 4-second delay after startup for instant smooth boot
   }
 
@@ -212,8 +276,82 @@ ipcMain.on('window-close', () => {
   if (mainWindow && !mainWindow.isDestroyed()) mainWindow.close();
 });
 
+// Windows Taskbar Thumbnail Toolbar Buttons (SMTC media buttons on hover)
+function updateThumbarButtons(isPlaying) {
+  if (process.platform !== 'win32' || !mainWindow || mainWindow.isDestroyed()) return;
+  try {
+    const assetsDir = path.join(__dirname, 'assets');
+    const iconAdd = nativeImage.createFromPath(path.join(assetsDir, 'thumb-add.png'));
+    const iconPrev = nativeImage.createFromPath(path.join(assetsDir, 'thumb-prev.png'));
+    const iconPlay = nativeImage.createFromPath(path.join(assetsDir, 'thumb-play.png'));
+    const iconPause = nativeImage.createFromPath(path.join(assetsDir, 'thumb-pause.png'));
+    const iconNext = nativeImage.createFromPath(path.join(assetsDir, 'thumb-next.png'));
+
+    mainWindow.setThumbarButtons([
+      {
+        tooltip: 'Add to playlist',
+        icon: iconAdd,
+        click() {
+          if (mainWindow && !mainWindow.isDestroyed()) {
+            mainWindow.webContents.send('media-key', 'like');
+          }
+        },
+      },
+      {
+        tooltip: 'Previous track',
+        icon: iconPrev,
+        click() {
+          if (mainWindow && !mainWindow.isDestroyed()) {
+            mainWindow.webContents.send('media-key', 'prev');
+          }
+        },
+      },
+      {
+        tooltip: isPlaying ? 'Pause' : 'Play',
+        icon: isPlaying ? iconPause : iconPlay,
+        click() {
+          if (mainWindow && !mainWindow.isDestroyed()) {
+            mainWindow.webContents.send('media-key', 'play-pause');
+          }
+        },
+      },
+      {
+        tooltip: 'Next track',
+        icon: iconNext,
+        click() {
+          if (mainWindow && !mainWindow.isDestroyed()) {
+            mainWindow.webContents.send('media-key', 'next');
+          }
+        },
+      },
+    ]);
+  } catch (err) {
+    console.warn('Failed to update taskbar thumbnail buttons:', err ? err.message : err);
+  }
+}
+
+ipcMain.on('playback-state', (_event, state) => {
+  if (!mainWindow || mainWindow.isDestroyed()) return;
+  const isPlaying = Boolean(state?.isPlaying);
+  const song = state?.currentSong;
+  const uiMode = state?.uiMode;
+
+  if (song && song.title) {
+    mainWindow.setTitle(`${song.title} • ${song.artist || 'Spotify Free'}`);
+  } else {
+    mainWindow.setTitle(uiMode === 'sunona' ? 'SunoNa!!' : 'Spotify Free');
+  }
+
+  updateThumbarButtons(isPlaying);
+});
+
 ipcMain.on('restart-and-install', () => {
-  autoUpdater.quitAndInstall();
+  if (process.platform === 'darwin') {
+    const { shell } = require('electron');
+    shell.openExternal('https://github.com/notgarv01/Sunona/releases/latest');
+  } else {
+    autoUpdater.quitAndInstall();
+  }
 });
 
 // Second instance triggered: focus the main window

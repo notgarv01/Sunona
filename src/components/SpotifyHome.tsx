@@ -22,6 +22,7 @@ interface Props {
   onSelectAlbum?: (albumId: string) => void;
   onAddToPlaylist?: (song: Song) => void;
   onOpenLikedSongs?: () => void;
+  onSelectArtist?: (artistName: string) => void;
 }
 
 interface SpotifyCardItem {
@@ -74,49 +75,69 @@ export const SpotifyHome: React.FC<Props> = ({
   playlists,
   currentSong,
   isPlaying,
-  likedSongsCount = 0,
+  likedSongsCount: _likedSongsCount = 0,
   onPlaySong,
   onSelectPlaylist,
   onSelectAlbum,
   onOpenLikedSongs,
+  onSelectArtist,
 }) => {
   const [filterTag, setFilterTag] = useState<'all' | 'music' | 'podcasts'>('all');
 
   const greeting = useMemo(() => getGreeting(), []);
 
-  // Quick Access: 6 items in a 2-col grid (Screenshot 426)
+  // Quick Access: 6 items in a 2-col grid (Exact Spotify Desktop)
   const quickAccessItems = useMemo(() => {
     const items: { id: string; title: string; coverUrl: string; type: 'song' | 'playlist' | 'album'; data?: Song | Playlist | Album }[] = [];
 
-    // Liked songs tile with purple gradient
-    if (likedSongsCount > 0) {
-      items.push({
-        id: 'liked-songs',
-        title: 'Liked Songs',
-        coverUrl: '',
-        type: 'playlist',
-      });
+    // ALWAYS #1 in Spotify Desktop: Liked Songs with signature purple gradient & white heart
+    items.push({
+      id: 'liked-songs',
+      title: 'Liked Songs',
+      coverUrl: '',
+      type: 'playlist',
+    });
+
+    // Rich Spotify curated defaults with local extracted artwork
+    const defaultTiles: { id: string; title: string; coverUrl: string; type: 'playlist' | 'album' | 'song'; data?: Song | Playlist | Album }[] = [
+      { id: 'qa-val-hits', title: "Trending Valentine's Hits", coverUrl: '/images/onboarding-card-start-playing.webp', type: 'playlist' },
+      { id: 'qa-bolly-mush', title: 'Bollywood Mush', coverUrl: '/images/onboarding-card-save-playlist.webp', type: 'playlist' },
+      { id: 'qa-bolly-chill', title: 'Bollywood & Chill', coverUrl: '/images/onboarding-card-queue-it-up.webp', type: 'playlist' },
+      { id: 'qa-1am-feels', title: '1 AM Feels Hindi', coverUrl: '/images/onboarding-card-miniplayer.webp', type: 'playlist' },
+      { id: 'qa-ipop-icons', title: 'I-Pop Icons', coverUrl: '/images/onboarding-card-keyboard-shortcuts.webp', type: 'playlist' },
+    ];
+
+    // Priority user items (custom playlists, albums, songs)
+    const userPool: { id: string; title: string; coverUrl: string; type: 'song' | 'playlist' | 'album'; data?: Song | Playlist | Album }[] = [];
+    for (const pl of playlists.filter(p => p.id !== 'liked-songs')) {
+      userPool.push({ id: pl.id, title: pl.title, coverUrl: pl.coverUrl || '/images/onboarding-card-save-playlist.webp', type: 'playlist', data: pl });
+    }
+    for (const alb of albums) {
+      userPool.push({ id: alb.id, title: alb.title, coverUrl: alb.coverUrl || '/images/onboarding-card-keyboard-shortcuts.webp', type: 'album', data: alb });
+    }
+    for (const s of songs) {
+      userPool.push({ id: s.id, title: s.title, coverUrl: s.coverUrl || '/images/onboarding-card-start-playing.webp', type: 'song', data: s });
     }
 
-    // Playlists
-    for (const pl of playlists.slice(0, 2)) {
-      items.push({ id: pl.id, title: pl.title, coverUrl: pl.coverUrl, type: 'playlist', data: pl });
-    }
-
-    // Albums
-    for (const alb of albums.slice(0, 3)) {
-      items.push({ id: alb.id, title: alb.title, coverUrl: alb.coverUrl, type: 'album', data: alb });
-    }
-
-    // Fill with songs if needed
-    if (items.length < 6) {
-      for (const s of songs.slice(0, 6 - items.length)) {
-        items.push({ id: s.id, title: s.title, coverUrl: s.coverUrl, type: 'song', data: s });
+    let userIdx = 0;
+    while (items.length < 6) {
+      if (userIdx < userPool.length) {
+        const candidate = userPool[userIdx++];
+        if (!items.some(it => it.title === candidate.title)) {
+          items.push(candidate);
+        }
+      } else {
+        const def = defaultTiles[items.length - 1];
+        if (def && !items.some(it => it.title === def.title)) {
+          items.push(def);
+        } else {
+          break;
+        }
       }
     }
 
     return items.slice(0, 6);
-  }, [likedSongsCount, playlists, albums, songs]);
+  }, [playlists, albums, songs]);
 
   // Section 1: Based on your recent listening (Screenshot 426)
   const recentListeningCards: SpotifyCardItem[] = [
@@ -124,14 +145,14 @@ export const SpotifyHome: React.FC<Props> = ({
       id: 'val-hits',
       title: "Trending Valentine's Hits",
       subtitle: 'Songs India is falling in love with right now...',
-      coverUrl: 'https://images.unsplash.com/photo-1518495973542-4542c06a5843?w=500&auto=format&fit=crop&q=80',
+      coverUrl: '/images/onboarding-card-start-playing.webp',
       titleOnCover: true,
     },
     {
       id: 'bollywood-mush',
       title: 'Bollywood Mush',
       subtitle: 'Let these songs be the background score...',
-      coverUrl: 'https://images.unsplash.com/photo-1514525253161-7a46d19cd819?w=500&auto=format&fit=crop&q=80',
+      coverUrl: '/images/onboarding-card-save-playlist.webp',
       badge: 'Limited ads',
       titleOnCover: true,
     },
@@ -139,21 +160,21 @@ export const SpotifyHome: React.FC<Props> = ({
       id: 'bolly-chill',
       title: 'Bollywood & Chill',
       subtitle: "Sit back, and chill with Bollywood's...",
-      coverUrl: 'https://images.unsplash.com/photo-1509198397868-475647b2a1e5?w=500&auto=format&fit=crop&q=80',
+      coverUrl: '/images/onboarding-card-queue-it-up.webp',
       titleOnCover: true,
     },
     {
       id: '1am-feels',
       title: '1 AM Feels Hindi',
       subtitle: 'Late night cool, & these soothing tunes.',
-      coverUrl: 'https://images.unsplash.com/photo-1534447677768-be436bb09401?w=500&auto=format&fit=crop&q=80',
+      coverUrl: '/images/onboarding-card-miniplayer.webp',
       titleOnCover: true,
     },
     {
       id: 'ipop-icons',
       title: 'I-Pop Icons',
       subtitle: 'Hottest tracks from your favourite I-Pop...',
-      coverUrl: 'https://images.unsplash.com/photo-1470225620780-dba8ba36b745?w=500&auto=format&fit=crop&q=80',
+      coverUrl: '/images/onboarding-card-keyboard-shortcuts.webp',
       titleOnCover: true,
     },
   ];
@@ -223,31 +244,31 @@ export const SpotifyHome: React.FC<Props> = ({
       id: 'ek-villain',
       title: 'Ek Villain',
       subtitle: 'Mithoon, Ankit Tiwari, Pritam',
-      coverUrl: 'https://images.unsplash.com/photo-1518495973542-4542c06a5843?w=500&auto=format&fit=crop&q=80',
+      coverUrl: '/images/onboarding-card-start-playing.webp',
     },
     {
       id: 'ramaiya',
       title: 'Ramaiya Vastavaiya',
       subtitle: '(Original Motion Picture Soundtrack)',
-      coverUrl: 'https://images.unsplash.com/photo-1514525253161-7a46d19cd819?w=500&auto=format&fit=crop&q=80',
+      coverUrl: '/images/onboarding-card-save-playlist.webp',
     },
     {
       id: 'best-romance',
       title: 'Best of Romance: Atif Aslam',
       subtitle: 'Atif Aslam',
-      coverUrl: 'https://images.unsplash.com/photo-1500648767791-00dcc994a43e?w=500&auto=format&fit=crop&q=80',
+      coverUrl: '/images/producer.webp',
     },
     {
       id: 'blood-money',
       title: 'Blood Money',
       subtitle: '(Original Motion Picture Soundtrack)',
-      coverUrl: 'https://images.unsplash.com/photo-1509198397868-475647b2a1e5?w=500&auto=format&fit=crop&q=80',
+      coverUrl: '/images/onboarding-card-miniplayer.webp',
     },
     {
       id: 'bollywood-years',
       title: 'Bollywood Through The Years',
       subtitle: 'Timeless classic chartbusters',
-      coverUrl: 'https://images.unsplash.com/photo-1470225620780-dba8ba36b745?w=500&auto=format&fit=crop&q=80',
+      coverUrl: '/images/onboarding-card-queue-it-up.webp',
     },
   ];
 
@@ -257,35 +278,35 @@ export const SpotifyHome: React.FC<Props> = ({
       id: 'ipop-icons-2',
       title: 'I-Pop Icons',
       subtitle: 'Hottest tracks from your favourite I-Pop...',
-      coverUrl: 'https://images.unsplash.com/photo-1470225620780-dba8ba36b745?w=500&auto=format&fit=crop&q=80',
+      coverUrl: '/images/onboarding-card-keyboard-shortcuts.webp',
       titleOnCover: true,
     },
     {
       id: 'sad-hindi',
       title: 'Sad Hindi Melodies',
       subtitle: 'Soulful tunes for the heart that has loved...',
-      coverUrl: 'https://images.unsplash.com/photo-1534447677768-be436bb09401?w=500&auto=format&fit=crop&q=80',
+      coverUrl: '/images/onboarding-card-miniplayer.webp',
       titleOnCover: true,
     },
     {
       id: 'pov-love',
       title: "pov: you're in love",
       subtitle: "Uff, you've fallen! 💜",
-      coverUrl: 'https://images.unsplash.com/photo-1518495973542-4542c06a5843?w=500&auto=format&fit=crop&q=80',
+      coverUrl: '/images/onboarding-card-start-playing.webp',
       titleOnCover: true,
     },
     {
       id: 'filmy-hangover',
       title: 'Filmy Hangover',
       subtitle: 'Soothe your hangover with these chill tracks.',
-      coverUrl: 'https://images.unsplash.com/photo-1514525253161-7a46d19cd819?w=500&auto=format&fit=crop&q=80',
+      coverUrl: '/images/onboarding-card-save-playlist.webp',
       titleOnCover: true,
     },
     {
       id: 'bollywood-central',
       title: 'Bollywood Central',
       subtitle: 'Bollywood Central, jab baje toh sab...',
-      coverUrl: 'https://images.unsplash.com/photo-1509198397868-475647b2a1e5?w=500&auto=format&fit=crop&q=80',
+      coverUrl: '/images/onboarding-card-queue-it-up.webp',
       badge: 'Limited ads',
       titleOnCover: true,
     },
@@ -355,42 +376,42 @@ export const SpotifyHome: React.FC<Props> = ({
     {
       id: 'art-imran',
       name: 'Imran Khan',
-      avatarUrl: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=200',
+      avatarUrl: '/images/producer.webp',
     },
     {
       id: 'art-yyhs',
       name: 'Yo Yo Honey Singh',
-      avatarUrl: 'https://images.unsplash.com/photo-1500648767791-00dcc994a43e?w=200',
+      avatarUrl: '/images/kit-avatar-body.png',
     },
     {
       id: 'art-diljit',
       name: 'Diljit Dosanjh',
-      avatarUrl: 'https://images.unsplash.com/photo-1519085360753-af0119f7cbe7?w=200',
+      avatarUrl: '/images/ylx-artist-row-placeholder.webp',
     },
     {
       id: 'art-ar-rahman',
       name: 'A.R. Rahman',
-      avatarUrl: 'https://images.unsplash.com/photo-1506794778202-cad84cf45f1d?w=200',
+      avatarUrl: '/images/kit-avatar-highlight.png',
     },
     {
       id: 'art-king',
       name: 'King',
-      avatarUrl: 'https://images.unsplash.com/photo-1492562080023-ab3db95bfbce?w=200',
+      avatarUrl: '/images/producer.webp',
     },
     {
       id: 'art-mankirt',
       name: 'Mankirt Aulakh',
-      avatarUrl: 'https://images.unsplash.com/photo-1514525253161-7a46d19cd819?w=200',
+      avatarUrl: '/images/ylx-row-placeholder.webp',
     },
     {
       id: 'art-sidhu',
       name: 'Sidhu Moose Wala',
-      avatarUrl: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=200',
+      avatarUrl: '/images/producer.webp',
     },
     {
       id: 'art-kk',
       name: 'KK',
-      avatarUrl: 'https://images.unsplash.com/photo-1500648767791-00dcc994a43e?w=200',
+      avatarUrl: '/images/kit-avatar-body.png',
     },
   ];
 
@@ -401,8 +422,8 @@ export const SpotifyHome: React.FC<Props> = ({
       category: 'Based on your recent listening',
       title: "Trending Valentine's Hits",
       source: 'Playlist • Spotify',
-      bgUrl: 'https://images.unsplash.com/photo-1518495973542-4542c06a5843?w=800&auto=format&fit=crop&q=80',
-      thumbUrl: 'https://images.unsplash.com/photo-1518495973542-4542c06a5843?w=100',
+      bgUrl: '/images/onboarding-card-start-playing.webp',
+      thumbUrl: '/images/onboarding-card-start-playing.webp',
       description: 'Songs India is falling in love with right now...',
     },
     {
@@ -410,8 +431,8 @@ export const SpotifyHome: React.FC<Props> = ({
       category: 'Based on your recent listening',
       title: 'Sad Hindi Melodies',
       source: 'Playlist • Spotify',
-      bgUrl: 'https://images.unsplash.com/photo-1534447677768-be436bb09401?w=800&auto=format&fit=crop&q=80',
-      thumbUrl: 'https://images.unsplash.com/photo-1534447677768-be436bb09401?w=100',
+      bgUrl: '/images/onboarding-card-miniplayer.webp',
+      thumbUrl: '/images/onboarding-card-miniplayer.webp',
       description: 'Soulful tunes for the heart that has loved...',
     },
     {
@@ -419,8 +440,8 @@ export const SpotifyHome: React.FC<Props> = ({
       category: 'More like Tegi Pannu',
       title: 'Talwiinder Radio',
       source: 'Playlist • Spotify',
-      bgUrl: 'https://images.unsplash.com/photo-1470225620780-dba8ba36b745?w=800&auto=format&fit=crop&q=80',
-      thumbUrl: 'https://images.unsplash.com/photo-1470225620780-dba8ba36b745?w=100',
+      bgUrl: '/images/onboarding-card-save-playlist.webp',
+      thumbUrl: '/images/onboarding-card-save-playlist.webp',
       description: 'With AP Dhillon, Shubh, Karan Aujla...',
     },
     {
@@ -428,8 +449,8 @@ export const SpotifyHome: React.FC<Props> = ({
       category: 'Based on your recent listening',
       title: 'Jhakaas Mumbai',
       source: 'Playlist • Spotify',
-      bgUrl: 'https://images.unsplash.com/photo-1509198397868-475647b2a1e5?w=800&auto=format&fit=crop&q=80',
-      thumbUrl: 'https://images.unsplash.com/photo-1509198397868-475647b2a1e5?w=100',
+      bgUrl: '/images/onboarding-card-queue-it-up.webp',
+      thumbUrl: '/images/onboarding-card-queue-it-up.webp',
       description: 'Check out the songs Mumbai is vibing to.',
     },
     {
@@ -437,8 +458,8 @@ export const SpotifyHome: React.FC<Props> = ({
       category: 'Made for you',
       title: 'Sad Mix',
       source: 'Playlist • Spotify',
-      bgUrl: 'https://images.unsplash.com/photo-1514525253161-7a46d19cd819?w=800&auto=format&fit=crop&q=80',
-      thumbUrl: 'https://images.unsplash.com/photo-1514525253161-7a46d19cd819?w=100',
+      bgUrl: '/images/onboarding-card-create-playlist.webp',
+      thumbUrl: '/images/onboarding-card-create-playlist.webp',
       description: 'Gurnazar, Pritam, Anuradha Paudwal and more',
     },
     {
@@ -446,8 +467,8 @@ export const SpotifyHome: React.FC<Props> = ({
       category: 'Episodes to try',
       title: 'Proposal Icks, Dream Rings & How to Get Her to Say Yes',
       source: 'Episode • Moment of Silence',
-      bgUrl: 'https://images.unsplash.com/photo-1511671782779-c97d3d27a1d4?w=800&auto=format&fit=crop&q=80',
-      thumbUrl: 'https://images.unsplash.com/photo-1511671782779-c97d3d27a1d4?w=100',
+      bgUrl: '/images/onboarding-card-keyboard-shortcuts.webp',
+      thumbUrl: '/images/onboarding-card-keyboard-shortcuts.webp',
       description: 'Nov 6 • 51 min 53 sec • Hiii MOSSIES, hope you’re ready for the weekend!',
       isPodcast: true,
       podcastDate: 'Nov 6',
@@ -526,19 +547,24 @@ export const SpotifyHome: React.FC<Props> = ({
                     <svg width="28" height="28" viewBox="0 0 24 24" fill="white">
                       <path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"/>
                     </svg>
-                  ) : item.coverUrl ? (
+                  ) : (
                     <img
-                      src={item.coverUrl}
+                      src={
+                        item.coverUrl && !item.coverUrl.startsWith('http')
+                          ? item.coverUrl
+                          : item.type === 'album'
+                          ? '/images/onboarding-card-save-playlist.webp'
+                          : item.type === 'song'
+                          ? '/images/onboarding-card-start-playing.webp'
+                          : '/images/onboarding-card-queue-it-up.webp'
+                      }
                       alt={item.title}
-                      loading="lazy"
+                      loading="eager"
                       onError={(e) => {
-                        (e.target as HTMLImageElement).style.display = 'none';
+                        const img = e.target as HTMLImageElement;
+                        img.src = '/images/onboarding-card-start-playing.webp';
                       }}
                     />
-                  ) : (
-                    <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor" opacity="0.5">
-                      <path d="M12 3v10.55c-.59-.34-1.27-.55-2-.55-2.21 0-4 1.79-4 4s1.79 4 4 4 4-1.79 4-4V7h4V3h-6z"/>
-                    </svg>
                   )}
                 </div>
                 {/* Title */}
@@ -845,7 +871,13 @@ export const SpotifyHome: React.FC<Props> = ({
               <div
                 key={artist.id}
                 className="spotify-media-card spotify-artist-card-item"
-                onClick={() => handlePlayCard(idx)}
+                onClick={() => {
+                  if (onSelectArtist) {
+                    onSelectArtist(artist.name);
+                  } else {
+                    handlePlayCard(idx);
+                  }
+                }}
               >
                 <div className="spotify-media-card-cover-wrap sp-artist-round-wrap">
                   <img
@@ -853,6 +885,12 @@ export const SpotifyHome: React.FC<Props> = ({
                     alt={artist.name}
                     className="spotify-media-card-cover sp-artist-round-img"
                     loading="lazy"
+                    onError={(e) => {
+                      const img = e.target as HTMLImageElement;
+                      if (!img.src.includes('/images/')) {
+                        img.src = '/images/producer.webp';
+                      }
+                    }}
                   />
                   <button
                     className="spotify-floating-play-btn"

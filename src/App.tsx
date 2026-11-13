@@ -93,8 +93,20 @@ export const App: React.FC = () => {
   const [isShuffle, setIsShuffle] = useState<boolean>(false);
   const [repeatMode, setRepeatMode] = useState<'off' | 'all' | 'one'>('off');
 
-  const [activeView, setActiveView] = useState<'home' | 'explore' | 'library' | 'my-playlists' | 'playlist' | 'album'>('home');
-  const [selectedAlbumId, setSelectedAlbumId] = useState<string | null>(null);
+  const [activeView, setActiveView] = useState<'home' | 'explore' | 'library' | 'my-playlists' | 'playlist' | 'album' | 'artist'>(() => {
+    try {
+      const alb = new URLSearchParams(window.location.search).get('album');
+      if (alb) return 'album';
+    } catch {}
+    return 'home';
+  });
+  const [selectedAlbumId, setSelectedAlbumId] = useState<string | null>(() => {
+    try {
+      const alb = new URLSearchParams(window.location.search).get('album');
+      if (alb) return alb;
+    } catch {}
+    return null;
+  });
 
   // UI/UX Mode: 'sunona' (MetroList classic) vs 'spotify' (Spotify desktop layout)
   const [uiMode, setUiMode] = useState<'sunona' | 'spotify'>(() => {
@@ -118,7 +130,13 @@ export const App: React.FC = () => {
     } catch {}
   }, []);
   // const [hasEntered, setHasEntered] = useState<boolean>(true); // Temporarily commented out
-  const [activeDrawer, setActiveDrawer] = useState<'lyrics' | 'queue' | null>(null);
+  const [activeDrawer, setActiveDrawer] = useState<'lyrics' | 'queue' | null>(() => {
+    try {
+      const drawer = new URLSearchParams(window.location.search).get('drawer');
+      if (drawer === 'queue' || drawer === 'lyrics') return drawer;
+    } catch {}
+    return null;
+  });
   const [isLoadingLyrics, setIsLoadingLyrics] = useState<boolean>(false);
   const [isNowPlayingOpen, setIsNowPlayingOpen] = useState<boolean>(false);
 
@@ -1003,6 +1021,10 @@ export const App: React.FC = () => {
           handleNext();
         } else if (key === 'prev') {
           handlePrev();
+        } else if (key === 'like') {
+          if (currentSongRef.current) {
+            handleToggleLike(currentSongRef.current.id);
+          }
         }
       });
     }
@@ -1075,6 +1097,23 @@ export const App: React.FC = () => {
       unsubError?.();
     };
   }, [handleTogglePlay, handleNext, handlePrev, showToast]);
+
+  // Synchronize Taskbar & Window State with Electron / Browser SMTC
+  useEffect(() => {
+    const electronAPI = (window as any).electronAPI;
+    if (electronAPI?.sendPlaybackState) {
+      electronAPI.sendPlaybackState({
+        isPlaying,
+        currentSong,
+        uiMode,
+      });
+    }
+    if (currentSong && currentSong.title) {
+      document.title = `${currentSong.title} • ${currentSong.artist || 'Spotify Free'}`;
+    } else {
+      document.title = uiMode === 'spotify' ? 'Spotify Free' : 'SunoNa!!';
+    }
+  }, [isPlaying, currentSong, uiMode]);
 
   const handleCheckForUpdates = useCallback(() => {
     const electronAPI = (window as any).electronAPI;
@@ -1291,6 +1330,13 @@ export const App: React.FC = () => {
       } else {
         handleNext();
       }
+    };
+
+    audioEngine.onError = (err) => {
+      console.warn('Audio streaming notice:', err);
+      setTimeout(() => {
+        handleNext();
+      }, 1000);
     };
 
     audioEngine.setupMediaSessionHandlers({

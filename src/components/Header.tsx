@@ -26,6 +26,7 @@ interface RecentSearchSong {
   title: string;
   artist: string;
   coverUrl: string;
+  album?: string;
   duration?: number;
 }
 
@@ -120,6 +121,7 @@ export const Header: React.FC<Props> = ({
           id: song.id,
           title: song.title,
           artist: song.artist,
+          album: song.album,
           coverUrl: song.coverUrl,
           duration: song.duration,
         },
@@ -189,7 +191,7 @@ export const Header: React.FC<Props> = ({
             id: it.id,
             title: it.title,
             artist: it.artist,
-            album: it.album || 'YouTube Music',
+            album: it.subtitle || it.album || 'YouTube Music',
             duration: it.duration || 210,
             coverUrl: it.coverUrl,
             audioUrl: '', // Uses YouTube player engine directly by id!
@@ -353,7 +355,7 @@ export const Header: React.FC<Props> = ({
                         <img src={song.coverUrl} alt={song.title} className="search-result-thumb" />
                         <div className="search-result-info">
                           <div className="search-result-title">{song.title}</div>
-                          <div className="search-result-subtitle">Song • {song.artist}</div>
+                          <div className="search-result-subtitle">{song.album && song.album.includes('•') ? song.album : `Song • ${song.artist}`}</div>
                         </div>
                         <button
                           className="search-history-remove-btn"
@@ -393,7 +395,7 @@ export const Header: React.FC<Props> = ({
                           <img src={song.coverUrl} alt={song.title} className="search-result-thumb" />
                           <div className="search-result-info">
                             <div className="search-result-title">{song.title}</div>
-                            <div className="search-result-subtitle">Song • {song.artist}</div>
+                            <div className="search-result-subtitle">{song.album && song.album.includes('•') ? song.album : `Song • ${song.artist}`}</div>
                           </div>
                         </div>
                       ))

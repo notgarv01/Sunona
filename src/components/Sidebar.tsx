@@ -4,8 +4,8 @@ import { THEME_PRESETS } from '../data/musicData';
 import type { ThemePreset, Playlist } from '../types';
 
 interface Props {
-  activeView: 'home' | 'explore' | 'library' | 'my-playlists' | 'playlist' | 'album';
-  setActiveView: (view: 'home' | 'explore' | 'library' | 'my-playlists' | 'playlist' | 'album') => void;
+  activeView: 'home' | 'explore' | 'library' | 'my-playlists' | 'playlist' | 'album' | 'artist';
+  setActiveView: (view: 'home' | 'explore' | 'library' | 'my-playlists' | 'playlist' | 'album' | 'artist') => void;
   onOpenLibrary?: (filter: 'all' | 'liked' | 'cached' | 'playlists') => void;
   libraryFilter?: 'all' | 'liked' | 'cached' | 'playlists';
   playlists: Playlist[];

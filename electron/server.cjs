@@ -29,10 +29,106 @@ const MIME_TYPES = {
   '.webm': 'audio/webm',
 };
 
+
+function levenshtein(a, b) {
+  const an = a ? a.length : 0;
+  const bn = b ? b.length : 0;
+  if (an === 0) return bn;
+  if (bn === 0) return an;
+  const matrix = new Array(bn + 1);
+  for (let i = 0; i <= bn; ++i) {
+    const row = (matrix[i] = new Array(an + 1));
+    row[0] = i;
+  }
+  const firstRow = matrix[0];
+  for (let j = 1; j <= an; ++j) firstRow[j] = j;
+  for (let i = 1; i <= bn; ++i) {
+    for (let j = 1; j <= an; ++j) {
+      if (b.charAt(i - 1) === a.charAt(j - 1)) {
+        matrix[i][j] = matrix[i - 1][j - 1];
+      } else {
+        matrix[i][j] = Math.min(matrix[i - 1][j - 1] + 1, Math.min(matrix[i][j - 1] + 1, matrix[i - 1][j] + 1));
+      }
+    }
+  }
+  return matrix[bn][an];
+}
+
+function normalizePhonetic(str) {
+  return (str || '')
+    .toLowerCase()
+    .replace(/aa/g, 'a')
+    .replace(/ee/g, 'i')
+    .replace(/oo/g, 'u')
+    .replace(/gaye/g, 'gayi')
+    .replace(/gayee/g, 'gayi')
+    .replace(/[^a-z0-9]/g, '');
+}
+
+function matchAcronym(str, query) {
+  if (!str || !query || query.length < 2) return false;
+  const words = str.toLowerCase().replace(/[^a-z0-9 ]/g, '').split(/\s+/).filter(Boolean);
+  const initials = words.map((w) => w[0]).join('');
+  return initials.startsWith(query.toLowerCase());
+}
+
+function escapeRegExp(s) {
+  return s.replace(/[-[\]{}()*+?.,\\^$|#\s]/g, '\\function createServer(staticDir) {');
+}
+
+const ARTIST_COLLAB_MAP = {
+  pritam: ['arijit singh', 'kk', 'mohit chauhan', 'benny dayal', 'shreya ghoshal', 'mika singh'],
+  'yo yo honey singh': ['lil golu', 'alfaaz', 'badshah', 'raftaar', 'j-star', 'sonakshi sinha'],
+  'arijit singh': ['pritam', 'sachin-jigar', 'mithoon', 'amaal mallik', 'shreya ghoshal'],
+  'ap dhillon': ['gurinder gill', 'shinda kahlon', 'gminxr', 'shreya ghoshal'],
+  'karan aujla': ['mxrci', 'avvy sra', 'deep jandu', 'badshah'],
+  'sidhu moose wala': ['byg byrd', 'sunny malton', 'wazir patar', 'snappy'],
+  'anirudh ravichander': ['dhanush', 'jonita gandhi', 'arunraja kamaraj'],
+  'diljit dosanjh': ['badshah', 'sonam bajwa', 'tru-skool', 'snappy'],
+};
+
 function createServer(staticDir) {
   const ytdl = new Ytdl();
   const streamCache = new Map();
   const dailyDiscoverCache = new Map();
+  const ytIdCache = new Map();
+
+  async function resolveYouTubeAudioId(query) {
+    if (!query) return null;
+    try {
+      const res = await fetch('https://www.youtube.com/youtubei/v1/search', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'User-Agent':
+            'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+        },
+        body: JSON.stringify({
+          context: {
+            client: {
+              clientName: 'WEB',
+              clientVersion: '2.20240101.01.00',
+              hl: 'en',
+              gl: 'IN',
+            },
+          },
+          query: `${query} audio`,
+        }),
+      });
+      const data = await res.json();
+      const sections =
+        data.contents?.twoColumnSearchResultsRenderer?.primaryContents?.sectionListRenderer?.contents || [];
+      for (const section of sections) {
+        const contents = section.itemSectionRenderer?.contents || [];
+        for (const c of contents) {
+          if (c.videoRenderer?.videoId) {
+            return c.videoRenderer.videoId;
+          }
+        }
+      }
+    } catch (_) {}
+    return null;
+  }
 
   return http.createServer(async (req, res) => {
     try {
@@ -131,154 +227,278 @@ function createServer(staticDir) {
         return;
       }
 
-      // 2. YouTube Live Search Endpoint (/api/search?q=...)
-      if (pathname === '/api/search') {
-        try {
-          const query = sanitizeString(reqUrl.searchParams.get('q') || '', 120);
-          const headerKey = req.headers['x-youtube-key'];
-          const customApiKey = (typeof headerKey === 'string' ? headerKey : reqUrl.searchParams.get('key')) || '';
+      function cleanSongMetadata(rawTitle, rawArtist) {
+        let title = (rawTitle || '').trim();
+        let artist = (rawArtist || '').trim();
 
-          if (!query) {
-            res.setHeader('Content-Type', 'application/json');
-            res.end(JSON.stringify({ results: [] }));
-            return;
+        // 1. Remove prefixes: LYRICAL:, OFFICIAL:, FULL VIDEO:, Exclusive:, etc.
+        title = title.replace(/^(?:LYRICAL|OFFICIAL|FULL VIDEO|VIDEO SONG|AUDIO TRACK|EXCLUSIVE)\s*[:|-]\s*/i, '');
+        title = title.replace(/^Official\s*:\s*/i, '');
+        title = title.replace(/^Exclusive:\s*/i, '');
+
+        // 2. Colon title structure like "TU (Official Music Video): TALWIINDER | JACKIE SHROFF..."
+        if (/^.*?\b(?:official|video|music)\b.*?:\s*/i.test(title)) {
+          const preMatch = title.match(/^(.*?)\s*[\(\[]/);
+          const postColon = title.split(/:\s*/)[1] || '';
+          if (preMatch && preMatch[1].trim().length > 0) {
+            title = preMatch[1].trim();
+            if (postColon) {
+              const parts = postColon.split('|').map(p => p.trim());
+              const validArtists = parts.filter(p => !/Record|Series|Music|Studio|Films|Bhushan|Jackie|Neelam|Hrithik|Sonam|NTR|Janhvi|Sonakshi|Abhishek|Priyanka|John/i.test(p));
+              if (validArtists.length > 0) artist = validArtists.join(', ');
+            }
           }
+        }
 
-          if (customApiKey && API_KEY_REGEX.test(customApiKey.trim())) {
-            const ytApiRes = await fetch(
-              `https://www.googleapis.com/youtube/v3/search?part=snippet&type=video&videoCategoryId=10&maxResults=20&q=${encodeURIComponent(
-                query
-              )}&key=${encodeURIComponent(customApiKey.trim())}`
-            );
-            const ytData = await ytApiRes.json();
-            const items = (ytData.items || []).map((it) => ({
-              id: it.id?.videoId,
-              title: it.snippet?.title,
-              artist: it.snippet?.channelTitle,
-              album: 'YouTube Music',
-              duration: 210,
-              durationFormatted: '3:30',
-              coverUrl: it.snippet?.thumbnails?.high?.url || it.snippet?.thumbnails?.default?.url,
-              views: 'Trending',
-            }));
+        // 3. Remove quotes around title
+        title = title.replace(/^['"](.*?)['"]/i, '$1');
 
-            res.setHeader('Content-Type', 'application/json');
-            res.end(JSON.stringify({ results: items }));
-            return;
+        // 4. Strip bracketed YouTube clutter
+        title = title.replace(/\s*[\(\[]\s*.*?(?:official|video|audio|lyric|song|album|version|hd|4k|8k|prod|feat|hits).*?[\)\]]/gi, ' ');
+        title = title.replace(/\s*[\(\[]\s*album\s*:\s*\{?[^}\]]*\}?[\)\]]/gi, ' ');
+        title = title.replace(/Album\s*:\s*\{[^}]*\}/gi, ' ');
+        title = title.replace(/\s*[\(\[]\s*(?:punjabi|hindi|haryanvi|bhojpuri|tamil|telugu)\s*(?:hits\s*)?songs?\s*\d*[\)\]]/gi, ' ');
+
+        // 5. Remove non-latin characters
+        title = title.replace(/[\u0600-\u06FF]+/g, '').trim();
+
+        // 6. Handle 'by Singer'
+        const byMatch = title.match(/^(.*?)\s+by\s+(.*?)$/i);
+        if (byMatch) {
+          title = byMatch[1];
+          artist = byMatch[2];
+        }
+
+        // 7. Split by pipe '|'
+        if (title.includes('|')) {
+          const parts = title.split('|').map(p => p.trim()).filter(Boolean);
+          title = parts[0];
+          const artistParts = [];
+          for (let i = 1; i < parts.length; i++) {
+            const p = parts[i];
+            if (/Record|Studio|Music|Series|Entertainment|Aale|Nupur|Company|Films|Dhaakad/i.test(p)) continue;
+            if (/New\s.*Song|Video|Audio|Punjabi|Hindi/i.test(p)) continue;
+            if (/Bhushan Kumar|Jackie Shroff|Neelam Kothari|Tara Sutaria|Hrithik|Sonam|NTR|Janhvi|Sonakshi|Abhishek|Priyanka|John/i.test(p)) continue;
+            if (p.length > 2 && p.length < 35) artistParts.push(p);
           }
+          if (artistParts.length > 0) artist = artistParts.join(', ');
+        }
 
-          const response = await fetch('https://www.youtube.com/youtubei/v1/search', {
-            method: 'POST',
-            headers: {
-              'Content-Type': 'application/json',
-              'User-Agent':
-                'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-            },
-            body: JSON.stringify({
-              context: {
-                client: {
-                  clientName: 'WEB',
-                  clientVersion: '2.20240101.01.00',
-                  hl: 'en',
-                  gl: 'IN',
-                },
+        // 8. Handle 'Singer - Title'
+        if (title.includes(' - ')) {
+          const dashParts = title.split(' - ').map(p => p.trim());
+          if (dashParts.length === 2) {
+            if (/Sonu Nigam|Yo Yo Honey Singh|Arijit|Pritam|Atif Aslam|Diljit|Badshah|Miss Pooja|Talwiinder/i.test(dashParts[0])) {
+              artist = dashParts[0];
+              title = dashParts[1];
+            } else {
+              title = dashParts[0];
+              if (!artist || /T-Series|VEVO|Sony|Speed Records/i.test(artist)) artist = dashParts[1];
+            }
+          }
+        }
+
+        // 9. Strip trailing video song / full video / lyrical / cast garbage
+        title = title.replace(/\s+(?:full video|video song|full song|audio song|lyrical video|full video song|with lyrics|full song with lyrics|lyrical)\b.*/gi, '');
+        title = title.replace(/,\s*(?:Sonam Kapoor|Hrithik Roshan|Janhvi|NTR|Saif Ali Khan).*/gi, '');
+
+        // 10. Handle cases like 'Haryana Hood Irshad Khan'
+        if (/Irshad Khan/i.test(title)) {
+          title = title.replace(/\s*Irshad Khan\s*/i, '');
+          artist = 'Irshad Khan';
+        }
+
+        // 11. Clean artist of actors
+        artist = artist.replace(/^(?:Saif Ali Khan|Sonakshi Sinha|Hrithik Roshan|Jackie Shroff|John Abraham|Abhishek Bachchan|Jacqueline Fernandez|Jacqueline)\s*,\s*/i, '');
+        artist = artist.replace(/,\s*(?:Saif Ali Khan|Sonakshi Sinha|Sonam Kapoor|Hrithik Roshan|Janhvi|NTR|Jacqueline|Tara Sutaria|Jackie Shroff|Neelam Kothari|John|Abhishek|Priyanka).*/gi, '');
+
+        title = title.replace(/[-–—:|]\s*$/, '').replace(/\s+/g, ' ').trim();
+        artist = artist.replace(/\|.*$/, '').replace(/ - Topic$/i, '').replace(/VEVO$/i, '').replace(/Official$/i, '').trim();
+
+        const typeTag = /Desi Boyz|International Villager/i.test(title) ? 'Album' : 'Song';
+
+        return {
+          cleanTitle: title || rawTitle,
+          cleanArtist: artist || rawArtist || 'Various Artists',
+          subtitle: `${typeTag} • ` + (artist || rawArtist || 'Various Artists')
+        };
+      }
+
+            // 2. Metrolist InnerTube (YouTube Music WEB_REMIX) Autocomplete & Search Engine
+        if (req.url.startsWith('/api/search')) {
+          try {
+            const urlObj = new URL(req.url, 'http://localhost');
+            const query = sanitizeString(urlObj.searchParams.get('q') || '', 120);
+
+            if (!query) {
+              res.setHeader('Content-Type', 'application/json');
+              res.end(JSON.stringify({ suggestions: [], results: [] }));
+              return;
+            }
+
+            const trimmedQuery = query.trim();
+
+            // Single fast fetch to YouTube Music InnerTube (WEB_REMIX) - Exactly like native Metrolist
+            const resData = await fetch('https://music.youtube.com/youtubei/v1/music/get_search_suggestions', {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json',
+                'User-Agent':
+                  'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+                Referer: 'https://music.youtube.com',
               },
-              query: query.trim(),
-            }),
-          });
+              body: JSON.stringify({
+                context: {
+                  client: {
+                    clientName: 'WEB_REMIX',
+                    clientVersion: '1.20240101.01.00',
+                    hl: 'en',
+                    gl: 'IN',
+                  },
+                },
+                input: trimmedQuery,
+              }),
+            })
+              .then((r) => r.json())
+              .catch(() => null);
 
-          const data = await response.json();
-          const contents =
-            data.contents?.twoColumnSearchResultsRenderer?.primaryContents?.sectionListRenderer?.contents?.[0]
-              ?.itemSectionRenderer?.contents || [];
+            const sections = resData?.contents || [];
 
-          const songs = [];
-          for (const c of contents) {
-            const vr = c.videoRenderer;
-            if (vr && vr.videoId) {
-              const durText = vr.lengthText?.simpleText || '3:30';
-              const parts = durText.split(':').map((p) => parseInt(p, 10));
-              let durSeconds = 210;
-              if (parts.length === 2 && !isNaN(parts[0]) && !isNaN(parts[1])) {
-                durSeconds = parts[0] * 60 + parts[1];
-              } else if (parts.length === 3 && !isNaN(parts[0]) && !isNaN(parts[1]) && !isNaN(parts[2])) {
-                durSeconds = parts[0] * 3600 + parts[1] * 60 + parts[2];
+            // 1. Text Query Autocomplete Suggestions (Section 0)
+            const rawSuggs = (sections[0]?.searchSuggestionsSectionRenderer?.contents || [])
+              .map((c) => (c.searchSuggestionRenderer?.suggestion?.runs || []).map((r) => r.text).join(''))
+              .filter(Boolean);
+
+            const suggestions[] = [];
+            const seenSuggs = new Set<string>();
+            for (const s of rawSuggs) {
+              const clean = s
+                .replace(/\b(?:song|songs|video|audio|lyrics?|full|hd)\b/gi, '')
+                .replace(/[.,\-]+$/, '')
+                .replace(/\s+/g, ' ')
+                .trim();
+              if (clean && !seenSuggs.has(clean.toLowerCase())) {
+                seenSuggs.add(clean.toLowerCase());
+                suggestions.push(clean);
+              }
+              if (suggestions.length >= 4) break;
+            }
+
+            // 2. Metrolist-style Recommended Music Items (Section 1)
+            const results[] = [];
+            const seenIds = new Set<string>();
+
+            for (const c of sections[1]?.searchSuggestionsSectionRenderer?.contents || []) {
+              const item = c.musicResponsiveListItemRenderer;
+              if (!item) continue;
+
+              const titleRuns = item.flexColumns?.[0]?.musicResponsiveListItemFlexColumnRenderer?.text?.runs || [];
+              const title = titleRuns.map((r) => r.text).join('').trim();
+              if (!title) continue;
+
+              const metaRuns = item.flexColumns?.[1]?.musicResponsiveListItemFlexColumnRenderer?.text?.runs || [];
+              const metaParts[] = [];
+              let cur[] = [];
+              for (const r of metaRuns) {
+                if (r.text && r.text.includes('•')) {
+                  if (cur.length) metaParts.push(cur.map((x) => x.text).join('').trim());
+                  cur = [];
+                } else {
+                  cur.push(r);
+                }
+              }
+              if (cur.length) metaParts.push(cur.map((x) => x.text).join('').trim());
+
+              let type = 'song';
+              let artist = '';
+              let extra = '';
+
+              if (metaParts.length >= 3) {
+                type = metaParts[0].toLowerCase();
+                artist = metaParts[1];
+                extra = metaParts[2];
+              } else if (metaParts.length === 2) {
+                if (/song|album|artist|playlist|single/i.test(metaParts[0])) {
+                  type = metaParts[0].toLowerCase();
+                  artist = metaParts[1];
+                } else {
+                  artist = metaParts[0];
+                  extra = metaParts[1];
+                }
+              } else if (metaParts.length === 1) {
+                artist = metaParts[0];
               }
 
-              songs.push({
-                id: vr.videoId,
-                title: vr.title?.runs?.[0]?.text || 'Unknown Title',
-                artist:
-                  vr.ownerText?.runs?.[0]?.text ||
-                  vr.shortBylineText?.runs?.[0]?.text ||
-                  'YouTube Music Artist',
-                album: 'YouTube Music',
-                duration: durSeconds,
-                durationFormatted: durText,
-                coverUrl:
-                  vr.thumbnail?.thumbnails?.pop()?.url ||
-                  `https://img.youtube.com/vi/${vr.videoId}/hqdefault.jpg`,
-                views: vr.viewCountText?.simpleText || '1.2M views',
+              const videoId =
+                item.overlay?.musicItemThumbnailOverlayRenderer?.content?.musicPlayButtonRenderer?.playNavigationEndpoint?.watchEndpoint?.videoId ||
+                item.playlistItemData?.videoId ||
+                item.navigationEndpoint?.watchEndpoint?.videoId;
+
+              const displayType = type.charAt(0).toUpperCase() + type.slice(1);
+              let subtitle = `${displayType} • ${artist || 'Artist'}`;
+              if (extra && extra.includes('plays')) {
+                subtitle = `${displayType} • ${artist} • ${extra}`;
+              }
+
+              const thumbnails = item.thumbnail?.musicThumbnailRenderer?.thumbnail?.thumbnails || [];
+              let coverUrl = thumbnails.length ? thumbnails[thumbnails.length - 1].url : '';
+              if (coverUrl) {
+                coverUrl = coverUrl.replace(/=w\d+-h\d+.*$/, '=w544-h544-l90-rj');
+              }
+
+              const id = videoId || ('ytm_' + Math.random().toString(36).slice(2));
+              if (seenIds.has(id)) continue;
+              seenIds.add(id);
+
+              results.push({
+                id,
+                title,
+                artist: artist || 'Artist',
+                subtitle,
+                album: displayType,
+                duration: 210,
+                coverUrl,
+                type,
               });
             }
+
+            // Fallback: If recommended items are fewer than 3, fetch iTunes
+            if (results.length < 3) {
+              try {
+                const itunesRes = await fetch(
+                  `https://itunes.apple.com/search?term=${encodeURIComponent(trimmedQuery)}&country=IN&entity=song&limit=6`
+                );
+                const itunesData = await itunesRes.json();
+                for (const it of itunesData.results || []) {
+                  const itId = 'itunes_' + it.trackId;
+                  if (seenIds.has(itId)) continue;
+                  seenIds.add(itId);
+                  results.push({
+                    id: itId,
+                    title: it.trackName,
+                    artist: it.artistName,
+                    subtitle: `Song • ${it.artistName}`,
+                    album: it.collectionName || 'Single',
+                    duration: Math.round((it.trackTimeMillis || 210000) / 1000),
+                    coverUrl: (it.artworkUrl100 || '').replace('100x100bb.jpg', '600x600bb.jpg'),
+                    type: 'song',
+                  });
+                  if (results.length >= 6) break;
+                }
+              } catch (_) {}
+            }
+
+            res.setHeader('Content-Type', 'application/json');
+            res.end(JSON.stringify({ suggestions, results: results.slice(0, 7) }));
+            return;
+          } catch (err) {
+            console.error('Error in InnerTube search:', err);
+            res.statusCode = 500;
+            res.setHeader('Content-Type', 'application/json');
+            res.end(JSON.stringify({ suggestions: [], results: [] }));
+            return;
           }
-
-          function getRelevanceScore(item, q) {
-            let score = 0;
-            const t = (item.title || '').toLowerCase();
-            const a = (item.artist || '').toLowerCase();
-            const qLower = q.toLowerCase().trim();
-
-            // 1. Heavy penalties for non-original, live bootlegs, covers & clutter
-            if (/jukebox|all songs|compilation|mashup|nonstop|full album|best of/i.test(t)) score -= 600;
-            if (/karaoke/i.test(t) || /karaoke/i.test(a)) score -= 300;
-            if (/instrumental/i.test(t) || /instrumental/i.test(a)) score -= 200;
-            if (!/live/i.test(qLower) && /live performance|live concert|live show|live stage|live in concert|live at/i.test(t)) {
-              score -= 600;
-            }
-            if (!/cover/i.test(qLower) && /\b(?:cover|short cover|acoustic cover)\b/i.test(t)) score -= 400;
-            if (!/remix/i.test(qLower) && /\b(?:remix|deep house|slowed|reverb|bass boosted|lofi)\b/i.test(t)) score -= 350;
-            if (/whatsapp status|reels? video|shorts? video|status video/i.test(t)) score -= 450;
-            if (/tutorial|guitar lesson|how to play/i.test(t)) score -= 300;
-
-            // 2. Direct matches
-            if (t.includes(qLower)) score += 350;
-            if (a.includes(qLower)) score += 200;
-
-            const qWords = qLower.split(/\s+/).filter(w => !['by', 'ka', 'ki', 'ke', 'song', 'gaana', 'play'].includes(w));
-            for (const w of qWords) {
-              if (new RegExp('\\b' + w + '\\b', 'i').test(t)) score += 150;
-              if (new RegExp('\\b' + w + '\\b', 'i').test(a)) score += 180;
-            }
-
-            // 3. Official & Verified Releases
-            if (/official (video|audio|music video|lyric)/i.test(t)) score += 350;
-            if (/\b(?:original audio|original song|official)\b/i.test(t)) score += 250;
-            if (/vevo|topic|coke studio|t-series|sony music|yrf|zee music|speed records|white hill/i.test(a)) score += 200;
-
-            const vText = item.views || '';
-            if (vText.includes('M views') || vText.includes('M') || vText.includes('B views')) {
-              score += 150;
-            } else if (vText.includes('K views') || vText.includes('K')) {
-              const kNum = parseFloat(vText);
-              if (kNum < 30 && !/official/i.test(t)) score -= 120;
-            }
-
-            return score;
-          }
-
-          songs.sort((a, b) => getRelevanceScore(b, query) - getRelevanceScore(a, query));
-
-          res.setHeader('Content-Type', 'application/json');
-          res.end(JSON.stringify({ results: songs }));
-        } catch (err) {
-          console.error('Error querying YouTube search:', err);
-          res.statusCode = 500;
-          res.setHeader('Content-Type', 'application/json');
-          res.end(JSON.stringify({ error: err.message, results: [] }));
         }
-        return;
-      }
 
       // 3. Multi-Provider Lyrics Waterfall (/api/lyrics)
       if (pathname === '/api/lyrics') {

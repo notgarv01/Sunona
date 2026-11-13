@@ -1,7 +1,6 @@
 import React from 'react';
 import { ListMusic, X, Trash2 } from 'lucide-react';
 import type { Song } from '../types';
-import { SwipeableSongRow } from './SwipeableSongRow';
 
 interface Props {
   queue: Song[];
@@ -24,8 +23,8 @@ export const QueueDrawer: React.FC<Props> = ({
     <aside className="app-drawer">
       <div className="drawer-header">
         <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-          <ListMusic size={18} style={{ color: 'var(--primary)' }} />
-          <span style={{ fontFamily: 'var(--font-heading)', fontWeight: 700, fontSize: '1rem' }}>
+          <ListMusic size={18} style={{ color: 'var(--primary, #1ed760)' }} />
+          <span style={{ fontFamily: 'var(--font-heading)', fontWeight: 700, fontSize: '1rem', color: '#ffffff' }}>
             Up Next Queue ({queue.length})
           </span>
         </div>
@@ -33,57 +32,77 @@ export const QueueDrawer: React.FC<Props> = ({
           <button className="icon-btn" style={{ width: '32px', height: '32px' }} onClick={onClearQueue} title="Clear Queue">
             <Trash2 size={14} />
           </button>
-          <button className="icon-btn" style={{ width: '32px', height: '32px' }} onClick={onClose}>
+          <button className="icon-btn" style={{ width: '32px', height: '32px' }} onClick={onClose} title="Close Queue">
             <X size={15} />
           </button>
         </div>
       </div>
 
       <div className="queue-container">
-        {queue.length > 0 ? (
+        {queue && queue.length > 0 ? (
           queue.map((song, idx) => {
+            if (!song) return null;
             const isCurrent = currentSong?.id === song.id;
 
             return (
-              <SwipeableSongRow
-                key={`${song.id}-${idx}`}
-                onDelete={() => onRemoveFromQueue(idx)}
-                deleteLabel="Remove"
+              <div
+                key={`${song.id || 'q'}-${idx}`}
+                className={`queue-item ${isCurrent ? 'active' : ''}`}
+                onClick={() => onPlaySong(song)}
               >
-                <div
-                  className={`queue-item ${isCurrent ? 'active' : ''}`}
-                  onClick={() => onPlaySong(song)}
-                >
-                  <img src={song.coverUrl} alt={song.title} className="queue-item-thumb" />
-                  <div style={{ flex: 1, overflow: 'hidden' }}>
-                    <div style={{ fontSize: '0.86rem', fontWeight: 600, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                      {song.title}
-                    </div>
-                    <div style={{ fontSize: '0.74rem', color: 'var(--text-secondary)' }}>
-                      {song.artist}
-                    </div>
+                <img
+                  src={song.coverUrl || '/images/onboarding-card-save-playlist.webp'}
+                  alt={song.title || 'Song'}
+                  className="queue-item-thumb"
+                  onError={(e) => {
+                    (e.target as HTMLImageElement).src = '/images/onboarding-card-save-playlist.webp';
+                  }}
+                />
+                <div style={{ flex: 1, minWidth: 0, overflow: 'hidden' }}>
+                  <div
+                    style={{
+                      fontSize: '0.86rem',
+                      fontWeight: 600,
+                      whiteSpace: 'nowrap',
+                      overflow: 'hidden',
+                      textOverflow: 'ellipsis',
+                      color: isCurrent ? 'var(--primary, #1ed760)' : '#ffffff',
+                    }}
+                  >
+                    {song.title || 'Untitled Track'}
                   </div>
-                  {isCurrent ? (
-                    <span className="brand-platform-tag" style={{ fontSize: '0.6rem' }}>PLAYING</span>
-                  ) : (
-                    <button
-                      className="icon-btn"
-                      style={{ width: '24px', height: '24px', opacity: 0.6 }}
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        onRemoveFromQueue(idx);
-                      }}
-                      title="Remove from queue"
-                    >
-                      <X size={12} />
-                    </button>
-                  )}
+                  <div
+                    style={{
+                      fontSize: '0.74rem',
+                      color: '#b3b3b3',
+                      whiteSpace: 'nowrap',
+                      overflow: 'hidden',
+                      textOverflow: 'ellipsis',
+                    }}
+                  >
+                    {song.artist || 'Unknown Artist'}
+                  </div>
                 </div>
-              </SwipeableSongRow>
+                {isCurrent ? (
+                  <span className="brand-platform-tag" style={{ fontSize: '0.6rem' }}>PLAYING</span>
+                ) : (
+                  <button
+                    className="icon-btn"
+                    style={{ width: '24px', height: '24px', opacity: 0.6 }}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      onRemoveFromQueue(idx);
+                    }}
+                    title="Remove from queue"
+                  >
+                    <X size={12} />
+                  </button>
+                )}
+              </div>
             );
           })
         ) : (
-          <div style={{ textAlign: 'center', padding: '48px 24px', color: 'var(--text-muted)' }}>
+          <div style={{ textAlign: 'center', padding: '48px 24px', color: '#b3b3b3' }}>
             <p>Queue is empty.</p>
           </div>
         )}

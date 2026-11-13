@@ -9,9 +9,9 @@
  */
 import React, { useState, useRef, useEffect, useCallback } from 'react';
 import {
-  Home, Search, Bell, Users, ChevronLeft, ChevronRight, Plus, Library, Maximize2,
+  Home, Search, Bell, Users, ChevronLeft, ChevronRight, Plus, Check, Library, Maximize2,
   Play, Pause, SkipBack, SkipForward, Shuffle, Repeat, Repeat1, Volume2, VolumeX, Volume1,
-  Heart, Mic2, ListMusic, Tv2, PlusCircle, Moon, X, ArrowUpDown,
+  Heart, Mic2, ListMusic, PlusCircle, Moon, X, ArrowUpDown,
   Compass, MoreHorizontal, Laptop, PictureInPicture2,
   Minus, Square
 } from 'lucide-react';
@@ -23,8 +23,12 @@ import { SpotifyExplore } from './SpotifyExplore';
 import { SpotifyPlaylistView } from './SpotifyPlaylistView';
 import { SpotifyRightPanel } from './SpotifyRightPanel';
 import { SpotifySongView } from './SpotifySongView';
-import { SwipeableSongRow } from './SwipeableSongRow';
 import { INITIAL_ALBUMS } from '../data/musicData';
+import { SpotifyArtistView } from './SpotifyArtistView';
+import { SpotifyQueuePanel } from './SpotifyQueuePanel';
+import { RosePinkLyricsView } from './RosePinkLyricsView';
+import { LyricReelExportModal } from './LyricReelExportModal';
+import '../rose-pink-lyrics.css';
 
 interface SpotifyLayoutProps {
   // Playback state
@@ -51,7 +55,7 @@ interface SpotifyLayoutProps {
   // User
   user?: UserProfile | null;
   // Active view & navigation
-  activeView: 'home' | 'explore' | 'library' | 'my-playlists' | 'playlist' | 'album';
+  activeView: 'home' | 'explore' | 'library' | 'my-playlists' | 'playlist' | 'album' | 'artist';
   selectedPlaylistId: string | null;
   selectedAlbumId: string | null;
   // Drawer state
@@ -81,7 +85,7 @@ interface SpotifyLayoutProps {
   onCreatePlaylist: () => void;
   onSelectPlaylist: (playlistId: string) => void;
   onSelectAlbum: (albumId: string) => void;
-  setActiveView: (view: 'home' | 'explore' | 'library' | 'my-playlists' | 'playlist' | 'album') => void;
+  setActiveView: (view: 'home' | 'explore' | 'library' | 'my-playlists' | 'playlist' | 'album' | 'artist') => void;
   onOpenLibrary: (filter?: 'all' | 'liked' | 'cached' | 'playlists') => void;
   onOpenAuth: () => void;
   onOpenProfile: () => void;
@@ -118,13 +122,63 @@ export const SpotifyLayout: React.FC<SpotifyLayoutProps> = ({
   onRemoveSong, onRemoveFromQueue,
 }) => {
   const [spotifyLibTab, setSpotifyLibTab] = useState<'playlists' | 'albums' | 'artists' | null>(null);
+  const [selectedArtist, setSelectedArtist] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
   const [searchResults, setSearchResults] = useState<Song[]>([]);
+  const [searchSuggestions, setSearchSuggestions] = useState<string[]>([]);
+  const [focusedNavIndex, setFocusedNavIndex] = useState<number>(-1);
   const [isSearching, setIsSearching] = useState(false);
   const [showSearchDropdown, setShowSearchDropdown] = useState(false);
+  const [recentSearches, setRecentSearches] = useState<{ id: string; title: string; artist: string; coverUrl: string; explicit?: boolean }[]>(() => {
+    try {
+      const stored = localStorage.getItem('spotify_recent_searches_list');
+      if (stored) {
+        const parsed = JSON.parse(stored);
+        if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+      }
+    } catch {}
+    return [
+      { id: 'rec-1', title: 'Dilruba Dilnasheen', artist: 'Rito Riba, Siddhant Kaushal', coverUrl: '/images/onboarding-card-save-playlist.webp' },
+      { id: 'rec-2', title: 'Pyaar Tune Kya Kiya', artist: 'Jubin Nautiyal', coverUrl: '/images/onboarding-card-browse-listen.webp' },
+      { id: 'rec-3', title: 'Khuda Bhi', artist: 'Tony Kakkar, Mohit Chauhan, Manoj Muntashir', coverUrl: '/images/onboarding-card-create-music.webp' },
+      { id: 'rec-4', title: 'C.R.E.A.M POSSE', artist: 'Baggh-e SMG, Farmaan SMG, BIG KAY SMG', coverUrl: '/images/onboarding-card-share-friends.webp', explicit: true },
+      { id: 'rec-5', title: 'Raanjhanaa (From "Raanjhanaa")', artist: 'A.R. Rahman, Jaswinder Singh, Shiraz Uppal', coverUrl: '/images/onboarding-card-start-playing.webp' },
+      { id: 'rec-6', title: 'Sajde - From "Lost;Found"', artist: 'Faheem Abdullah', coverUrl: '/images/onboarding-card-sync-devices.webp' },
+    ];
+  });
+
+  const saveRecentSearch = useCallback((song: { id: string; title: string; artist: string; coverUrl?: string; explicit?: boolean }) => {
+    setRecentSearches(prev => {
+      const filtered = prev.filter(item => item.title.toLowerCase() !== song.title.toLowerCase());
+      const newEntry = {
+        id: song.id,
+        title: song.title,
+        artist: song.artist,
+        coverUrl: song.coverUrl || '/images/onboarding-card-save-playlist.webp',
+        explicit: song.explicit || false,
+      };
+      const updated = [newEntry, ...filtered].slice(0, 8);
+      try {
+        localStorage.setItem('spotify_recent_searches_list', JSON.stringify(updated));
+      } catch {}
+      return updated;
+    });
+  }, []);
+
+  const removeRecentSearch = useCallback((songId: string) => {
+    setRecentSearches(prev => {
+      const updated = prev.filter(item => item.id !== songId);
+      try {
+        localStorage.setItem('spotify_recent_searches_list', JSON.stringify(updated));
+      } catch {}
+      return updated;
+    });
+  }, []);
   const [showTopMenu, setShowTopMenu] = useState(false);
   const [isMiniPlayerOpen, setIsMiniPlayerOpen] = useState(false);
   const [isSongViewActive, setIsSongViewActive] = useState(false);
+  const [lyricsTheme, setLyricsTheme] = useState<'classic' | 'rose'>('rose');
+  const [isReelExportOpen, setIsReelExportOpen] = useState(false);
   const searchTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const searchInputRef = useRef<HTMLInputElement>(null);
 
@@ -204,34 +258,168 @@ export const SpotifyLayout: React.FC<SpotifyLayoutProps> = ({
     };
   }, [calcVolRatio, onVolumeChange]);
 
-  // Live search
+  // Spotify LTR Engine: Search Click-Through Rate (CTR) Tracking in LocalStorage
+  const getSearchClickHistory = (q: string): string => {
+    try {
+      const stored = localStorage.getItem('suno_search_ctr');
+      if (!stored) return '';
+      const map = JSON.parse(stored);
+      return (map[q.toLowerCase().trim()] || []).slice(0, 5).join(',');
+    } catch {
+      return '';
+    }
+  };
+
+  const recordSearchClick = (q: string, songTitle: string) => {
+    try {
+      const stored = localStorage.getItem('suno_search_ctr');
+      const map = stored ? JSON.parse(stored) : {};
+      const key = q.toLowerCase().trim();
+      if (!map[key]) map[key] = [];
+      if (!map[key].includes(songTitle)) {
+        map[key].unshift(songTitle);
+        if (map[key].length > 5) map[key].pop();
+      }
+      localStorage.setItem('suno_search_ctr', JSON.stringify(map));
+    } catch {}
+  };
+
+  // Live search powered by 6-Pillar Spotify LTR Engine + Instant Local Fallback
+  const executeSearch = (val: string) => {
+    if (searchTimeoutRef.current) clearTimeout(searchTimeoutRef.current);
+    setIsSearching(true);
+
+    // Instant local search for 0ms responsiveness even offline
+    const qLower = val.toLowerCase().trim();
+    const localSongMatches = songs.filter(s =>
+      s.title.toLowerCase().includes(qLower) || s.artist.toLowerCase().includes(qLower)
+    );
+    if (localSongMatches.length > 0) {
+      setSearchResults(localSongMatches.slice(0, 6));
+      setSearchSuggestions(
+        Array.from(new Set([
+          ...localSongMatches.map(s => s.title),
+          ...localSongMatches.map(s => s.artist)
+        ])).slice(0, 4)
+      );
+    }
+
+    // Extract real-time LTR personalization context
+    const topArtists = (tasteProfile?.topArtists || []).slice(0, 3).map(a => a.artist).join(',');
+    const currentGenre = currentSong ? ((currentSong as any).genre || '') : '';
+    const likedIds = (likedSongs || []).slice(0, 20).map(s => s.id).join(',');
+    const hour = new Date().getHours();
+    const clicks = getSearchClickHistory(val);
+
+    const params = new URLSearchParams({
+      q: val,
+      hour: hour.toString(),
+      artists: topArtists,
+      genre: currentGenre,
+      clicks: clicks,
+      liked: likedIds
+    });
+
+    fetch(`/api/search?${params.toString()}`)
+      .then(res => res.json())
+      .then(data => {
+        if (data.suggestions && data.suggestions.length > 0) setSearchSuggestions(data.suggestions.slice(0, 4));
+        if (data.results && data.results.length > 0) setSearchResults(data.results.slice(0, 6));
+      })
+      .catch(() => {})
+      .finally(() => setIsSearching(false));
+  };
+
   const handleSearchChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const val = e.target.value;
     setSearchQuery(val);
+    setFocusedNavIndex(-1);
     if (!val.trim()) {
       setSearchResults([]);
+      setSearchSuggestions([]);
       setShowSearchDropdown(false);
       return;
     }
     setShowSearchDropdown(true);
     if (searchTimeoutRef.current) clearTimeout(searchTimeoutRef.current);
-    searchTimeoutRef.current = setTimeout(async () => {
-      setIsSearching(true);
-      try {
-        const res = await fetch(`/api/search?q=${encodeURIComponent(val)}`);
-        const data = await res.json();
-        if (data.results) setSearchResults(data.results.slice(0, 7));
-      } catch {}
-      setIsSearching(false);
-    }, 300);
+    searchTimeoutRef.current = setTimeout(() => {
+      executeSearch(val);
+    }, 250);
   };
 
-  const handleSearchSelect = (song: Song) => {
-    setIsSongViewActive(false);
-    onSelectSong(song);
-    setSearchQuery('');
-    setShowSearchDropdown(false);
-    setSearchResults([]);
+  const handleSuggestionClick = (sugg: string) => {
+    setSearchQuery(sugg);
+    setSearchSuggestions([]);
+    executeSearch(sugg);
+  };
+
+  const handleSearchKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    const totalItems = searchSuggestions.length + searchResults.length;
+    if (totalItems === 0) return;
+
+    if (e.key === 'ArrowDown') {
+      e.preventDefault();
+      setFocusedNavIndex(prev => (prev + 1) % totalItems);
+    } else if (e.key === 'ArrowUp') {
+      e.preventDefault();
+      setFocusedNavIndex(prev => (prev - 1 + totalItems) % totalItems);
+    } else if (e.key === 'Enter') {
+      e.preventDefault();
+      if (focusedNavIndex >= 0 && focusedNavIndex < searchSuggestions.length) {
+        handleSuggestionClick(searchSuggestions[focusedNavIndex]);
+      } else if (focusedNavIndex >= searchSuggestions.length) {
+        const songIdx = focusedNavIndex - searchSuggestions.length;
+        if (searchResults[songIdx]) handleSearchSelect(searchResults[songIdx]);
+      } else if (searchResults.length > 0) {
+        handleSearchSelect(searchResults[0]);
+      }
+    } else if (e.key === 'Escape') {
+      setShowSearchDropdown(false);
+    }
+  };
+
+  const handleSearchSelect = (song: Song | { id: string; title: string; artist: string; coverUrl?: string; explicit?: boolean }) => {
+    recordSearchClick(searchQuery, song.title);
+    saveRecentSearch(song);
+
+    const fullSong: Song = {
+      id: song.id,
+      title: song.title,
+      artist: song.artist,
+      album: (song as any).album || 'Single',
+      duration: (song as any).duration || 210,
+      coverUrl: song.coverUrl || '/images/onboarding-card-save-playlist.webp',
+      audioUrl: (song as any).audioUrl || '',
+      lyrics: (song as any).lyrics || [],
+    };
+    onSelectSong(fullSong);
+    setIsSongViewActive(true);
+
+    // Keep dropdown open until the background song page opens smoothly!
+    setTimeout(() => {
+      setShowSearchDropdown(false);
+      setSearchQuery('');
+      setSearchSuggestions([]);
+      setSearchResults([]);
+    }, 280);
+  };
+
+  const renderBoldedMatch = (fullText: string, query: string) => {
+    if (!query) return fullText;
+    const lowerFull = fullText.toLowerCase();
+    const lowerQ = query.toLowerCase();
+    const matchIdx = lowerFull.indexOf(lowerQ);
+    if (matchIdx === -1) return fullText;
+    const before = fullText.slice(0, matchIdx);
+    const matched = fullText.slice(matchIdx, matchIdx + query.length);
+    const after = fullText.slice(matchIdx + query.length);
+    return (
+      <>
+        {before}
+        <strong>{matched}</strong>
+        {after}
+      </>
+    );
   };
 
   const VolumeIcon = isMuted || volume === 0 ? VolumeX : volume < 0.5 ? Volume1 : Volume2;
@@ -270,35 +458,35 @@ export const SpotifyLayout: React.FC<SpotifyLayoutProps> = ({
       id: 'best-bollywood-love',
       title: 'Best Bollywood Love Songs',
       sub: 'Playlist • Revibe',
-      coverUrl: 'https://images.unsplash.com/photo-1518495973542-4542c06a5843?w=160',
+      coverUrl: '/images/onboarding-card-save-playlist.webp',
       type: 'playlist',
     },
     {
       id: 'alb-iv',
       title: 'International Villager',
       sub: 'Album • Yo Yo Honey Singh',
-      coverUrl: 'https://images.unsplash.com/photo-1506794778202-cad84cf45f1d?w=160',
+      coverUrl: '/images/onboarding-card-keyboard-shortcuts.webp',
       type: 'album',
     },
     {
       id: 'alb-dk',
       title: 'Desi Kalakaar',
       sub: 'Album • Yo Yo Honey Singh',
-      coverUrl: 'https://images.unsplash.com/photo-1492562080023-ab3db95bfbce?w=160',
+      coverUrl: '/images/onboarding-card-queue-it-up.webp',
       type: 'album',
     },
     {
       id: 'pl-another',
       title: 'Another',
       sub: `Playlist • ${user?.displayName || 'Garvgupta'}`,
-      coverUrl: 'https://images.unsplash.com/photo-1514525253161-7a46d19cd819?w=160',
+      coverUrl: '/images/onboarding-card-miniplayer.webp',
       type: 'playlist',
     },
     {
       id: 'art-imran',
       title: 'Imran Khan',
       sub: 'Artist',
-      coverUrl: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=160',
+      coverUrl: '/images/producer.webp',
       isArtist: true,
       type: 'artist',
     },
@@ -306,7 +494,7 @@ export const SpotifyLayout: React.FC<SpotifyLayoutProps> = ({
       id: 'art-yyhs',
       title: 'Yo Yo Honey Singh',
       sub: 'Artist',
-      coverUrl: 'https://images.unsplash.com/photo-1500648767791-00dcc994a43e?w=160',
+      coverUrl: '/images/kit-avatar-body.png',
       isArtist: true,
       type: 'artist',
     },
@@ -314,7 +502,7 @@ export const SpotifyLayout: React.FC<SpotifyLayoutProps> = ({
       id: 'art-diljit',
       title: 'Diljit Dosanjh',
       sub: 'Artist',
-      coverUrl: 'https://images.unsplash.com/photo-1519085360753-af0119f7cbe7?w=160',
+      coverUrl: '/images/ylx-artist-row-placeholder.webp',
       isArtist: true,
       type: 'artist',
     },
@@ -322,7 +510,7 @@ export const SpotifyLayout: React.FC<SpotifyLayoutProps> = ({
       id: p.id,
       title: p.title,
       sub: `Playlist • ${user?.displayName || 'Garvgupta'}`,
-      coverUrl: p.coverUrl,
+      coverUrl: p.coverUrl || '/images/onboarding-card-create-playlist.webp',
       type: 'playlist' as const,
     })),
   ];
@@ -343,28 +531,39 @@ export const SpotifyLayout: React.FC<SpotifyLayoutProps> = ({
       return;
     }
     if (item.type === 'album') {
-      const foundAlbum = INITIAL_ALBUMS.find(a => a.id === item.id || a.title === item.title);
+      const foundAlbum = INITIAL_ALBUMS.find(a => a.id === item.id || a.title.toLowerCase() === item.title.toLowerCase());
       if (foundAlbum) {
         onSelectAlbum(foundAlbum.id);
-      } else if (songs.length > 0) {
-        onPlaySong(songs[0]);
+        if (foundAlbum.songs && foundAlbum.songs.length > 0) {
+          onPlaySong(foundAlbum.songs[0], foundAlbum.songs);
+        }
+      } else {
+        onSelectAlbum(item.id);
       }
       return;
     }
-    if (item.type === 'artist') {
-      const artistSong = songs.find(s => s.artist.toLowerCase().includes(item.title.toLowerCase()));
-      if (artistSong) {
-        onPlaySong(artistSong);
-      } else {
-        setSearchQuery(item.title);
+    if (item.type === 'artist' || item.isArtist) {
+      setSelectedArtist(item.title);
+      setActiveView('artist');
+      return;
+    }
+    // Check if album has this id or title (e.g. best-bollywood-love, pl-another)
+    const foundAlbum = INITIAL_ALBUMS.find(a => a.id === item.id || a.title.toLowerCase() === item.title.toLowerCase());
+    if (foundAlbum) {
+      onSelectAlbum(foundAlbum.id);
+      if (foundAlbum.songs && foundAlbum.songs.length > 0) {
+        onPlaySong(foundAlbum.songs[0], foundAlbum.songs);
       }
       return;
     }
     const foundPlaylist = playlists.find(p => p.id === item.id);
     if (foundPlaylist) {
       onSelectPlaylist(foundPlaylist.id);
+      if (foundPlaylist.songs && foundPlaylist.songs.length > 0) {
+        onPlaySong(foundPlaylist.songs[0], foundPlaylist.songs);
+      }
     } else {
-      setActiveView('playlist');
+      onSelectPlaylist(item.id);
     }
   };
 
@@ -413,7 +612,19 @@ export const SpotifyLayout: React.FC<SpotifyLayoutProps> = ({
               </div>
             )}
           </div>
-          <button className="sp-nav-arrow" title="Go Back" onClick={() => window.history.back()}>
+          <button
+            className="sp-nav-arrow"
+            title="Go Back"
+            onClick={() => {
+              if (activeView !== 'home' || isSongViewActive || isLyricsOpen) {
+                if (isLyricsOpen) onToggleLyrics();
+                setIsSongViewActive(false);
+                setActiveView('home');
+              } else {
+                window.history.back();
+              }
+            }}
+          >
             <ChevronLeft size={16} />
           </button>
           <button className="sp-nav-arrow" title="Go Forward" onClick={() => window.history.forward()}>
@@ -444,9 +655,25 @@ export const SpotifyLayout: React.FC<SpotifyLayoutProps> = ({
               className="sp-search-input"
               value={searchQuery}
               onChange={handleSearchChange}
-              onFocus={() => searchQuery && setShowSearchDropdown(true)}
-              onBlur={() => setTimeout(() => setShowSearchDropdown(false), 200)}
+              onKeyDown={handleSearchKeyDown}
+              onFocus={() => setShowSearchDropdown(true)}
+              onBlur={() => setTimeout(() => setShowSearchDropdown(false), 300)}
             />
+            {searchQuery && (
+              <button
+                className="sp-search-clear-btn"
+                onClick={() => {
+                  setSearchQuery('');
+                  setSearchResults([]);
+                  setSearchSuggestions([]);
+                  setShowSearchDropdown(true);
+                  if (searchInputRef.current) searchInputRef.current.focus();
+                }}
+                title="Clear search"
+              >
+                <X size={16} />
+              </button>
+            )}
             <div className="sp-search-divider" />
             <button
               className="sp-browse-pill"
@@ -460,23 +687,159 @@ export const SpotifyLayout: React.FC<SpotifyLayoutProps> = ({
               <Compass size={18} />
             </button>
 
-            {/* Search dropdown */}
+            {/* Spotify 1:1 Search dropdown */}
             {showSearchDropdown && (
-              <div className="sp-search-dropdown">
-                {isSearching ? (
-                  <div className="sp-search-loading">Searching...</div>
-                ) : searchResults.length > 0 ? (
-                  searchResults.map(song => (
-                    <div key={song.id} className="sp-search-result" onMouseDown={() => handleSearchSelect(song)}>
-                      <img src={song.coverUrl} alt={song.title} className="sp-search-result-img" />
-                      <div className="sp-search-result-meta">
-                        <span className="sp-search-result-title">{song.title}</span>
-                        <span className="sp-search-result-artist">{song.artist}</span>
+              <div className="sp-search-dropdown" onMouseDown={(e) => e.stopPropagation()}>
+                {!searchQuery.trim() ? (
+                  /* Spotify Native Recent Searches (matching Screenshot & Video) */
+                  <div className="sp-recent-searches-container">
+                    <div className="sp-recent-searches-title">Recent searches</div>
+                    <div className="sp-recent-searches-list">
+                      {recentSearches.map((item) => (
+                        <div
+                          key={item.id}
+                          className="sp-recent-search-row"
+                          onMouseDown={() => handleSearchSelect(item as any)}
+                        >
+                          <img
+                            src={item.coverUrl}
+                            alt={item.title}
+                            className="sp-recent-search-cover"
+                            onError={(e) => {
+                              (e.target as HTMLImageElement).src = '/images/onboarding-card-save-playlist.webp';
+                            }}
+                          />
+                          <div className="sp-recent-search-meta">
+                            <div className="sp-recent-search-name">{item.title}</div>
+                            <div className="sp-recent-search-sub">
+                              {item.explicit && <span className="sp-explicit-tag">E</span>}
+                              <span>Song • {item.artist}</span>
+                            </div>
+                          </div>
+                          <button
+                            className="sp-recent-search-remove"
+                            title="Remove from recent searches"
+                            onMouseDown={(e) => {
+                              e.stopPropagation();
+                              removeRecentSearch(item.id);
+                            }}
+                          >
+                            <X size={16} />
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                ) : (
+                  <>
+                    {/* Keyboard hints header */}
+                    <div className="sp-search-header">
+                      <div className="sp-search-header-left"></div>
+                      <div className="sp-search-header-right">
+                        <span className="sp-key-badge">↑</span>
+                        <span className="sp-key-badge">↓</span>
+                        <span className="sp-header-text">Navigate</span>
+                        <span className="sp-key-badge" style={{ marginLeft: '8px' }}>Enter</span>
+                        <span className="sp-header-text">Search</span>
                       </div>
                     </div>
-                  ))
-                ) : (
-                  <div className="sp-search-empty">No results for "{searchQuery}"</div>
+
+                    {/* Text query suggestions */}
+                    {searchSuggestions.map((sugg, idx) => {
+                      const isFocused = focusedNavIndex === idx;
+                      return (
+                        <div
+                          key={`sugg-${idx}`}
+                          className={`sp-search-sugg-row ${isFocused ? 'active' : ''}`}
+                          onMouseDown={() => handleSuggestionClick(sugg)}
+                        >
+                          <Search size={16} className="sp-search-sugg-icon" />
+                          <span className="sp-search-sugg-text">
+                            {renderBoldedMatch(sugg, searchQuery)}
+                          </span>
+                        </div>
+                      );
+                    })}
+
+                    {searchSuggestions.length > 0 && searchResults.length > 0 && (
+                      <div className="sp-search-section-divider" />
+                    )}
+
+                    {/* Entity results (Song, Album, Playlist) */}
+                    {isSearching && searchResults.length === 0 ? (
+                      <div className="sp-search-loading">Searching...</div>
+                    ) : searchResults.length > 0 ? (
+                      <>
+                        {searchResults.map((song, sIdx) => {
+                          const itemIndex = searchSuggestions.length + sIdx;
+                          const isFocused = focusedNavIndex === itemIndex;
+                          const isLiked = likedSongs.some((s) => s.id === song.id);
+                          const subtitle = (song as any).subtitle || `Song • ${song.artist}`;
+                          return (
+                            <div
+                              key={song.id || sIdx}
+                              className={`sp-search-result ${isFocused ? 'active' : ''}`}
+                              onMouseDown={() => handleSearchSelect(song)}
+                              title={`${song.title}\n${subtitle}`}
+                            >
+                              <div className="sp-search-result-thumb-wrapper">
+                                <img
+                                  src={song.coverUrl || '/images/onboarding-card-start-playing.webp'}
+                                  alt={song.title}
+                                  className="sp-search-result-img"
+                                  onError={(e) => {
+                                    const img = e.target as HTMLImageElement;
+                                    img.src = '/images/onboarding-card-start-playing.webp';
+                                  }}
+                                />
+                                <div className="sp-search-play-overlay">
+                                  <Play size={14} fill="#ffffff" color="#ffffff" />
+                                </div>
+                              </div>
+                              <div className="sp-search-result-meta">
+                                <span className="sp-search-result-title">{song.title}</span>
+                                <span className="sp-search-result-artist">{subtitle}</span>
+                              </div>
+                              <div className="sp-search-result-actions">
+                                <button
+                                  className="sp-search-more-btn"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                  }}
+                                  title="More options"
+                                >
+                                  <MoreHorizontal size={16} />
+                                </button>
+                                <button
+                                  className="sp-search-add-btn"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    onToggleLike(song.id);
+                                  }}
+                                  title={isLiked ? 'Saved to Liked Songs' : 'Save to Liked Songs'}
+                                >
+                                  {isLiked ? <Check size={16} color="#1ed760" /> : <Plus size={16} />}
+                                </button>
+                              </div>
+                            </div>
+                          );
+                        })}
+                        <div
+                          className="sp-view-all-results-btn"
+                          onMouseDown={() => {
+                            if (searchResults.length > 0) {
+                              handleSearchSelect(searchResults[0]);
+                            }
+                          }}
+                        >
+                          <Search size={16} color="#b3b3b3" />
+                          <span>View all results for "{searchQuery}"</span>
+                        </div>
+                      </>
+                    ) : !isSearching && searchSuggestions.length === 0 ? (
+                      <div className="sp-search-empty">No results for "{searchQuery}"</div>
+                    ) : null}
+                  </>
                 )}
               </div>
             )}
@@ -485,14 +848,31 @@ export const SpotifyLayout: React.FC<SpotifyLayoutProps> = ({
 
         {/* Right: Mode toggle + Bell + Friends + Avatar + Windows Controls */}
         <div className="sp-titlebar-right">
-          {/* SunoNa mode toggle pill */}
-          <button className="sp-mode-toggle-pill" onClick={onGoSunoNa} title="Switch to SunoNa mode">
-            <span className="sp-toggle-dot sp-toggle-spotify" />
-            <span className="sp-toggle-label">Spotify</span>
-            <span className="sp-toggle-sep" />
-            <img src="/logo.jpg" alt="" style={{ width: '13px', height: '13px', borderRadius: '50%', objectFit: 'cover', marginRight: '4px', display: 'inline-block', verticalAlign: 'middle' }} />
-            <span className="sp-toggle-label sp-toggle-label-off">SunoNa</span>
-          </button>
+          {/* Segmented Mode toggle pill */}
+          <div className="header-ui-mode-pill sp-mode-segmented">
+            <button
+              className="header-ui-mode-btn active"
+              onClick={(e) => { e.stopPropagation(); }}
+              title="Spotify Desktop UI (Active)"
+            >
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="currentColor">
+                <path d="M12 0C5.4 0 0 5.4 0 12s5.4 12 12 12 12-5.4 12-12S18.66 0 12 0zm5.521 17.34c-.24.359-.66.48-1.021.24-2.82-1.74-6.36-2.101-10.561-1.141-.418.122-.779-.179-.899-.539-.12-.421.18-.78.54-.9 4.56-1.021 8.52-.6 11.64 1.32.42.18.479.659.301 1.02zm1.44-3.3c-.301.42-.841.6-1.262.3-3.239-1.98-8.159-2.58-11.939-1.38-.479.12-1.02-.12-1.14-.6-.12-.48.12-1.021.6-1.141C9.6 9.9 15 10.561 18.72 12.84c.361.181.54.78.241 1.2zm.12-3.36C15.24 8.4 8.82 8.16 5.16 9.301c-.6.179-1.2-.181-1.38-.721-.18-.601.18-1.2.72-1.381 4.26-1.26 11.28-1.02 15.721 1.621.539.3.719 1.02.419 1.56-.299.421-1.02.599-1.559.3z" />
+              </svg>
+              <span>Spotify</span>
+            </button>
+            <button
+              className="header-ui-mode-btn"
+              onClick={onGoSunoNa}
+              title="Switch to SunoNa Original UI"
+            >
+              <img
+                src="/logo.jpg"
+                alt="SunoNa"
+                style={{ width: '13px', height: '13px', borderRadius: '50%', objectFit: 'cover' }}
+              />
+              <span>SunoNa</span>
+            </button>
+          </div>
 
           <button className="sp-icon-btn" title="What's New / Notifications"><Bell size={18} /></button>
           <button className="sp-icon-btn" title="Friend Activity" onClick={onOpenListenTogether}><Users size={18} /></button>
@@ -622,7 +1002,14 @@ export const SpotifyLayout: React.FC<SpotifyLayoutProps> = ({
                         {isLiked ? (
                           <Heart size={20} fill="#ffffff" color="#ffffff" />
                         ) : item.coverUrl ? (
-                          <img src={item.coverUrl} alt={item.title} />
+                          <img
+                            src={item.coverUrl}
+                            alt={item.title}
+                            onError={(e) => {
+                              const img = e.target as HTMLImageElement;
+                              img.src = item.isArtist ? '/images/ylx-artist-row-placeholder.webp' : '/images/onboarding-card-save-playlist.webp';
+                            }}
+                          />
                         ) : (
                           <div className="sp-lib-item-placeholder">
                             <ListMusic size={18} />
@@ -651,46 +1038,76 @@ export const SpotifyLayout: React.FC<SpotifyLayoutProps> = ({
         {/* ── CENTER CONTENT (Home / Explore / Playlist / Full Lyrics) ── */}
         <main className={`sp-content ${isLyricsOpen ? 'sp-full-lyrics-container' : ''}`}>
           {isLyricsOpen ? (
-            /* ══════════════════════════════════════════════════════
-               FULL LYRICS CINEMATIC VIEW (Screenshot 442, 443, 444)
-               Solid wine-red canvas with synchronized lyrics lines
-               ══════════════════════════════════════════════════════ */
-            <div className="spotify-full-lyrics-view">
-              {/* Lyrics Header bar */}
-              <div className="spotify-fl-header">
-                <span className="spotify-fl-track-title">{currentSong?.title || 'Lyrics'}</span>
-                <div className="spotify-fl-actions">
-                  <button className="spotify-fl-btn" onClick={onToggleLyrics} title="Close Full Lyrics">
-                    <X size={18} />
-                  </button>
+            lyricsTheme === 'rose' ? (
+              <RosePinkLyricsView
+                currentSong={currentSong}
+                currentTime={currentTime}
+                duration={duration}
+                isPlaying={isPlaying}
+                onSeek={onSeek}
+                onTogglePlay={onTogglePlay}
+                onClose={onToggleLyrics}
+                onSwitchTheme={() => setLyricsTheme('classic')}
+                onOpenExportModal={() => setIsReelExportOpen(true)}
+              />
+            ) : (
+              /* ══════════════════════════════════════════════════════
+                 FULL LYRICS CINEMATIC VIEW (Screenshot 442, 443, 444)
+                 Solid wine-red canvas with synchronized lyrics lines
+                 ══════════════════════════════════════════════════════ */
+              <div className="spotify-full-lyrics-view">
+                {/* Lyrics Header bar */}
+                <div className="spotify-fl-header">
+                  <span className="spotify-fl-track-title">{currentSong?.title || 'Lyrics'}</span>
+                  <div className="spotify-fl-actions" style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                    <button
+                      className="spotify-fl-btn"
+                      onClick={() => setIsReelExportOpen(true)}
+                      title="Export 9:16 Lyric Reel"
+                      style={{ background: 'linear-gradient(135deg, #ff2d75, #ff69b4)', color: '#fff', border: 'none', padding: '6px 12px', borderRadius: '16px', fontSize: '12px', fontWeight: 600, display: 'flex', alignItems: 'center', gap: '5px' }}
+                    >
+                      <span>🎬 Export Reel</span>
+                    </button>
+                    <button
+                      className="spotify-fl-btn"
+                      onClick={() => setLyricsTheme('rose')}
+                      title="Switch to Rose Pink 3D Lyrics Theme"
+                      style={{ background: 'rgba(255, 45, 117, 0.2)', color: '#ff69b4', border: '1px solid rgba(255, 45, 117, 0.4)', padding: '6px 12px', borderRadius: '16px', fontSize: '12px', fontWeight: 600 }}
+                    >
+                      🌸 Rose 3D
+                    </button>
+                    <button className="spotify-fl-btn" onClick={onToggleLyrics} title="Close Full Lyrics">
+                      <X size={18} />
+                    </button>
+                  </div>
+                </div>
+
+                {/* Big Interactive Lyrics List */}
+                <div className="spotify-fl-body">
+                  {currentSong?.lyrics && currentSong.lyrics.length > 0 ? (
+                    currentSong.lyrics.map((line, i) => {
+                      const isLineActive = currentTime >= line.time && (!currentSong.lyrics?.[i + 1] || currentTime < currentSong.lyrics[i + 1].time);
+                      return (
+                        <p
+                          key={i}
+                          className={`spotify-fl-line ${isLineActive ? 'active' : ''}`}
+                          onClick={() => onSeek(line.time)}
+                        >
+                          {line.text}
+                        </p>
+                      );
+                    })
+                  ) : (
+                    <div className="spotify-fl-fallback">
+                      <p className="spotify-fl-line active">pyaar tune kya kiya? chain mera liya</p>
+                      <p className="spotify-fl-line">bepanaah ishq se vaastaa ho gaya</p>
+                      <p className="spotify-fl-line">tera hee cheharaa ab to dikhe hai</p>
+                      <p className="spotify-fl-line">har pal nigaahon mein tera asar hai</p>
+                    </div>
+                  )}
                 </div>
               </div>
-
-              {/* Big Interactive Lyrics List */}
-              <div className="spotify-fl-body">
-                {currentSong?.lyrics && currentSong.lyrics.length > 0 ? (
-                  currentSong.lyrics.map((line, i) => {
-                    const isLineActive = currentTime >= line.time && (!currentSong.lyrics?.[i + 1] || currentTime < currentSong.lyrics[i + 1].time);
-                    return (
-                      <p
-                        key={i}
-                        className={`spotify-fl-line ${isLineActive ? 'active' : ''}`}
-                        onClick={() => onSeek(line.time)}
-                      >
-                        {line.text}
-                      </p>
-                    );
-                  })
-                ) : (
-                  <div className="spotify-fl-fallback">
-                    <p className="spotify-fl-line active">pyaar tune kya kiya? chain mera liya</p>
-                    <p className="spotify-fl-line">bepanaah ishq se vaastaa ho gaya</p>
-                    <p className="spotify-fl-line">tera hee cheharaa ab to dikhe hai</p>
-                    <p className="spotify-fl-line">har pal nigaahon mein tera asar hai</p>
-                  </div>
-                )}
-              </div>
-            </div>
+            )
           ) : isSongViewActive && currentSong ? (
             <SpotifySongView
               song={currentSong}
@@ -722,6 +1139,10 @@ export const SpotifyLayout: React.FC<SpotifyLayoutProps> = ({
                   onSelectAlbum={onSelectAlbum}
                   onAddToPlaylist={onAddToPlaylist}
                   onOpenLikedSongs={() => onOpenLibrary('liked')}
+                  onSelectArtist={(name) => {
+                    setSelectedArtist(name);
+                    setActiveView('artist');
+                  }}
                 />
               )}
               {activeView === 'explore' && (
@@ -780,6 +1201,20 @@ export const SpotifyLayout: React.FC<SpotifyLayoutProps> = ({
                   />
                 );
               })()}
+              {activeView === 'artist' && (
+                <SpotifyArtistView
+                  artistName={selectedArtist || currentSong?.artist || 'Top Artist'}
+                  songs={songs}
+                  albums={albums}
+                  currentSong={currentSong}
+                  isPlaying={isPlaying}
+                  onPlaySong={onPlaySong}
+                  onTogglePlay={onTogglePlay}
+                  onToggleLike={onToggleLike}
+                  onSelectAlbum={onSelectAlbum}
+                  onBack={() => setActiveView('home')}
+                />
+              )}
               {activeView === 'my-playlists' && (
                 <div className="sp-my-playlists">
                   <h2 className="sp-section-title">Your Playlists</h2>
@@ -807,74 +1242,30 @@ export const SpotifyLayout: React.FC<SpotifyLayoutProps> = ({
         {/* ── RIGHT PANEL (Now Playing OR Queue / Recently Played) ── */}
         {showRightPanel && (
           (isQueueOpen || isLyricsOpen) ? (
-            <aside className="sp-right-panel" aria-label="Queue Panel">
-              {/* Tabs matching Screenshot 442 & 446 */}
-              <div className="sp-rp-tabs">
-                <button
-                  className={`sp-rp-tab ${isQueueOpen || isLyricsOpen ? 'active' : ''}`}
-                  onClick={onToggleQueue}
-                >
-                  Queue
-                </button>
-                <button className="sp-rp-tab">Recently played</button>
-                <button className="sp-rp-close" onClick={() => {
-                  if (isQueueOpen) onToggleQueue();
-                  if (isLyricsOpen) onToggleLyrics();
-                }}>
-                  <X size={18} />
-                </button>
-              </div>
-
-              <div className="sp-rp-queue">
-                <h3 className="sp-rp-section-title">Now playing</h3>
-                {currentSong ? (
-                  <div className="sp-rp-now-playing">
-                    <img src={currentSong.coverUrl} alt={currentSong.title} className="sp-rp-np-cover" />
-                    <div className="sp-rp-np-meta">
-                      <span className="sp-rp-np-title">{currentSong.title}</span>
-                      <span className="sp-rp-np-artist">{currentSong.artist}</span>
-                    </div>
-                  </div>
-                ) : (
-                  <div className="sp-rp-empty">
-                    <p>Your queue is empty</p>
-                    <button className="sp-rp-search-btn" onClick={() => setActiveView('explore')}>Search for something new</button>
-                  </div>
-                )}
-
-                {queue.length > 1 && (
-                  <>
-                    <h3 className="sp-rp-section-title">Next in queue</h3>
-                    <div className="sp-rp-queue-list">
-                      {queue
-                        .filter(s => s.id !== currentSong?.id)
-                        .slice(0, 20)
-                        .map((song, i) => {
-                          const realIndex = queue.findIndex(s => s.id === song.id);
-                          return (
-                            <SwipeableSongRow
-                              key={song.id + i}
-                              onDelete={() => onRemoveFromQueue && realIndex >= 0 ? onRemoveFromQueue(realIndex) : null}
-                              deleteLabel="Remove"
-                            >
-                              <div
-                                className="sp-rp-queue-item"
-                                onClick={() => onPlaySong(song)}
-                              >
-                                <img src={song.coverUrl} alt={song.title} className="sp-rp-q-cover" />
-                                <div className="sp-rp-q-meta">
-                                  <span className="sp-rp-q-title">{song.title}</span>
-                                  <span className="sp-rp-q-artist">{song.artist}</span>
-                                </div>
-                              </div>
-                            </SwipeableSongRow>
-                          );
-                        })}
-                    </div>
-                  </>
-                )}
-              </div>
-            </aside>
+            <SpotifyQueuePanel
+              currentSong={currentSong}
+              queue={queue}
+              isPlaying={isPlaying}
+              playlists={playlists}
+              recentlyPlayed={listenAgain || songs.slice(0, 10)}
+              contextTitle={currentSong?.album || (selectedPlaylistId ? playlists.find(p => p.id === selectedPlaylistId)?.title : undefined) || 'Dilfek'}
+              onPlaySong={onPlaySong}
+              onTogglePlay={onTogglePlay}
+              onClose={() => {
+                if (isQueueOpen) onToggleQueue();
+                if (isLyricsOpen) onToggleLyrics();
+              }}
+              onToggleLike={onToggleLike}
+              onAddToPlaylist={onAddToPlaylist}
+              onRemoveFromQueue={onRemoveFromQueue}
+              onAddToQueue={(song) => onPlaySong(song, [...queue, song])}
+              onSelectArtist={(artistName) => {
+                setSelectedArtist(artistName);
+                setActiveView('artist');
+              }}
+              onOpenSleepTimer={onOpenSleepTimer}
+              onSearchMore={() => setActiveView('explore')}
+            />
           ) : isNowPlayingViewOpen ? (
             <SpotifyRightPanel
               currentSong={currentSong}
@@ -961,7 +1352,15 @@ export const SpotifyLayout: React.FC<SpotifyLayoutProps> = ({
                 }}
                 title="Open song view"
               >
-                <img src={currentSong.coverUrl} alt={currentSong.title} className="sp-pb-cover" />
+                <img
+                  src={currentSong.coverUrl || '/images/onboarding-card-start-playing.webp'}
+                  alt={currentSong.title}
+                  className="sp-pb-cover"
+                  onError={(e) => {
+                    const img = e.target as HTMLImageElement;
+                    img.src = '/images/onboarding-card-start-playing.webp';
+                  }}
+                />
               </div>
               <div className="sp-pb-meta">
                 <span
@@ -1050,15 +1449,8 @@ export const SpotifyLayout: React.FC<SpotifyLayoutProps> = ({
           </div>
         </div>
 
-        {/* Right: Full Spotify right-side control suite */}
+        {/* Right: Full Spotify right-side control suite (matching Screenshot 23be7311) */}
         <div className="sp-pb-right">
-          <button
-            className={`sp-pb-icon-btn ${isNowPlayingViewOpen ? 'active-green' : ''}`}
-            onClick={onToggleNowPlayingView}
-            title="Now Playing View"
-          >
-            <Tv2 size={16} />
-          </button>
           <button
             className={`sp-pb-icon-btn ${isLyricsOpen ? 'active-green' : ''}`}
             onClick={onToggleLyrics}
@@ -1070,8 +1462,11 @@ export const SpotifyLayout: React.FC<SpotifyLayoutProps> = ({
             className={`sp-pb-icon-btn ${isQueueOpen ? 'active-green' : ''}`}
             onClick={onToggleQueue}
             title="Queue"
+            aria-label="Queue"
           >
-            <ListMusic size={16} />
+            <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor">
+              <path d="M15 15H1v-1.5h14V15zm0-4.5H1V9h14v1.5zm-14-7A2.5 2.5 0 0 1 3.5 1h9a2.5 2.5 0 0 1 0 5h-9A2.5 2.5 0 0 1 1 3.5zm2.5-1a1 1 0 0 0 0 2h9a1 1 0 1 0 0-2h-9z" />
+            </svg>
           </button>
           <button
             className="sp-pb-icon-btn"
@@ -1123,6 +1518,14 @@ export const SpotifyLayout: React.FC<SpotifyLayoutProps> = ({
           )}
         </div>
       </footer>
+
+      {/* 9:16 Lyric Reel Exporter Modal (from Pink Rose Lyric Guide) */}
+      <LyricReelExportModal
+        currentSong={currentSong}
+        currentTime={currentTime}
+        isOpen={isReelExportOpen}
+        onClose={() => setIsReelExportOpen(false)}
+      />
     </div>
   );
 };

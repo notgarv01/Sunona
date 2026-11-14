@@ -138,15 +138,15 @@ async function createWindow() {
     height: 820,
     minWidth: 980,
     minHeight: 640,
-    backgroundColor: '#09090b',
+    backgroundColor: '#000000',
     title: 'SunoNa',
     icon: iconPath,
     // Modern Spotify-style Frameless Header
     titleBarStyle: 'hidden',
     titleBarOverlay: {
-      color: '#09090b',
-      symbolColor: '#e4e4e7',
-      height: 40,
+      color: '#000000',
+      symbolColor: '#ffffff',
+      height: 52,
     },
     autoHideMenuBar: true,
     show: false, // Don't show until ready to prevent white flash
@@ -221,11 +221,17 @@ async function createWindow() {
     }
   });
 
-  // Enable F12 and Ctrl+Shift+I for developer tools toggle
+  // Enable F12 and Ctrl+Shift+I for developer tools toggle, block accidental Ctrl+R / F5 reload (like Spotify)
   mainWindow.webContents.on('before-input-event', (event, input) => {
     if (input.key === 'F12' || (input.control && input.shift && input.key.toLowerCase() === 'i')) {
       mainWindow.webContents.toggleDevTools();
       event.preventDefault();
+      return;
+    }
+    // Block accidental reload during playback unless Shift is held (Ctrl+Shift+R allowed for dev)
+    if (input.key === 'F5' || ((input.control || input.meta) && input.key.toLowerCase() === 'r' && !input.shift)) {
+      event.preventDefault();
+      return;
     }
   });
 

@@ -2,12 +2,17 @@
   "name": "SunoNa",
   "short_name": "SunoNa",
   "description": "Pure Vibes Music Player by Garv",
+  "id": "/",
   "start_url": "/",
+  "scope": "/",
   "display": "standalone",
-  "display_override": ["window-controls-overlay"],
+  "display_override": ["window-controls-overlay", "standalone"],
   "background_color": "#000000",
   "theme_color": "#000000",
   "orientation": "any",
+  "launch_handler": {
+    "client_mode": "focus-existing"
+  },
   "icons": [
     {
       "src": "/icon-192.png",

@@ -57,11 +57,26 @@ interface StoredPlaybackSession {
   currentTime: number;
   duration: number;
   queue?: Song[];
+  isPlaying?: boolean;
 }
 
 const getStoredPlaybackSession = (): StoredPlaybackSession | null => {
   try {
     if (typeof window !== 'undefined' && window.localStorage) {
+      // 1. Check seamless PWA install / window handover first
+      const rawHandover = sessionStorage.getItem('sunona_pwa_handover') || localStorage.getItem('sunona_pwa_handover');
+      if (rawHandover) {
+        try {
+          const parsed = JSON.parse(rawHandover);
+          if (parsed && parsed.song && parsed.song.id && Date.now() - (parsed.timestamp || 0) < 60000) {
+            sessionStorage.removeItem('sunona_pwa_handover');
+            localStorage.removeItem('sunona_pwa_handover');
+            return parsed;
+          }
+        } catch {}
+      }
+
+      // 2. Fall back to user-isolated session
       localStorage.removeItem('sunona_last_playback_session'); // Clean legacy unisolated key
       const activeUser = authService.getCurrentUser();
       if (!activeUser || !activeUser.uid) return null;
@@ -83,6 +98,10 @@ export const App: React.FC = () => {
 
   const [songs, setSongs] = useState<Song[]>(INITIAL_SONGS);
   const [currentSong, setCurrentSong] = useState<Song | null>(() => (initialSession ? initialSession.song : null));
+  const currentSongRef = useRef<Song | null>(currentSong);
+  useEffect(() => {
+    currentSongRef.current = currentSong;
+  }, [currentSong]);
   const [queue, setQueue] = useState<Song[]>(() => ((initialSession?.queue && initialSession.queue.length > 0) ? initialSession.queue : []));
   const queueRef = useRef<Song[]>((initialSession?.queue && initialSession.queue.length > 0) ? initialSession.queue : []);
   const playbackContextRef = useRef<'radio' | 'playlist'>('radio');
@@ -917,6 +936,43 @@ export const App: React.FC = () => {
     }
   }, [fetchLyricsForSong]);
 
+  // Seamless PWA install & window handover preservation
+  useEffect(() => {
+    const persistHandover = () => {
+      if (currentSongRef.current) {
+        try {
+          const handoverData = {
+            song: currentSongRef.current,
+            currentTime: currentTime,
+            duration: duration || currentSongRef.current.duration,
+            queue: queueRef.current,
+            isPlaying: isPlaying,
+            timestamp: Date.now(),
+          };
+          sessionStorage.setItem('sunona_pwa_handover', JSON.stringify(handoverData));
+          localStorage.setItem('sunona_pwa_handover', JSON.stringify(handoverData));
+        } catch {}
+      }
+    };
+
+    window.addEventListener('beforeunload', persistHandover);
+    window.addEventListener('appinstalled', persistHandover);
+    return () => {
+      window.removeEventListener('beforeunload', persistHandover);
+      window.removeEventListener('appinstalled', persistHandover);
+    };
+  }, [currentTime, duration, isPlaying]);
+
+  // Seamless resume when launching from PWA install handover
+  useEffect(() => {
+    if (initialSession && initialSession.isPlaying && initialSession.song) {
+      const timer = setTimeout(() => {
+        playSong(initialSession.song, initialSession.queue || [], 'playlist', initialSession.currentTime || 0);
+      }, 150);
+      return () => clearTimeout(timer);
+    }
+  }, []);
+
   // Next track in queue with playlist boundary handling & radio lookahead auto-pagination
   const handleNext = useCallback(() => {
     if (!currentSong || queue.length === 0) return;
@@ -1035,8 +1091,6 @@ export const App: React.FC = () => {
 
   const repeatModeRef = useRef(repeatMode);
   repeatModeRef.current = repeatMode;
-  const currentSongRef = useRef(currentSong);
-  currentSongRef.current = currentSong;
 
   // Toggle Shuffle with queue reordering & instant feedback
   const handleToggleShuffle = useCallback(() => {
@@ -1103,6 +1157,25 @@ export const App: React.FC = () => {
       }
     }
   }, [currentSong, currentTime, duration, isPlaying, currentUser]);
+
+  // PWA Window Controls Overlay Integration
+  useEffect(() => {
+    if (typeof navigator !== 'undefined' && 'windowControlsOverlay' in navigator) {
+      const wco = (navigator as any).windowControlsOverlay;
+      const updateWco = () => {
+        if (wco?.visible) {
+          document.body.classList.add('is-wco');
+        } else {
+          document.body.classList.remove('is-wco');
+        }
+      };
+      updateWco();
+      wco?.addEventListener?.('geometrychange', updateWco);
+      return () => {
+        wco?.removeEventListener?.('geometrychange', updateWco);
+      };
+    }
+  }, []);
 
   // Electron Native Integration: Keyboard Media Keys & Native Frame Support
   useEffect(() => {
@@ -1459,6 +1532,57 @@ export const App: React.FC = () => {
   // Laptop Keyboard Shortcuts Listener
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
+      // Repeat toggle with Ctrl+R (Spotify standard) & prevent browser reload
+      if ((e.ctrlKey || e.metaKey) && (e.key === 'r' || e.key === 'R') && !e.shiftKey) {
+        e.preventDefault();
+        handleToggleRepeat();
+        return;
+      }
+      if (e.key === 'F5') {
+        e.preventDefault();
+        return;
+      }
+
+      // Shuffle toggle with Ctrl+S (Spotify standard)
+      if ((e.ctrlKey || e.metaKey) && (e.key === 's' || e.key === 'S')) {
+        e.preventDefault();
+        handleToggleShuffle();
+        return;
+      }
+
+      // New Playlist with Ctrl+N
+      if ((e.ctrlKey || e.metaKey) && (e.key === 'n' || e.key === 'N') && !e.shiftKey) {
+        e.preventDefault();
+        setIsCreatePlaylistOpen(true);
+        return;
+      }
+
+      // Preferences with Ctrl+P
+      if ((e.ctrlKey || e.metaKey) && (e.key === 'p' || e.key === 'P')) {
+        e.preventDefault();
+        setIsSettingsOpen(true);
+        return;
+      }
+
+      // Zoom In / Out / Reset (Ctrl+=, Ctrl+-, Ctrl+0)
+      if ((e.ctrlKey || e.metaKey) && (e.key === '=' || e.key === '+')) {
+        e.preventDefault();
+        const cur = parseFloat(document.body.style.zoom || '1');
+        document.body.style.zoom = String(Math.min(1.5, Math.round((cur + 0.1) * 10) / 10));
+        return;
+      }
+      if ((e.ctrlKey || e.metaKey) && e.key === '-') {
+        e.preventDefault();
+        const cur = parseFloat(document.body.style.zoom || '1');
+        document.body.style.zoom = String(Math.max(0.7, Math.round((cur - 0.1) * 10) / 10));
+        return;
+      }
+      if ((e.ctrlKey || e.metaKey) && e.key === '0') {
+        e.preventDefault();
+        document.body.style.zoom = '1';
+        return;
+      }
+
       if (['INPUT', 'TEXTAREA'].includes((e.target as HTMLElement).tagName)) {
         return;
       }
@@ -1466,12 +1590,20 @@ export const App: React.FC = () => {
       if (e.code === 'Space') {
         e.preventDefault();
         handleTogglePlay();
-      } else if (e.code === 'ArrowRight' && !e.ctrlKey) {
+      } else if (e.code === 'ArrowRight') {
         e.preventDefault();
-        handleNext();
-      } else if (e.code === 'ArrowLeft' && !e.ctrlKey) {
+        if (e.shiftKey) {
+          handleSeek(Math.min(duration, currentTime + 10));
+        } else {
+          handleNext();
+        }
+      } else if (e.code === 'ArrowLeft') {
         e.preventDefault();
-        handlePrev();
+        if (e.shiftKey) {
+          handleSeek(Math.max(0, currentTime - 10));
+        } else {
+          handlePrev();
+        }
       } else if (e.code === 'ArrowUp') {
         e.preventDefault();
         setVolume((v) => {
@@ -1504,7 +1636,7 @@ export const App: React.FC = () => {
 
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [handleTogglePlay, handleNext, handlePrev]);
+  }, [handleTogglePlay, handleNext, handlePrev, handleToggleRepeat, handleToggleShuffle, handleSeek, duration, currentTime]);
 
   const likedCount = likedSongs.length;
   const cachedCount = songs.filter((s) => s.isCached).length;
@@ -1582,6 +1714,11 @@ export const App: React.FC = () => {
           onOpenListenTogether={() => setIsListenTogetherOpen(true)}
           onOpenSettings={() => setIsSettingsOpen(true)}
           onGoSunoNa={() => handleToggleUiMode('sunona')}
+          onLogout={async () => {
+            await authService.signOut();
+            setCurrentUser(null);
+            setIsAuthModalOpen(true);
+          }}
           onRemoveSong={handleRemoveSongFromPlaylist}
           onRemoveFromQueue={handleRemoveSongFromQueue}
         />

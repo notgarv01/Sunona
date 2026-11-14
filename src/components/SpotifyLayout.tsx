@@ -7,17 +7,16 @@
  *   - Floating Mini-Player (PiP window)
  *   - Bottom player bar (pure black, 90px, full control suite with active green dots)
  */
-import React, { useState, useRef, useEffect, useCallback } from 'react';
+import React, { useState, useRef, useEffect, useCallback, useMemo } from 'react';
 import {
-  Home, Search, Bell, Users, ChevronLeft, ChevronRight, Plus, Check, Library, Maximize2,
+  Home, Search, Bell, Users, ChevronLeft, ChevronRight, Plus, Check, Maximize2, Minimize2,
   Play, Pause, SkipBack, SkipForward, Shuffle, Repeat, Repeat1, Volume2, VolumeX, Volume1,
-  Heart, Mic2, ListMusic, PlusCircle, Moon, X, ArrowUpDown,
-  Compass, MoreHorizontal, Laptop, PictureInPicture2,
-  Minus, Square, User
+  Heart, Mic2, ListMusic, PlusCircle, Moon, X,
+  MoreHorizontal, Laptop, PictureInPicture2
 } from 'lucide-react';
 import type { Song, Playlist, Album, DailyDiscoverItem } from '../types';
 import type { TasteProfile } from '../services/historyService';
-import type { UserProfile } from '../services/authService';
+import { authService, type UserProfile } from '../services/authService';
 import { SpotifyHome } from './SpotifyHome';
 import { SpotifyExplore } from './SpotifyExplore';
 import { SpotifyPlaylistView } from './SpotifyPlaylistView';
@@ -29,6 +28,7 @@ import { SpotifyQueuePanel } from './SpotifyQueuePanel';
 import { RosePinkLyricsView } from './RosePinkLyricsView';
 import { LyricReelExportModal } from './LyricReelExportModal';
 import { isInvalidCoverUrl } from '../services/playlistService';
+import { SpotifyLogoIcon } from './Header';
 import '../rose-pink-lyrics.css';
 
 interface SpotifyLayoutProps {
@@ -94,6 +94,7 @@ interface SpotifyLayoutProps {
   onOpenListenTogether: () => void;
   onOpenSettings: () => void;
   onGoSunoNa: () => void; // Switch back to SunoNa mode
+  onLogout?: () => void;
   onRemoveSong?: (playlistId: string, songId: string, index?: number) => void;
   onRemoveFromQueue?: (index: number) => void;
 }
@@ -104,6 +105,52 @@ function formatTime(secs: number) {
   const s = Math.floor(secs % 60);
   return `${m}:${s < 10 ? '0' : ''}${s}`;
 }
+
+const SpotifyBooksIcon = () => (
+  <svg role="img" height="24" width="24" viewBox="0 0 24 24" fill="currentColor">
+    <path d="M3 22a1 1 0 0 1-1-1V3a1 1 0 0 1 2 0v18a1 1 0 0 1-1 1zM8 22a1 1 0 0 1-1-1V3a1 1 0 0 1 2 0v18a1 1 0 0 1-1 1zM15.5 2.134A1 1 0 0 0 14 3v18a1 1 0 0 0 1 1h6a1 1 0 0 0 1-1V3a1 1 0 0 0-1-1h-6.5zm.5 1.866h5v16h-5V4z" />
+  </svg>
+);
+
+const SpotifyCollapseIcon = () => (
+  <svg role="img" height="24" width="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <rect x="3" y="3" width="18" height="18" rx="2.5" />
+    <line x1="9" y1="3" x2="9" y2="21" />
+    <polyline points="15 9 12 12 15 15" />
+  </svg>
+);
+
+const SpotifyExpandIcon = () => (
+  <svg role="img" height="24" width="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <rect x="3" y="3" width="18" height="18" rx="2.5" />
+    <line x1="9" y1="3" x2="9" y2="21" />
+    <polyline points="12 9 15 12 12 15" />
+  </svg>
+);
+
+const SpotifyCompactListIcon = () => (
+  <svg role="img" height="16" width="16" viewBox="0 0 16 16" fill="currentColor">
+    <path d="M1 2.5h14V4H1V2.5zm0 5h14V9H1V7.5zm0 5h14V14H1v-1.5z" />
+  </svg>
+);
+
+const SpotifyListIcon = () => (
+  <svg role="img" height="16" width="16" viewBox="0 0 16 16" fill="currentColor">
+    <path d="M15 14.5H5V13h10v1.5zm0-5.75H5v-1.5h10v1.5zM15 3H5V1.5h10V3zM3 3H1V1.5h2V3zm0 11.5H1V13h2v1.5zm0-5.75H1v-1.5h2v1.5z" />
+  </svg>
+);
+
+const SpotifyCompactGridIcon = () => (
+  <svg role="img" height="16" width="16" viewBox="0 0 16 16" fill="currentColor">
+    <path d="M1 1h3.5v3.5H1V1zm5.25 0h3.5v3.5h-3.5V1zm5.25 0H15v3.5h-3.5V1zM1 6.25h3.5v3.5H1v-3.5zm5.25 0h3.5v3.5h-3.5v-3.5zm5.25 0H15v3.5h-3.5v-3.5zM1 11.5h3.5V15H1v-3.5zm5.25 0h3.5V15h-3.5v-3.5zm5.25 0H15V15h-3.5v-3.5z" />
+  </svg>
+);
+
+const SpotifyGridIcon = () => (
+  <svg role="img" height="16" width="16" viewBox="0 0 16 16" fill="currentColor">
+    <path d="M1 1h6v6H1V1zm8 0h6v6H9V1zM1 9h6v6H1V9zm8 0h6v6H9V9z" />
+  </svg>
+);
 
 export const SpotifyLayout: React.FC<SpotifyLayoutProps> = ({
   currentSong, isPlaying, currentTime, duration, volume, isMuted,
@@ -119,7 +166,7 @@ export const SpotifyLayout: React.FC<SpotifyLayoutProps> = ({
   onToggleNowPlayingView, onOpenNowPlaying: _onOpenNowPlaying, onOpenSleepTimer,
   onCreatePlaylist, onSelectPlaylist, onSelectAlbum,
   setActiveView, onOpenLibrary, onOpenAuth, onOpenProfile,
-  onSelectSong, onOpenListenTogether, onOpenSettings, onGoSunoNa,
+  onSelectSong, onOpenListenTogether, onOpenSettings, onGoSunoNa, onLogout,
   onRemoveSong, onRemoveFromQueue,
 }) => {
   const [spotifyLibTab, setSpotifyLibTab] = useState<'playlists' | 'albums' | 'artists' | null>(null);
@@ -186,6 +233,78 @@ export const SpotifyLayout: React.FC<SpotifyLayoutProps> = ({
     });
   }, [user?.uid]);
   const [showTopMenu, setShowTopMenu] = useState(false);
+  const [activeSubmenu, setActiveSubmenu] = useState<'file' | 'edit' | 'view' | 'playback' | 'help' | null>(null);
+  const [activeTroubleshooting, setActiveTroubleshooting] = useState(false);
+  const [isPrivateSession, setIsPrivateSession] = useState(false);
+  const [isAboutModalOpen, setIsAboutModalOpen] = useState(false);
+  const [isThirdPartyModalOpen, setIsThirdPartyModalOpen] = useState(false);
+  const [menuToast, setMenuToast] = useState<string | null>(null);
+  const [zoomLevel, setZoomLevel] = useState<number>(() => {
+    try {
+      const saved = localStorage.getItem('spotify_zoom_level');
+      return saved ? parseFloat(saved) : 1;
+    } catch {
+      return 1;
+    }
+  });
+
+  const topMenuRef = useRef<HTMLDivElement>(null);
+
+  const showToast = useCallback((msg: string) => {
+    setMenuToast(msg);
+    setTimeout(() => {
+      setMenuToast(null);
+    }, 2800);
+  }, []);
+
+  // Restore zoom on mount
+  useEffect(() => {
+    try {
+      const saved = localStorage.getItem('spotify_zoom_level');
+      if (saved) {
+        document.body.style.zoom = saved;
+      }
+    } catch {}
+  }, []);
+
+  // Click outside to close 3-dots top menu
+  useEffect(() => {
+    if (!showTopMenu) return;
+    const handleClickOutside = (e: MouseEvent) => {
+      if (topMenuRef.current && !topMenuRef.current.contains(e.target as Node)) {
+        setShowTopMenu(false);
+        setActiveSubmenu(null);
+        setActiveTroubleshooting(false);
+      }
+    };
+    window.addEventListener('mousedown', handleClickOutside);
+    return () => window.removeEventListener('mousedown', handleClickOutside);
+  }, [showTopMenu]);
+
+  const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
+  const [isSidebarHovered, setIsSidebarHovered] = useState(false);
+  const [isLibBtnHovered, setIsLibBtnHovered] = useState(false);
+  const [isLibraryEnlarged, setIsLibraryEnlarged] = useState(false);
+  const [showRecentsMenu, setShowRecentsMenu] = useState(false);
+  const [librarySortBy, setLibrarySortBy] = useState<'recents' | 'recently_added' | 'alphabetical' | 'creator'>('recents');
+  const [libraryViewMode, setLibraryViewMode] = useState<'compact_list' | 'list' | 'compact_grid' | 'grid'>('list');
+  const [isLibSearchOpen, setIsLibSearchOpen] = useState(false);
+  const [libSearchQuery, setLibSearchQuery] = useState('');
+  const libSearchInputRef = useRef<HTMLInputElement>(null);
+  const recentsMenuRef = useRef<HTMLDivElement>(null);
+
+  // Click outside to close Recents dropdown menu
+  useEffect(() => {
+    if (!showRecentsMenu) return;
+    const handleClickOutside = (e: MouseEvent) => {
+      if (recentsMenuRef.current && !recentsMenuRef.current.contains(e.target as Node)) {
+        setShowRecentsMenu(false);
+      }
+    };
+    window.addEventListener('mousedown', handleClickOutside);
+    return () => window.removeEventListener('mousedown', handleClickOutside);
+  }, [showRecentsMenu]);
+
   const [isMiniPlayerOpen, setIsMiniPlayerOpen] = useState(false);
   const [isSongViewActive, setIsSongViewActive] = useState(false);
   const [lyricsTheme, setLyricsTheme] = useState<'classic' | 'rose'>('rose');
@@ -535,6 +654,22 @@ export const SpotifyLayout: React.FC<SpotifyLayoutProps> = ({
       })
     : allLibraryItems;
 
+  const sortedLibrary = useMemo(() => {
+    let items = [...filteredLibrary];
+    if (libSearchQuery.trim()) {
+      const q = libSearchQuery.toLowerCase().trim();
+      items = items.filter(it => it.title.toLowerCase().includes(q) || (it.sub && it.sub.toLowerCase().includes(q)));
+    }
+    if (librarySortBy === 'alphabetical') {
+      items.sort((a, b) => a.title.localeCompare(b.title));
+    } else if (librarySortBy === 'creator') {
+      items.sort((a, b) => (a.sub || '').localeCompare(b.sub || ''));
+    } else if (librarySortBy === 'recently_added') {
+      items = [...items].reverse();
+    }
+    return items;
+  }, [filteredLibrary, librarySortBy, libSearchQuery]);
+
   const handleLibraryItemClick = (item: SpotifyLibEntry) => {
     setIsSongViewActive(false);
     if (item.id === 'liked-songs') {
@@ -591,26 +726,360 @@ export const SpotifyLayout: React.FC<SpotifyLayoutProps> = ({
       <div className="sp-titlebar">
         {/* Left: 3-dots menu button + nav arrows */}
         <div className="sp-titlebar-left">
-          <div className="sp-dots-menu-wrap" style={{ position: 'relative' }}>
+          <div className="sp-dots-menu-wrap" ref={topMenuRef} style={{ position: 'relative' }}>
             <button
               className="sp-nav-arrow sp-dots-btn"
-              onClick={() => setShowTopMenu(prev => !prev)}
+              onClick={() => {
+                setShowTopMenu(prev => !prev);
+                setActiveSubmenu(null);
+                setActiveTroubleshooting(false);
+              }}
               title="Spotify menu"
             >
               <MoreHorizontal size={18} />
             </button>
+
             {showTopMenu && (
-              <div className="spotify-top-dropdown" onClick={(e) => e.stopPropagation()}>
-                <button className="spotify-top-menu-item" onClick={() => { onGoSunoNa(); setShowTopMenu(false); }}>
-                  Switch to SunoNa mode
-                </button>
-                <button className="spotify-top-menu-item" onClick={() => { onOpenSettings(); setShowTopMenu(false); }}>
-                  Settings
-                </button>
-                <div className="spotify-top-menu-divider" />
-                <button className="spotify-top-menu-item" onClick={() => setShowTopMenu(false)}>
-                  Close
-                </button>
+              <div className="spotify-desktop-menu-root" onMouseDown={(e) => e.stopPropagation()}>
+                {/* 5 Main Menu Categories */}
+                <div className="spotify-desktop-menu-pane">
+                  <div
+                    className={`spotify-menu-item ${activeSubmenu === 'file' ? 'active' : ''}`}
+                    onMouseEnter={() => { setActiveSubmenu('file'); setActiveTroubleshooting(false); }}
+                    onClick={() => { setActiveSubmenu('file'); setActiveTroubleshooting(false); }}
+                  >
+                    <span>File</span>
+                    <ChevronRight size={14} className="sp-menu-chevron" />
+                  </div>
+                  <div
+                    className={`spotify-menu-item ${activeSubmenu === 'edit' ? 'active' : ''}`}
+                    onMouseEnter={() => { setActiveSubmenu('edit'); setActiveTroubleshooting(false); }}
+                    onClick={() => { setActiveSubmenu('edit'); setActiveTroubleshooting(false); }}
+                  >
+                    <span>Edit</span>
+                    <ChevronRight size={14} className="sp-menu-chevron" />
+                  </div>
+                  <div
+                    className={`spotify-menu-item ${activeSubmenu === 'view' ? 'active' : ''}`}
+                    onMouseEnter={() => { setActiveSubmenu('view'); setActiveTroubleshooting(false); }}
+                    onClick={() => { setActiveSubmenu('view'); setActiveTroubleshooting(false); }}
+                  >
+                    <span>View</span>
+                    <ChevronRight size={14} className="sp-menu-chevron" />
+                  </div>
+                  <div
+                    className={`spotify-menu-item ${activeSubmenu === 'playback' ? 'active' : ''}`}
+                    onMouseEnter={() => { setActiveSubmenu('playback'); setActiveTroubleshooting(false); }}
+                    onClick={() => { setActiveSubmenu('playback'); setActiveTroubleshooting(false); }}
+                  >
+                    <span>Playback</span>
+                    <ChevronRight size={14} className="sp-menu-chevron" />
+                  </div>
+                  <div
+                    className={`spotify-menu-item ${activeSubmenu === 'help' ? 'active' : ''}`}
+                    onMouseEnter={() => { setActiveSubmenu('help'); }}
+                    onClick={() => { setActiveSubmenu('help'); }}
+                  >
+                    <span>Help</span>
+                    <ChevronRight size={14} className="sp-menu-chevron" />
+                  </div>
+                </div>
+
+                {/* Submenu Flyout (Screenshots 2-6: Aligns with hovered item) */}
+                {activeSubmenu && (
+                  <div
+                    className="spotify-desktop-submenu-pane"
+                    style={{
+                      marginTop: `${
+                        activeSubmenu === 'file' ? 0 :
+                        activeSubmenu === 'edit' ? 36 :
+                        activeSubmenu === 'view' ? 72 :
+                        activeSubmenu === 'playback' ? 108 :
+                        144
+                      }px`
+                    }}
+                  >
+                    {/* 1. FILE SUBMENU */}
+                    {activeSubmenu === 'file' && (
+                      <>
+                        <button className="spotify-sub-item" onClick={() => { onCreatePlaylist(); setShowTopMenu(false); }}>
+                          <span>New Playlist</span>
+                          <span className="sp-menu-shortcut">Ctrl+N</span>
+                        </button>
+                        <button className="spotify-sub-item" onClick={() => { onCreatePlaylist(); showToast('New Playlist Folder created'); setShowTopMenu(false); }}>
+                          <span>New Playlist Folder</span>
+                          <span className="sp-menu-shortcut">Ctrl+Shift+N</span>
+                        </button>
+                        <div className="spotify-menu-divider" />
+                        <button className="spotify-sub-item" onClick={() => {
+                          setIsPrivateSession(p => {
+                            const next = !p;
+                            showToast(next ? 'Private Session enabled' : 'Private Session disabled');
+                            return next;
+                          });
+                          setShowTopMenu(false);
+                        }}>
+                          <span>Private Session</span>
+                          {isPrivateSession && <Check size={14} color="#1ed760" />}
+                        </button>
+                        <div className="spotify-menu-divider" />
+                        <button className="spotify-sub-item" onClick={() => {
+                          if (onLogout) onLogout();
+                          else authService.signOut();
+                          setShowTopMenu(false);
+                        }}>
+                          <span>Log Out</span>
+                          <span className="sp-menu-shortcut">Ctrl+Shift+W</span>
+                        </button>
+                        <div className="spotify-menu-divider" />
+                        <button className="spotify-sub-item" onClick={() => {
+                          if ((window as any).electron?.ipcRenderer) {
+                            (window as any).electron.ipcRenderer.send('window-close');
+                          } else {
+                            onGoSunoNa();
+                          }
+                          setShowTopMenu(false);
+                        }}>
+                          <span>Exit</span>
+                          <span className="sp-menu-shortcut">Ctrl+Shift+Q</span>
+                        </button>
+                      </>
+                    )}
+
+                    {/* 2. EDIT SUBMENU */}
+                    {activeSubmenu === 'edit' && (
+                      <>
+                        <button className="spotify-sub-item" onClick={() => { document.execCommand('undo'); setShowTopMenu(false); }}>
+                          <span>Undo</span>
+                          <span className="sp-menu-shortcut">Ctrl+Z</span>
+                        </button>
+                        <button className="spotify-sub-item" onClick={() => { document.execCommand('redo'); setShowTopMenu(false); }}>
+                          <span>Redo</span>
+                          <span className="sp-menu-shortcut">Ctrl+Y</span>
+                        </button>
+                        <div className="spotify-menu-divider" />
+                        <button className="spotify-sub-item" onClick={() => { document.execCommand('cut'); setShowTopMenu(false); }}>
+                          <span>Cut</span>
+                          <span className="sp-menu-shortcut">Ctrl+X</span>
+                        </button>
+                        <button className="spotify-sub-item" onClick={() => { document.execCommand('copy'); setShowTopMenu(false); }}>
+                          <span>Copy</span>
+                          <span className="sp-menu-shortcut">Ctrl+C</span>
+                        </button>
+                        <button className="spotify-sub-item" onClick={() => {
+                          navigator.clipboard?.readText().then(t => {
+                            if (document.activeElement && 'value' in document.activeElement) {
+                              (document.activeElement as HTMLInputElement).value += t;
+                            }
+                          }).catch(() => document.execCommand('paste'));
+                          setShowTopMenu(false);
+                        }}>
+                          <span>Paste</span>
+                          <span className="sp-menu-shortcut">Ctrl+V</span>
+                        </button>
+                        <button className="spotify-sub-item" onClick={() => { document.execCommand('delete'); setShowTopMenu(false); }}>
+                          <span>Delete</span>
+                          <span className="sp-menu-shortcut">Del</span>
+                        </button>
+                        <div className="spotify-menu-divider" />
+                        <button className="spotify-sub-item" onClick={() => { document.execCommand('selectAll'); setShowTopMenu(false); }}>
+                          <span>Select All</span>
+                          <span className="sp-menu-shortcut">Ctrl+A</span>
+                        </button>
+                        <div className="spotify-menu-divider" />
+                        <button className="spotify-sub-item" onClick={() => {
+                          setShowTopMenu(false);
+                          setTimeout(() => { searchInputRef.current?.focus(); searchInputRef.current?.select(); }, 50);
+                        }}>
+                          <span>Search</span>
+                          <span className="sp-menu-shortcut">Ctrl+L</span>
+                        </button>
+                        <button className="spotify-sub-item" onClick={() => {
+                          setShowTopMenu(false);
+                          setTimeout(() => { searchInputRef.current?.focus(); }, 50);
+                        }}>
+                          <span>Filter</span>
+                          <span className="sp-menu-shortcut">Ctrl+F</span>
+                        </button>
+                        <div className="spotify-menu-divider" />
+                        <button className="spotify-sub-item" onClick={() => { onOpenSettings(); setShowTopMenu(false); }}>
+                          <span>Preferences...</span>
+                          <span className="sp-menu-shortcut">Ctrl+P</span>
+                        </button>
+                      </>
+                    )}
+
+                    {/* 3. VIEW SUBMENU */}
+                    {activeSubmenu === 'view' && (
+                      <>
+                        <button className="spotify-sub-item" onClick={() => {
+                          const next = Math.min(1.5, Math.round((zoomLevel + 0.1) * 10) / 10);
+                          setZoomLevel(next);
+                          document.body.style.zoom = String(next);
+                          try { localStorage.setItem('spotify_zoom_level', String(next)); } catch {}
+                          showToast(`Zoom: ${Math.round(next * 100)}%`);
+                          setShowTopMenu(false);
+                        }}>
+                          <span>Zoom In</span>
+                          <span className="sp-menu-shortcut">Ctrl+=</span>
+                        </button>
+                        <button className="spotify-sub-item" onClick={() => {
+                          const next = Math.max(0.7, Math.round((zoomLevel - 0.1) * 10) / 10);
+                          setZoomLevel(next);
+                          document.body.style.zoom = String(next);
+                          try { localStorage.setItem('spotify_zoom_level', String(next)); } catch {}
+                          showToast(`Zoom: ${Math.round(next * 100)}%`);
+                          setShowTopMenu(false);
+                        }}>
+                          <span>Zoom Out</span>
+                          <span className="sp-menu-shortcut">Ctrl+-</span>
+                        </button>
+                        <button className="spotify-sub-item" onClick={() => {
+                          setZoomLevel(1);
+                          document.body.style.zoom = '1';
+                          try { localStorage.setItem('spotify_zoom_level', '1'); } catch {}
+                          showToast('Zoom: 100%');
+                          setShowTopMenu(false);
+                        }}>
+                          <span>Reset Zoom</span>
+                          <span className="sp-menu-shortcut">Ctrl+0</span>
+                        </button>
+                      </>
+                    )}
+
+                    {/* 4. PLAYBACK SUBMENU */}
+                    {activeSubmenu === 'playback' && (
+                      <>
+                        <button className="spotify-sub-item" onClick={() => { onTogglePlay(); setShowTopMenu(false); }}>
+                          <span>{isPlaying ? 'Pause' : 'Play'}</span>
+                          <span className="sp-menu-shortcut">Space</span>
+                        </button>
+                        <div className="spotify-menu-divider" />
+                        <button className="spotify-sub-item" onClick={() => { onNext(); setShowTopMenu(false); }}>
+                          <span>Next</span>
+                          <span className="sp-menu-shortcut">Ctrl+Right Arrow</span>
+                        </button>
+                        <button className="spotify-sub-item" onClick={() => { onPrev(); setShowTopMenu(false); }}>
+                          <span>Previous</span>
+                          <span className="sp-menu-shortcut">Ctrl+Left Arrow</span>
+                        </button>
+                        <button className="spotify-sub-item" onClick={() => { onSeek(Math.min(duration, currentTime + 10)); setShowTopMenu(false); }}>
+                          <span>Seek Forward</span>
+                          <span className="sp-menu-shortcut">Shift+Right Arrow</span>
+                        </button>
+                        <button className="spotify-sub-item" onClick={() => { onSeek(Math.max(0, currentTime - 10)); setShowTopMenu(false); }}>
+                          <span>Seek Backward</span>
+                          <span className="sp-menu-shortcut">Shift+Left Arrow</span>
+                        </button>
+                        <div className="spotify-menu-divider" />
+                        <button className="spotify-sub-item" onClick={() => {
+                          onToggleShuffle();
+                          showToast(`Shuffle: ${!isShuffle ? 'On' : 'Off'}`);
+                          setShowTopMenu(false);
+                        }}>
+                          <span>Shuffle</span>
+                          <span className="sp-menu-shortcut">Ctrl+S</span>
+                        </button>
+                        <button className="spotify-sub-item" onClick={() => {
+                          onToggleRepeat();
+                          const nextMode = repeatMode === 'off' ? 'All' : repeatMode === 'all' ? 'One' : 'Off';
+                          showToast(`Repeat: ${nextMode}`);
+                          setShowTopMenu(false);
+                        }}>
+                          <span>Repeat</span>
+                          <span className="sp-menu-shortcut">Ctrl+R</span>
+                        </button>
+                        <div className="spotify-menu-divider" />
+                        <button className="spotify-sub-item" onClick={() => {
+                          const next = Math.min(1, Math.round((volume + 0.1) * 10) / 10);
+                          onVolumeChange(next);
+                          showToast(`Volume: ${Math.round(next * 100)}%`);
+                          setShowTopMenu(false);
+                        }}>
+                          <span>Volume Up</span>
+                          <span className="sp-menu-shortcut">Ctrl+Up Arrow</span>
+                        </button>
+                        <button className="spotify-sub-item" onClick={() => {
+                          const next = Math.max(0, Math.round((volume - 0.1) * 10) / 10);
+                          onVolumeChange(next);
+                          showToast(`Volume: ${Math.round(next * 100)}%`);
+                          setShowTopMenu(false);
+                        }}>
+                          <span>Volume Down</span>
+                          <span className="sp-menu-shortcut">Ctrl+Down Arrow</span>
+                        </button>
+                      </>
+                    )}
+
+                    {/* 5. HELP SUBMENU */}
+                    {activeSubmenu === 'help' && (
+                      <>
+                        <button className="spotify-sub-item" onClick={() => {
+                          window.open('https://support.spotify.com', '_blank', 'noopener,noreferrer');
+                          setShowTopMenu(false);
+                        }}>
+                          <span>Spotify Help</span>
+                          <span className="sp-menu-shortcut">F1</span>
+                        </button>
+                        <button className="spotify-sub-item" onClick={() => {
+                          window.open('https://community.spotify.com', '_blank', 'noopener,noreferrer');
+                          setShowTopMenu(false);
+                        }}>
+                          <span>Spotify Community</span>
+                        </button>
+                        <button className="spotify-sub-item" onClick={() => {
+                          if (user) onOpenProfile(); else onOpenAuth();
+                          setShowTopMenu(false);
+                        }}>
+                          <span>Your Account</span>
+                        </button>
+                        <div className="spotify-menu-divider" />
+                        <button className="spotify-sub-item" onClick={() => {
+                          setIsThirdPartyModalOpen(true);
+                          setShowTopMenu(false);
+                        }}>
+                          <span>Third-party Software</span>
+                        </button>
+                        <div
+                          className="spotify-sub-item sp-sub-has-flyout"
+                          onMouseEnter={() => setActiveTroubleshooting(true)}
+                          onClick={() => setActiveTroubleshooting(p => !p)}
+                        >
+                          <span>Troubleshooting</span>
+                          <ChevronRight size={14} className="sp-menu-chevron" />
+                          {activeTroubleshooting && (
+                            <div className="spotify-desktop-sub-submenu-pane" onClick={e => e.stopPropagation()}>
+                              <button className="spotify-sub-item" onClick={() => window.location.reload()}>
+                                <span>Reload Page</span>
+                                <span className="sp-menu-shortcut">Ctrl+Shift+R</span>
+                              </button>
+                              <button className="spotify-sub-item" onClick={() => {
+                                localStorage.clear();
+                                showToast('Cache cleared. Reloading...');
+                                setTimeout(() => window.location.reload(), 800);
+                              }}>
+                                <span>Clear Cache</span>
+                              </button>
+                              <button className="spotify-sub-item" onClick={() => {
+                                onGoSunoNa();
+                                setShowTopMenu(false);
+                              }}>
+                                <span>Switch to SunoNa Mode</span>
+                              </button>
+                            </div>
+                          )}
+                        </div>
+                        <div className="spotify-menu-divider" />
+                        <button className="spotify-sub-item" onClick={() => {
+                          setIsAboutModalOpen(true);
+                          setShowTopMenu(false);
+                        }}>
+                          <span>About Spotify</span>
+                        </button>
+                      </>
+                    )}
+                  </div>
+                )}
               </div>
             )}
           </div>
@@ -686,7 +1155,9 @@ export const SpotifyLayout: React.FC<SpotifyLayoutProps> = ({
               }}
               title="Browse"
             >
-              <Compass size={18} />
+              <svg role="img" height="20" width="20" aria-hidden="true" viewBox="0 0 24 24" fill="currentColor">
+                <path d="M3 4.5A1.5 1.5 0 0 1 4.5 3h15A1.5 1.5 0 0 1 21 4.5v3A1.5 1.5 0 0 1 19.5 9H4.5A1.5 1.5 0 0 1 3 7.5v-3zM4.5 10.5h15a1.5 1.5 0 0 1 1.5 1.5v6a3 3 0 0 1-3 3h-12a3 3 0 0 1-3-3v-6a1.5 1.5 0 0 1 1.5-1.5zm6 4.5a.75.75 0 0 0 0 1.5h3a.75.75 0 0 0 0-1.5h-3z" />
+              </svg>
             </button>
 
             {/* Spotify 1:1 Search dropdown */}
@@ -848,20 +1319,10 @@ export const SpotifyLayout: React.FC<SpotifyLayoutProps> = ({
           </div>
         </div>
 
-        {/* Right: Mode toggle + Bell + Friends + Avatar + Windows Controls */}
+        {/* Right: UI Mode toggle pill + Bell + Friends + Avatar */}
         <div className="sp-titlebar-right">
-          {/* Segmented Mode toggle pill */}
+          {/* Segmented Mode toggle pill (Consistent SunoNa | Spotify order with Green Spotify Logo) */}
           <div className="header-ui-mode-pill sp-mode-segmented">
-            <button
-              className="header-ui-mode-btn active"
-              onClick={(e) => { e.stopPropagation(); }}
-              title="Spotify Desktop UI (Active)"
-            >
-              <svg width="13" height="13" viewBox="0 0 24 24" fill="currentColor">
-                <path d="M12 0C5.4 0 0 5.4 0 12s5.4 12 12 12 12-5.4 12-12S18.66 0 12 0zm5.521 17.34c-.24.359-.66.48-1.021.24-2.82-1.74-6.36-2.101-10.561-1.141-.418.122-.779-.179-.899-.539-.12-.421.18-.78.54-.9 4.56-1.021 8.52-.6 11.64 1.32.42.18.479.659.301 1.02zm1.44-3.3c-.301.42-.841.6-1.262.3-3.239-1.98-8.159-2.58-11.939-1.38-.479.12-1.02-.12-1.14-.6-.12-.48.12-1.021.6-1.141C9.6 9.9 15 10.561 18.72 12.84c.361.181.54.78.241 1.2zm.12-3.36C15.24 8.4 8.82 8.16 5.16 9.301c-.6.179-1.2-.181-1.38-.721-.18-.601.18-1.2.72-1.381 4.26-1.26 11.28-1.02 15.721 1.621.539.3.719 1.02.419 1.56-.299.421-1.02.599-1.559.3z" />
-              </svg>
-              <span>Spotify</span>
-            </button>
             <button
               className="header-ui-mode-btn"
               onClick={onGoSunoNa}
@@ -870,49 +1331,34 @@ export const SpotifyLayout: React.FC<SpotifyLayoutProps> = ({
               <img
                 src="/logo.jpg"
                 alt="SunoNa"
+                className={isPlaying ? 'spinning-disc-icon' : ''}
                 style={{ width: '13px', height: '13px', borderRadius: '50%', objectFit: 'cover' }}
               />
               <span>SunoNa</span>
+            </button>
+            <button
+              className="header-ui-mode-btn active"
+              onClick={(e) => { e.stopPropagation(); }}
+              title="Spotify Desktop UI (Active)"
+            >
+              <SpotifyLogoIcon size={14} />
+              <span>Spotify</span>
             </button>
           </div>
 
           <button className="sp-icon-btn" title="What's New / Notifications"><Bell size={18} /></button>
           <button className="sp-icon-btn" title="Friend Activity" onClick={onOpenListenTogether}><Users size={18} /></button>
 
-          {/* Profile Avatar */}
-          {user ? (
-            <button className="sp-avatar-btn" onClick={onOpenProfile} title={user.displayName || 'Profile'}>
-              {user.photoURL ? (
-                <img
-                  src={user.photoURL}
-                  alt={user.displayName || 'avatar'}
-                  className="sp-avatar-img"
-                  onError={(e) => {
-                    (e.currentTarget as HTMLElement).style.display = 'none';
-                  }}
-                />
-              ) : (
-                <span className="sp-avatar-letter">{(user.displayName || 'U')[0].toUpperCase()}</span>
-              )}
-            </button>
-          ) : (
-            <button className="sp-avatar-btn" onClick={onOpenAuth} title="Sign In">
-              <User size={15} />
-            </button>
-          )}
-
-          {/* Windows titlebar control buttons (Screenshot 426: — □ ✕) */}
-          <div className="sp-win-controls">
-            <button className="sp-win-btn" title="Minimize">
-              <Minus size={14} />
-            </button>
-            <button className="sp-win-btn" onClick={toggleFullscreen} title="Maximize">
-              <Square size={12} />
-            </button>
-            <button className="sp-win-btn sp-win-btn-close" onClick={onGoSunoNa} title="Close / Switch Mode">
-              <X size={14} />
-            </button>
-          </div>
+          {/* Profile Avatar (matching Spotify Image 1 - circular lavender badge with bold initial) */}
+          <button
+            className="sp-avatar-btn"
+            onClick={user ? onOpenProfile : onOpenAuth}
+            title={user ? (user.displayName || 'Profile') : 'Profile'}
+          >
+            <span className="sp-avatar-letter">
+              {(user?.displayName || 'G')[0].toUpperCase()}
+            </span>
+          </button>
         </div>
       </div>
 
@@ -920,133 +1366,304 @@ export const SpotifyLayout: React.FC<SpotifyLayoutProps> = ({
           MAIN AREA: Sidebar + Content + (Right Panel)
           Per mera design.txt: In Lyrics mode, sidebar is hidden!
           ══════════════════════════════════════════════════════ */}
-      <div className={`sp-main ${showRightPanel ? 'rp-open' : ''} ${isLyricsOpen ? 'lyrics-mode-main' : ''}`}>
+      <div className={`sp-main ${showRightPanel ? 'rp-open' : ''} ${isLyricsOpen ? 'lyrics-mode-main' : ''} ${isSidebarCollapsed ? 'sidebar-collapsed' : ''} ${isLibraryEnlarged && !isSidebarCollapsed ? 'sidebar-enlarged' : ''}`}>
 
         {/* ── LEFT SIDEBAR (Hidden during full lyrics view) ── */}
         {!isLyricsOpen && (
-          <aside className="sp-sidebar">
-            {/* Top box: Home + Search nav */}
-            <div className="sp-sidebar-top">
-              <button
-                className={`sp-sidebar-nav-row ${activeView === 'home' && !isSongViewActive ? 'active' : ''}`}
-                onClick={() => {
-                  setIsSongViewActive(false);
-                  setActiveView('home');
-                }}
-              >
-                <Home size={24} className="sp-sidebar-icon" fill={activeView === 'home' && !isSongViewActive ? '#ffffff' : 'none'} />
-                <span>Home</span>
-              </button>
-              <button
-                className={`sp-sidebar-nav-row ${activeView === 'explore' && !isSongViewActive ? 'active' : ''}`}
-                onClick={() => {
-                  setIsSongViewActive(false);
-                  setActiveView('explore');
-                }}
-              >
-                <Search size={24} className="sp-sidebar-icon" />
-                <span>Search</span>
-              </button>
-            </div>
+          <aside
+            className={`sp-sidebar ${isSidebarCollapsed ? 'collapsed' : ''} ${isLibraryEnlarged && !isSidebarCollapsed ? 'enlarged' : ''}`}
+            onMouseEnter={() => setIsSidebarHovered(true)}
+            onMouseLeave={() => { setIsSidebarHovered(false); setIsLibBtnHovered(false); }}
+          >
+            {!isSidebarCollapsed ? (
+              /* Expanded Library Box (280px / 420px) */
+              <div className="sp-sidebar-library">
+                {/* Library header: collapse button appears only on sidebar hover */}
+                <div className="sp-lib-header">
+                  <div className="sp-lib-heading">
+                    <button
+                      className={`sp-lib-collapse-btn ${isSidebarHovered ? 'visible' : ''}`}
+                      onClick={() => setIsSidebarCollapsed(true)}
+                      title="Collapse Your Library"
+                      aria-label="Collapse Your Library"
+                    >
+                      <SpotifyCollapseIcon />
+                    </button>
+                    <span className="sp-lib-title">Your Library</span>
+                  </div>
+                  <div className="sp-lib-actions">
+                    <button className="sp-lib-icon-btn" onClick={onCreatePlaylist} title="Create playlist or folder">
+                      <Plus size={20} />
+                    </button>
+                    <button
+                      className="sp-lib-icon-btn"
+                      onClick={() => setIsLibraryEnlarged(prev => !prev)}
+                      title={isLibraryEnlarged ? "Reduce Your Library" : "Enlarge Your Library"}
+                    >
+                      {isLibraryEnlarged ? <Minimize2 size={16} /> : <Maximize2 size={16} />}
+                    </button>
+                  </div>
+                </div>
 
-            {/* Library box */}
-            <div className="sp-sidebar-library">
-              {/* Library header */}
-              <div className="sp-lib-header">
-                <button className="sp-lib-title-btn" onClick={() => onOpenLibrary()}>
-                  <Library size={24} className="sp-sidebar-icon" />
-                  <span className="sp-lib-title">Your Library</span>
-                </button>
-                <div className="sp-lib-actions">
-                  <button className="sp-lib-icon-btn" onClick={onCreatePlaylist} title="Create playlist or folder">
-                    <Plus size={20} />
+                {/* Filter chips */}
+                <div className="sp-lib-chips">
+                  <button
+                    className={`sp-lib-chip ${spotifyLibTab === 'playlists' ? 'active' : ''}`}
+                    onClick={() => setSpotifyLibTab(prev => prev === 'playlists' ? null : 'playlists')}
+                  >Playlists</button>
+                  <button
+                    className={`sp-lib-chip ${spotifyLibTab === 'albums' ? 'active' : ''}`}
+                    onClick={() => setSpotifyLibTab(prev => prev === 'albums' ? null : 'albums')}
+                  >Albums</button>
+                  <button
+                    className={`sp-lib-chip ${spotifyLibTab === 'artists' ? 'active' : ''}`}
+                    onClick={() => setSpotifyLibTab(prev => prev === 'artists' ? null : 'artists')}
+                  >Artists</button>
+                </div>
+
+                {/* Search + Recents row (Matching Spotify Image 1 / media_1794649491037_c3dd43b9.png) */}
+                <div className="sp-lib-search-row" ref={recentsMenuRef}>
+                  {isLibSearchOpen ? (
+                    <div className="sp-lib-search-input-wrap">
+                      <Search size={14} className="sp-lib-search-input-icon" />
+                      <input
+                        ref={libSearchInputRef}
+                        type="text"
+                        className="sp-lib-search-input"
+                        placeholder="Search in Your Library"
+                        value={libSearchQuery}
+                        onChange={e => setLibSearchQuery(e.target.value)}
+                        autoFocus
+                      />
+                      <button
+                        className="sp-lib-search-close-btn"
+                        onClick={() => { setIsLibSearchOpen(false); setLibSearchQuery(''); }}
+                        title="Close search"
+                      >
+                        <X size={14} />
+                      </button>
+                    </div>
+                  ) : (
+                    <button
+                      className="sp-lib-search-btn"
+                      onClick={() => {
+                        setIsLibSearchOpen(true);
+                        setTimeout(() => libSearchInputRef.current?.focus(), 50);
+                      }}
+                      title="Search in Your Library"
+                    >
+                      <Search size={16} />
+                    </button>
+                  )}
+
+                  <button
+                    className="sp-lib-recents-btn"
+                    onClick={() => setShowRecentsMenu(prev => !prev)}
+                    title="Sort and view options"
+                  >
+                    <span className="sp-lib-recents-label">
+                      {librarySortBy === 'recents' ? 'Recents' :
+                       librarySortBy === 'recently_added' ? 'Recently added' :
+                       librarySortBy === 'alphabetical' ? 'Alphabetical' : 'Creator'}
+                    </span>
+                    {libraryViewMode === 'compact_list' ? <SpotifyCompactListIcon /> :
+                     libraryViewMode === 'compact_grid' ? <SpotifyCompactGridIcon /> :
+                     libraryViewMode === 'grid' ? <SpotifyGridIcon /> :
+                     <SpotifyListIcon />}
                   </button>
-                  <button className="sp-lib-icon-btn" onClick={() => onOpenLibrary()} title="Expand library">
-                    <Maximize2 size={16} />
-                  </button>
+
+                  {/* Recents Dropdown Menu (Matching Image 1 / media_1794647540532_8401c08d.png) */}
+                  {showRecentsMenu && (
+                    <div className="spotify-recents-dropdown" onMouseDown={e => e.stopPropagation()}>
+                      <div className="sp-recents-header">Sort by</div>
+                      <button
+                        className={`sp-recents-item ${librarySortBy === 'recents' ? 'active' : ''}`}
+                        onClick={() => { setLibrarySortBy('recents'); setShowRecentsMenu(false); }}
+                      >
+                        <span style={{ color: librarySortBy === 'recents' ? '#1ed760' : 'inherit' }}>Recents</span>
+                        {librarySortBy === 'recents' && <Check size={16} color="#1ed760" />}
+                      </button>
+                      <button
+                        className={`sp-recents-item ${librarySortBy === 'recently_added' ? 'active' : ''}`}
+                        onClick={() => { setLibrarySortBy('recently_added'); setShowRecentsMenu(false); }}
+                      >
+                        <span style={{ color: librarySortBy === 'recently_added' ? '#1ed760' : 'inherit' }}>Recently added</span>
+                        {librarySortBy === 'recently_added' && <Check size={16} color="#1ed760" />}
+                      </button>
+                      <button
+                        className={`sp-recents-item ${librarySortBy === 'alphabetical' ? 'active' : ''}`}
+                        onClick={() => { setLibrarySortBy('alphabetical'); setShowRecentsMenu(false); }}
+                      >
+                        <span style={{ color: librarySortBy === 'alphabetical' ? '#1ed760' : 'inherit' }}>Alphabetical</span>
+                        {librarySortBy === 'alphabetical' && <Check size={16} color="#1ed760" />}
+                      </button>
+                      <button
+                        className={`sp-recents-item ${librarySortBy === 'creator' ? 'active' : ''}`}
+                        onClick={() => { setLibrarySortBy('creator'); setShowRecentsMenu(false); }}
+                      >
+                        <span style={{ color: librarySortBy === 'creator' ? '#1ed760' : 'inherit' }}>Creator</span>
+                        {librarySortBy === 'creator' && <Check size={16} color="#1ed760" />}
+                      </button>
+
+                      <div className="sp-recents-header" style={{ marginTop: '12px' }}>View as</div>
+                      <div className="sp-recents-view-toggles">
+                        <button
+                          className={`sp-recents-view-btn ${libraryViewMode === 'compact_list' ? 'active' : ''}`}
+                          onClick={() => { setLibraryViewMode('compact_list'); setShowRecentsMenu(false); }}
+                          title="Compact list"
+                        >
+                          <SpotifyCompactListIcon />
+                        </button>
+                        <button
+                          className={`sp-recents-view-btn ${libraryViewMode === 'list' ? 'active' : ''}`}
+                          onClick={() => { setLibraryViewMode('list'); setShowRecentsMenu(false); }}
+                          title="List"
+                        >
+                          <SpotifyListIcon />
+                        </button>
+                        <button
+                          className={`sp-recents-view-btn ${libraryViewMode === 'compact_grid' ? 'active' : ''}`}
+                          onClick={() => { setLibraryViewMode('compact_grid'); setShowRecentsMenu(false); }}
+                          title="Compact grid"
+                        >
+                          <SpotifyCompactGridIcon />
+                        </button>
+                        <button
+                          className={`sp-recents-view-btn ${libraryViewMode === 'grid' ? 'active' : ''}`}
+                          onClick={() => { setLibraryViewMode('grid'); setShowRecentsMenu(false); }}
+                          title="Grid"
+                        >
+                          <SpotifyGridIcon />
+                        </button>
+                      </div>
+                    </div>
+                  )}
+                </div>
+
+                {/* Library items list */}
+                <div className={`sp-lib-items view-${libraryViewMode}`}>
+                  {sortedLibrary.map(item => {
+                    const isActive = (selectedPlaylistId === item.id) ||
+                      (activeView === 'library' && item.id === 'liked-songs');
+                    const isLiked = item.id === 'liked-songs';
+                    const isNowPlaying = !!(currentSong && (
+                      (item.type === 'album' && currentSong.album === item.title) ||
+                      (item.type === 'playlist' && playlists.find(p => p.id === item.id)?.songs?.some(s => s.id === currentSong.id))
+                    ));
+
+                    return (
+                      <button
+                        key={item.id}
+                        className={`sp-lib-item ${isActive ? 'active' : ''} ${isNowPlaying ? 'is-playing' : ''}`}
+                        onClick={() => handleLibraryItemClick(item)}
+                      >
+                        <div className={`sp-lib-item-cover ${isLiked ? 'liked-cover' : ''} ${item.isArtist ? 'sp-artist-circle' : ''}`}>
+                          {isLiked ? (
+                            <Heart size={20} fill="#ffffff" color="#ffffff" />
+                          ) : item.coverUrl ? (
+                            <img
+                              src={item.coverUrl}
+                              alt={item.title}
+                              onLoad={(e) => {
+                                const img = e.target as HTMLImageElement;
+                                if (img.naturalWidth === 120 && img.naturalHeight === 90) {
+                                  img.src = item.isArtist ? '/images/ylx-artist-row-placeholder.webp' : 'https://images.unsplash.com/photo-1511671782779-c97d3d27a1d4?w=500&auto=format&fit=crop&q=80';
+                                }
+                              }}
+                              onError={(e) => {
+                                const img = e.target as HTMLImageElement;
+                                img.src = item.isArtist ? '/images/ylx-artist-row-placeholder.webp' : 'https://images.unsplash.com/photo-1511671782779-c97d3d27a1d4?w=500&auto=format&fit=crop&q=80';
+                              }}
+                            />
+                          ) : (
+                            <div className="sp-lib-item-placeholder">
+                              <ListMusic size={18} />
+                            </div>
+                          )}
+                        </div>
+                        <div className="sp-lib-item-meta">
+                          <span className="sp-lib-item-title">{item.title}</span>
+                          <span className="sp-lib-item-sub">
+                            {isLiked && (
+                              <svg className="sp-pin-icon" width="12" height="12" viewBox="0 0 24 24" fill="#1ed760" style={{ display: 'inline', verticalAlign: '-1px', marginRight: 4 }}>
+                                <path d="M16 12V4h1V2H7v2h1v8l-2 2v2h5.2v6h1.6v-6H18v-2l-2-2z"/>
+                              </svg>
+                            )}
+                            {item.sub}
+                          </span>
+                        </div>
+                      </button>
+                    );
+                  })}
                 </div>
               </div>
-
-              {/* Filter chips */}
-              <div className="sp-lib-chips">
+            ) : (
+              /* Collapsed Library Rail (72px) - Images 4, 5, 6 */
+              <div className="sp-sidebar-library collapsed-library">
+                {/* Top: Morphing library button */}
                 <button
-                  className={`sp-lib-chip ${spotifyLibTab === 'playlists' ? 'active' : ''}`}
-                  onClick={() => setSpotifyLibTab(prev => prev === 'playlists' ? null : 'playlists')}
-                >Playlists</button>
+                  className="sp-collapsed-lib-btn"
+                  onClick={() => setIsSidebarCollapsed(false)}
+                  onMouseEnter={() => setIsLibBtnHovered(true)}
+                  onMouseLeave={() => setIsLibBtnHovered(false)}
+                  title="Open Your Library"
+                  aria-label="Open Your Library"
+                >
+                  {isLibBtnHovered ? (
+                    <SpotifyExpandIcon />
+                  ) : (
+                    <SpotifyBooksIcon />
+                  )}
+                </button>
+
+                {/* Circular + button */}
                 <button
-                  className={`sp-lib-chip ${spotifyLibTab === 'albums' ? 'active' : ''}`}
-                  onClick={() => setSpotifyLibTab(prev => prev === 'albums' ? null : 'albums')}
-                >Albums</button>
-                <button
-                  className={`sp-lib-chip ${spotifyLibTab === 'artists' ? 'active' : ''}`}
-                  onClick={() => setSpotifyLibTab(prev => prev === 'artists' ? null : 'artists')}
-                >Artists</button>
-              </div>
+                  className="sp-collapsed-add-btn"
+                  onClick={onCreatePlaylist}
+                  title="Create playlist or folder"
+                >
+                  <Plus size={18} />
+                </button>
 
-              {/* Search + sort row */}
-              <div className="sp-lib-search-row">
-                <button className="sp-lib-icon-btn" title="Search in Your Library"><Search size={16} /></button>
-                <span className="sp-lib-recents">Recents</span>
-                <button className="sp-lib-icon-btn" title="Sort by Recents"><ArrowUpDown size={16} /></button>
-              </div>
+                {/* Vertical Stack of square tiles */}
+                <div className="sp-collapsed-items">
+                  {sortedLibrary.map(item => {
+                    const isActive = (selectedPlaylistId === item.id) ||
+                      (activeView === 'library' && item.id === 'liked-songs');
+                    const isLiked = item.id === 'liked-songs';
 
-              {/* Library items list */}
-              <div className="sp-lib-items">
-                {filteredLibrary.map(item => {
-                  const isActive = (selectedPlaylistId === item.id) ||
-                    (activeView === 'library' && item.id === 'liked-songs');
-                  const isLiked = item.id === 'liked-songs';
-                  const isNowPlaying = !!(currentSong && (
-                    (item.type === 'album' && currentSong.album === item.title) ||
-                    (item.type === 'playlist' && playlists.find(p => p.id === item.id)?.songs?.some(s => s.id === currentSong.id))
-                  ));
-
-                  return (
-                    <button
-                      key={item.id}
-                      className={`sp-lib-item ${isActive ? 'active' : ''} ${isNowPlaying ? 'is-playing' : ''}`}
-                      onClick={() => handleLibraryItemClick(item)}
-                    >
-                      <div className={`sp-lib-item-cover ${isLiked ? 'liked-cover' : ''} ${item.isArtist ? 'sp-artist-circle' : ''}`}>
+                    return (
+                      <button
+                        key={item.id}
+                        className={`sp-collapsed-item-tile ${isActive ? 'active' : ''}`}
+                        onClick={() => handleLibraryItemClick(item)}
+                        title={`${item.title} • ${item.sub || 'Playlist'}`}
+                      >
                         {isLiked ? (
-                          <Heart size={20} fill="#ffffff" color="#ffffff" />
+                          <div className="sp-collapsed-liked-cover">
+                            <Heart size={18} fill="#ffffff" color="#ffffff" />
+                          </div>
                         ) : item.coverUrl ? (
                           <img
                             src={item.coverUrl}
                             alt={item.title}
-                            onLoad={(e) => {
-                              const img = e.target as HTMLImageElement;
-                              if (img.naturalWidth === 120 && img.naturalHeight === 90) {
-                                img.src = item.isArtist ? '/images/ylx-artist-row-placeholder.webp' : 'https://images.unsplash.com/photo-1511671782779-c97d3d27a1d4?w=500&auto=format&fit=crop&q=80';
-                              }
-                            }}
+                            className={`sp-collapsed-img ${item.isArtist ? 'sp-artist-circle' : ''}`}
                             onError={(e) => {
                               const img = e.target as HTMLImageElement;
                               img.src = item.isArtist ? '/images/ylx-artist-row-placeholder.webp' : 'https://images.unsplash.com/photo-1511671782779-c97d3d27a1d4?w=500&auto=format&fit=crop&q=80';
                             }}
                           />
                         ) : (
-                          <div className="sp-lib-item-placeholder">
+                          <div className="sp-collapsed-placeholder">
                             <ListMusic size={18} />
                           </div>
                         )}
-                      </div>
-                      <div className="sp-lib-item-meta">
-                        <span className="sp-lib-item-title">{item.title}</span>
-                        <span className="sp-lib-item-sub">
-                          {isLiked && (
-                            <svg className="sp-pin-icon" width="12" height="12" viewBox="0 0 24 24" fill="#1ed760" style={{ display: 'inline', verticalAlign: '-1px', marginRight: 4 }}>
-                              <path d="M16 12V4h1V2H7v2h1v8l-2 2v2h5.2v6h1.6v-6H18v-2l-2-2z"/>
-                            </svg>
-                          )}
-                          {item.sub}
-                        </span>
-                      </div>
-                    </button>
-                  );
-                })}
+                      </button>
+                    );
+                  })}
+                </div>
               </div>
-            </div>
+            )}
           </aside>
         )}
 
@@ -1551,6 +2168,58 @@ export const SpotifyLayout: React.FC<SpotifyLayoutProps> = ({
         isOpen={isReelExportOpen}
         onClose={() => setIsReelExportOpen(false)}
       />
+
+      {/* Spotify 1:1 About Modal */}
+      {isAboutModalOpen && (
+        <div className="sp-modal-overlay" onClick={() => setIsAboutModalOpen(false)}>
+          <div className="spotify-about-modal" onClick={(e) => e.stopPropagation()}>
+            <button className="spotify-about-close" onClick={() => setIsAboutModalOpen(false)} title="Close">
+              <X size={18} />
+            </button>
+            <div className="spotify-about-logo">
+              <svg width="60" height="60" viewBox="0 0 24 24" fill="#1ed760">
+                <path d="M12 0C5.4 0 0 5.4 0 12s5.4 12 12 12 12-5.4 12-12S18.66 0 12 0zm5.521 17.34c-.24.359-.66.48-1.021.24-2.82-1.74-6.36-2.101-10.561-1.141-.418.122-.779-.179-.899-.539-.12-.421.18-.78.54-.9 4.56-1.021 8.52-.6 11.64 1.32.42.18.479.659.301 1.02zm1.44-3.3c-.301.42-.841.6-1.262.3-3.239-1.98-8.159-2.58-11.939-1.38-.479.12-1.02-.12-1.14-.6-.12-.48.12-1.021.6-1.141C9.6 9.9 15 10.561 18.72 12.84c.361.181.54.78.241 1.2zm.12-3.36C15.24 8.4 8.82 8.16 5.16 9.301c-.6.179-1.2-.181-1.38-.721-.18-.601.18-1.2.72-1.381 4.26-1.26 11.28-1.02 15.721 1.621.539.3.719 1.02.419 1.56-.299.421-1.02.599-1.559.3z" />
+              </svg>
+            </div>
+            <h2 className="spotify-about-title">Spotify for Windows (64 bit)</h2>
+            <p className="spotify-about-version">1.2.45.454.gc16ecf9f</p>
+            <p className="spotify-about-sub">Powered by SunoNa Engine v2.0</p>
+            <div className="spotify-about-divider" />
+            <p className="spotify-about-copy">Copyright © 2026 Spotify AB</p>
+          </div>
+        </div>
+      )}
+
+      {/* Third-party Software Modal */}
+      {isThirdPartyModalOpen && (
+        <div className="sp-modal-overlay" onClick={() => setIsThirdPartyModalOpen(false)}>
+          <div className="spotify-about-modal" style={{ maxWidth: '500px', textAlign: 'left' }} onClick={(e) => e.stopPropagation()}>
+            <button className="spotify-about-close" onClick={() => setIsThirdPartyModalOpen(false)} title="Close">
+              <X size={18} />
+            </button>
+            <h2 className="spotify-about-title" style={{ marginBottom: '14px' }}>Third-party Software Notices</h2>
+            <div style={{ maxHeight: '300px', overflowY: 'auto', fontSize: '13px', color: '#b3b3b3', lineHeight: '1.6' }}>
+              <p>This software incorporates components licensed under open-source software licenses:</p>
+              <ul style={{ paddingLeft: '18px', marginTop: '10px' }}>
+                <li>React & React DOM — MIT License</li>
+                <li>Lucide Icons — ISC License</li>
+                <li>Vite Build System — MIT License</li>
+                <li>Electron Platform — MIT License</li>
+                <li>Firebase Web SDK — Apache 2.0 License</li>
+              </ul>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Action Notification Toast */}
+      {menuToast && (
+        <div className="spotify-menu-toast">
+          {menuToast}
+        </div>
+      )}
     </div>
   );
 };
+
+export default SpotifyLayout;

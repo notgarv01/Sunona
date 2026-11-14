@@ -5,6 +5,7 @@
   "main": "index.mjs",
   "type": "module",
   "scripts": {
+    "build": "echo 'Ready for deployment'",
     "start": "node index.mjs"
   },
   "dependencies": {

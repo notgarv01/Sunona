@@ -62,7 +62,7 @@ export default async function handler(req, res) {
   }
 
   // If a dedicated Render backend is configured, forward seamlessly
-  const renderBackend = (process.env.RENDER_BACKEND_URL || process.env.BACKEND_URL || '').replace(/\/+$/, '');
+  const renderBackend = (process.env.RENDER_BACKEND_URL || process.env.BACKEND_URL || 'https://sunona-72ni.onrender.com').replace(/\/+$/, '');
   if (renderBackend) {
     try {
       const targetUrl = `${renderBackend}${req.url}`;

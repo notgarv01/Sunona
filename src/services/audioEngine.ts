@@ -81,7 +81,7 @@ class AudioEngine {
     this.updateMediaSession(song);
 
     // Stream directly through local or Render proxy endpoint (with title & artist for seamless on-the-fly resolution)
-    const backendBase = ((import.meta as any).env?.VITE_BACKEND_URL || (window as any).SUNONA_BACKEND_URL || '').replace(/\/+$/, '');
+    const backendBase = ((import.meta as any).env?.VITE_BACKEND_URL || (window as any).SUNONA_BACKEND_URL || 'https://sunona-72ni.onrender.com').replace(/\/+$/, '');
     const streamUrl = `${backendBase}/api/stream?id=${encodeURIComponent(song.id)}&title=${encodeURIComponent(song.title || '')}&artist=${encodeURIComponent(song.artist || '')}`;
     
     if (this.audio.src !== streamUrl) {

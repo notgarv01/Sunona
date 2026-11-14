@@ -34,6 +34,7 @@ import { SpotifyLayout } from './components/SpotifyLayout';
 import { MiniPlayer, copyStylesToPip } from './components/MiniPlayer';
 import { authService, type UserProfile } from './services/authService';
 import { cloudSyncService } from './services/cloudSyncService';
+import { useSleepTimer } from './hooks/useSleepTimer';
 
 // Helper to parse LRC formatted lyrics into LyricLine[]
 function parseLrcLyrics(lrcText: string): LyricLine[] {
@@ -587,99 +588,28 @@ export const App: React.FC = () => {
       .catch(() => {});
   }, []);
 
-  // Sleep Mode & Timer States & Handlers
-  const [isSleepModalOpen, setIsSleepModalOpen] = useState<boolean>(false);
-  const [isSleepOverlayOpen, setIsSleepOverlayOpen] = useState<boolean>(false);
-  const [sleepRemainingSeconds, setSleepRemainingSeconds] = useState<number | null>(null);
-  const [isSleepEndOfTrack, setIsSleepEndOfTrack] = useState<boolean>(false);
-  const isSleepEndOfTrackRef = useRef<boolean>(false);
-  isSleepEndOfTrackRef.current = isSleepEndOfTrack;
-  const originalVolumeRef = useRef<number>(volume);
-
-  // Trigger Deep Sleep Mode (Fades volume, halts stream, shows goodnight screen)
-  const triggerSleepMode = useCallback(() => {
-    setSleepRemainingSeconds(null);
-    setIsSleepEndOfTrack(false);
-
-    // Halt audio playback & terminate network streaming (0 data consumed)
-    audioEngine.stopAndRelease();
-    setIsPlaying(false);
-
-    // Restore original volume setting for next wake-up
-    audioEngine.setVolume(originalVolumeRef.current);
-    setVolume(originalVolumeRef.current);
-
-    // Open Deep Sleep Screen
-    setIsSleepOverlayOpen(true);
-    setIsSleepModalOpen(false);
-  }, []);
-
-  // Handle setting a timer in minutes
-  const handleSetSleepTimer = useCallback((minutes: number) => {
-    originalVolumeRef.current = audioEngine.getVolume();
-    setIsSleepEndOfTrack(false);
-    setSleepRemainingSeconds(minutes * 60);
-    setIsSleepModalOpen(false);
-    showToast(`🌙 Sleep timer set for ${minutes} min!`);
-  }, [showToast]);
-
-  // Handle setting End of Track
-  const handleSetSleepEndOfTrack = useCallback(() => {
-    originalVolumeRef.current = audioEngine.getVolume();
-    setIsSleepEndOfTrack(true);
-    setSleepRemainingSeconds(null);
-    setIsSleepModalOpen(false);
-    showToast('🌙 Sleep mode will activate when this song ends!');
-  }, [showToast]);
-
-  // Handle canceling timer
-  const handleCancelSleepTimer = useCallback(() => {
-    setSleepRemainingSeconds(null);
-    setIsSleepEndOfTrack(false);
-    audioEngine.setVolume(originalVolumeRef.current);
-    setVolume(originalVolumeRef.current);
-    showToast('Sleep timer turned off');
-  }, [showToast]);
-
-  // Handle adding minutes (+5, +15)
-  const handleAddSleepMinutes = useCallback((minutes: number) => {
-    setSleepRemainingSeconds((prev) => (prev ? prev + minutes * 60 : minutes * 60));
-    showToast(`Added +${minutes} min to sleep timer`);
-  }, [showToast]);
-
-  // Countdown timer tick & 30-second volume fade-out
-  useEffect(() => {
-    if (sleepRemainingSeconds === null) return;
-
-    if (sleepRemainingSeconds <= 0) {
-      triggerSleepMode();
-      return;
-    }
-
-    const timer = setInterval(() => {
-      setSleepRemainingSeconds((prev) => {
-        if (prev === null) return null;
-        const next = prev - 1;
-
-        // Smooth 30s Volume Fade-Out before sleep
-        if (next <= 30 && next > 0) {
-          const fadeRatio = next / 30;
-          const fadedVolume = originalVolumeRef.current * fadeRatio;
-          audioEngine.setVolume(fadedVolume);
-          setVolume(fadedVolume);
-        }
-
-        if (next <= 0) {
-          clearInterval(timer);
-          triggerSleepMode();
-          return null;
-        }
-        return next;
-      });
-    }, 1000);
-
-    return () => clearInterval(timer);
-  }, [sleepRemainingSeconds, triggerSleepMode]);
+  // Sleep Mode & Timer States & Handlers (extracted into custom hook)
+  const {
+    isSleepModalOpen,
+    setIsSleepModalOpen,
+    isSleepOverlayOpen,
+    setIsSleepOverlayOpen,
+    sleepRemainingSeconds,
+    isSleepEndOfTrack,
+    isSleepEndOfTrackRef,
+    triggerSleepMode,
+    handleSetSleepTimer,
+    handleSetSleepEndOfTrack,
+    handleCancelSleepTimer,
+    handleAddSleepMinutes,
+    isSleepTimerActive,
+    sleepRemainingText,
+  } = useSleepTimer({
+    volume,
+    setVolume,
+    setIsPlaying,
+    showToast,
+  });
 
   // 5-Stage Multi-Provider Lyrics Waterfall fetcher
   const fetchLyricsForSong = useCallback((song: Song) => {
@@ -1806,14 +1736,8 @@ export const App: React.FC = () => {
           isLyricsOpen={activeDrawer === 'lyrics'}
           isQueueOpen={activeDrawer === 'queue'}
           isNowPlayingViewOpen={isNowPlayingViewOpen}
-          isSleepTimerActive={sleepRemainingSeconds !== null || isSleepEndOfTrack}
-          sleepRemainingText={
-            isSleepEndOfTrack
-              ? 'Track'
-              : sleepRemainingSeconds !== null
-              ? `${Math.floor(sleepRemainingSeconds / 60)}:${sleepRemainingSeconds % 60 < 10 ? '0' : ''}${sleepRemainingSeconds % 60}`
-              : null
-          }
+          isSleepTimerActive={isSleepTimerActive}
+          sleepRemainingText={sleepRemainingText}
           onPlaySong={playSong}
           onTogglePlay={handleTogglePlay}
           onNext={handleNext}
@@ -2264,14 +2188,8 @@ export const App: React.FC = () => {
         onToggleQueue={() => setActiveDrawer((d) => (d === 'queue' ? null : 'queue'))}
         onToggleLike={handleToggleLike}
         onAddToPlaylist={(song) => setSongToAddToPlaylist(song)}
-        isSleepTimerActive={sleepRemainingSeconds !== null || isSleepEndOfTrack}
-        sleepRemainingText={
-          isSleepEndOfTrack
-            ? 'Track'
-            : sleepRemainingSeconds !== null
-            ? `${Math.floor(sleepRemainingSeconds / 60)}:${sleepRemainingSeconds % 60 < 10 ? '0' : ''}${sleepRemainingSeconds % 60}`
-            : null
-        }
+        isSleepTimerActive={isSleepTimerActive}
+        sleepRemainingText={sleepRemainingText}
         onOpenSleepTimer={() => setIsSleepModalOpen(true)}
         likedSongs={likedSongs}
       />

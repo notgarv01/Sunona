@@ -155,6 +155,12 @@ export const App: React.FC = () => {
     try {
       localStorage.setItem('sunona_ui_mode', mode);
     } catch {}
+    // Re-sync playback history, recommendations and search history so both UIs stay 100% in sync
+    setListenAgain(historyService.getListenAgain());
+    setMostPlayed(historyService.getMostPlayed());
+    const tp = historyService.getTasteProfile();
+    setTasteProfile(tp.totalPlays > 0 ? tp : undefined);
+    window.dispatchEvent(new CustomEvent('sunona:search-history-updated'));
   }, []);
   // const [hasEntered, setHasEntered] = useState<boolean>(true); // Temporarily commented out
   const [activeDrawer, setActiveDrawer] = useState<'lyrics' | 'queue' | null>(() => {

@@ -488,10 +488,37 @@ export const SpotifyHome: React.FC<Props> = ({
   ];
 
   const handlePlayCard = (idx: number) => {
+    const card = recentListeningCards[idx];
+    if (card) {
+      fetch(`/api/search?q=${encodeURIComponent(card.title)}`)
+        .then(res => res.json())
+        .then(data => {
+          if (data.results && data.results.length > 0) {
+            onPlaySong(data.results[0], data.results);
+            return;
+          }
+          if (songs.length > 0) onPlaySong(songs[idx % songs.length]);
+        })
+        .catch(() => {
+          if (songs.length > 0) onPlaySong(songs[idx % songs.length]);
+        });
+      return;
+    }
     if (songs.length > 0) {
       const songToPlay = songs[idx % songs.length];
       onPlaySong(songToPlay);
     }
+  };
+
+  const handlePlayRadioStation = (station: SpotifyRadioItem) => {
+    fetch(`/api/search?q=${encodeURIComponent(station.artist + ' songs')}`)
+      .then(res => res.json())
+      .then(data => {
+        if (data.results && data.results.length > 0) {
+          onPlaySong(data.results[0], data.results);
+        }
+      })
+      .catch(() => {});
   };
 
   const handleQuickAccessClick = (item: typeof quickAccessItems[0]) => {
@@ -855,7 +882,7 @@ export const SpotifyHome: React.FC<Props> = ({
                     className="spotify-floating-play-btn"
                     onClick={(e) => {
                       e.stopPropagation();
-                      handlePlayCard(idx + 3);
+                      handlePlayRadioStation(station);
                     }}
                     title={`Play ${station.artist} Radio`}
                   >

@@ -184,47 +184,69 @@ export const SpotifyLayout: React.FC<SpotifyLayoutProps> = ({
   const [focusedNavIndex, setFocusedNavIndex] = useState<number>(-1);
   const [isSearching, setIsSearching] = useState(false);
   const [showSearchDropdown, setShowSearchDropdown] = useState(false);
-  const getRecentSearchesKey = (uid?: string) => `spotify_recent_searches_${uid || 'guest'}`;
+  const getRecentSearchesKey = (uid?: string) => `sunona_recent_search_songs_${uid || 'guest'}`;
 
-  const [recentSearches, setRecentSearches] = useState<{ id: string; title: string; artist: string; coverUrl: string; explicit?: boolean }[]>(() => {
+  const [recentSearches, setRecentSearches] = useState<{ id: string; title: string; artist: string; coverUrl: string; explicit?: boolean; album?: string; duration?: number }[]>(() => {
     try {
-      const stored = localStorage.getItem(`spotify_recent_searches_${user?.uid || 'guest'}`);
+      const unifiedKey = `sunona_recent_search_songs_${user?.uid || 'guest'}`;
+      const legacyKey = `spotify_recent_searches_${user?.uid || 'guest'}`;
+      const stored = localStorage.getItem(unifiedKey) || localStorage.getItem(legacyKey);
       if (stored) {
         const parsed = JSON.parse(stored);
-        if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          if (!localStorage.getItem(unifiedKey)) {
+            localStorage.setItem(unifiedKey, JSON.stringify(parsed));
+          }
+          return parsed;
+        }
       }
     } catch {}
     return [];
   });
 
-  // Re-sync recent searches when active user changes
+  // Re-sync recent searches when active user changes or when another UI updates history
   useEffect(() => {
-    try {
-      const stored = localStorage.getItem(getRecentSearchesKey(user?.uid));
-      if (stored) {
-        const parsed = JSON.parse(stored);
-        if (Array.isArray(parsed)) {
-          setRecentSearches(parsed);
-          return;
+    const handleSync = () => {
+      try {
+        const unifiedKey = getRecentSearchesKey(user?.uid);
+        const legacyKey = `spotify_recent_searches_${user?.uid || 'guest'}`;
+        const stored = localStorage.getItem(unifiedKey) || localStorage.getItem(legacyKey);
+        if (stored) {
+          const parsed = JSON.parse(stored);
+          if (Array.isArray(parsed)) {
+            setRecentSearches(parsed);
+            return;
+          }
         }
-      }
-    } catch {}
-    setRecentSearches([]);
+      } catch {}
+      setRecentSearches([]);
+    };
+
+    handleSync();
+    window.addEventListener('sunona:search-history-updated', handleSync);
+    window.addEventListener('storage', handleSync);
+    return () => {
+      window.removeEventListener('sunona:search-history-updated', handleSync);
+      window.removeEventListener('storage', handleSync);
+    };
   }, [user?.uid]);
 
-  const saveRecentSearch = useCallback((song: { id: string; title: string; artist: string; coverUrl?: string; explicit?: boolean }) => {
+  const saveRecentSearch = useCallback((song: { id: string; title: string; artist: string; coverUrl?: string; explicit?: boolean; album?: string; duration?: number }) => {
     setRecentSearches(prev => {
-      const filtered = prev.filter(item => item.title.toLowerCase() !== song.title.toLowerCase());
+      const filtered = prev.filter(item => item.title.toLowerCase() !== song.title.toLowerCase() && item.id !== song.id);
       const newEntry = {
         id: song.id,
         title: song.title,
         artist: song.artist,
+        album: (song as any).album || 'Single',
         coverUrl: song.coverUrl || 'https://images.unsplash.com/photo-1511671782779-c97d3d27a1d4?w=500&auto=format&fit=crop&q=80',
+        duration: (song as any).duration || 210,
         explicit: song.explicit || false,
       };
-      const updated = [newEntry, ...filtered].slice(0, 8);
+      const updated = [newEntry, ...filtered].slice(0, 10);
       try {
         localStorage.setItem(getRecentSearchesKey(user?.uid), JSON.stringify(updated));
+        window.dispatchEvent(new CustomEvent('sunona:search-history-updated'));
       } catch {}
       return updated;
     });
@@ -235,6 +257,7 @@ export const SpotifyLayout: React.FC<SpotifyLayoutProps> = ({
       const updated = prev.filter(item => item.id !== songId);
       try {
         localStorage.setItem(getRecentSearchesKey(user?.uid), JSON.stringify(updated));
+        window.dispatchEvent(new CustomEvent('sunona:search-history-updated'));
       } catch {}
       return updated;
     });

@@ -71,9 +71,18 @@ export const Header: React.FC<Props> = ({
   const [recentSongs, setRecentSongs] = useState<RecentSearchSong[]>(() => getStoredRecentSongs(user?.uid));
   const [isLoading, setIsLoading] = useState(false);
 
-  // Sync recent search songs when active user changes
+  // Sync recent search songs when active user changes or when another UI updates history
   useEffect(() => {
-    setRecentSongs(getStoredRecentSongs(user?.uid));
+    const handleSync = () => {
+      setRecentSongs(getStoredRecentSongs(user?.uid));
+    };
+    handleSync();
+    window.addEventListener('sunona:search-history-updated', handleSync);
+    window.addEventListener('storage', handleSync);
+    return () => {
+      window.removeEventListener('sunona:search-history-updated', handleSync);
+      window.removeEventListener('storage', handleSync);
+    };
   }, [user?.uid]);
   const [isDropdownOpen, setIsDropdownOpen] = useState(false);
   const searchRef = useRef<HTMLDivElement | null>(null);
@@ -101,13 +110,13 @@ export const Header: React.FC<Props> = ({
 
   const saveRecentSong = useCallback((song: Song | RecentSearchSong) => {
     setRecentSongs((prev) => {
-      const filtered = prev.filter((s) => s.id !== song.id);
+      const filtered = prev.filter((s) => s.id !== song.id && s.title.toLowerCase() !== song.title.toLowerCase());
       const updated: RecentSearchSong[] = [
         {
           id: song.id,
           title: song.title,
           artist: song.artist,
-          album: song.album,
+          album: song.album || 'Single',
           coverUrl: song.coverUrl,
           duration: song.duration,
         },
@@ -115,6 +124,7 @@ export const Header: React.FC<Props> = ({
       ].slice(0, 10);
       try {
         localStorage.setItem(getRecentSongsKey(user?.uid), JSON.stringify(updated));
+        window.dispatchEvent(new CustomEvent('sunona:search-history-updated'));
       } catch {}
       return updated;
     });
@@ -126,6 +136,7 @@ export const Header: React.FC<Props> = ({
       const updated = prev.filter((s) => s.id !== id);
       try {
         localStorage.setItem(getRecentSongsKey(user?.uid), JSON.stringify(updated));
+        window.dispatchEvent(new CustomEvent('sunona:search-history-updated'));
       } catch {}
       return updated;
     });
@@ -136,6 +147,7 @@ export const Header: React.FC<Props> = ({
     setRecentSongs([]);
     try {
       localStorage.removeItem(getRecentSongsKey(user?.uid));
+      window.dispatchEvent(new CustomEvent('sunona:search-history-updated'));
     } catch {}
   }, [user?.uid]);
 

@@ -220,6 +220,42 @@ class PlaylistService {
     return { success: true };
   }
 
+  public addSongsToPlaylist(playlistId: string, songs: Song[]): { addedCount: number; alreadyCount: number } {
+    const target = this.playlists.find((p) => p.id === playlistId);
+    if (!target) return { addedCount: 0, alreadyCount: 0 };
+
+    let addedCount = 0;
+    let alreadyCount = 0;
+
+    songs.forEach((song) => {
+      if (!song || !song.id) return;
+      const exists = target.songs.some((s) => s.id === song.id);
+      if (exists) {
+        alreadyCount++;
+        return;
+      }
+
+      const cleanCover = isInvalidCoverUrl(song.coverUrl)
+        ? (song.id ? `https://i.ytimg.com/vi/${song.id}/hqdefault.jpg` : 'https://images.unsplash.com/photo-1511671782779-c97d3d27a1d4?w=500&auto=format&fit=crop&q=80')
+        : song.coverUrl;
+
+      const safeSong = { ...song, coverUrl: cleanCover };
+      target.songs.push(safeSong);
+      addedCount++;
+    });
+
+    target.songCount = target.songs.length;
+
+    if (target.songs.length > 0 && (isInvalidCoverUrl(target.coverUrl) || target.coverUrl.includes('unsplash'))) {
+      target.coverUrl = target.songs[0].coverUrl;
+    }
+
+    if (addedCount > 0) {
+      this.save();
+    }
+    return { addedCount, alreadyCount };
+  }
+
   public removeSongFromPlaylist(playlistId: string, songId: string): boolean {
     const target = this.playlists.find((p) => p.id === playlistId);
     if (!target) return false;

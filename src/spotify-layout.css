@@ -2527,36 +2527,88 @@ body.is-electron .sp-titlebar {
 }
 
 /* ══════════════════════════════════════════════════════
-   FLOATING MINI-PLAYER (PiP - Screenshot 442 & design doc)
+   SPOTIFY FLOATING MINI-PLAYER (Images 2, 3, 4 Parity)
    ══════════════════════════════════════════════════════ */
 .spotify-mini-player-pip {
   position: fixed;
   bottom: 104px;
-  right: 20px;
-  width: 260px;
+  right: 24px;
+  width: 320px;
   background: #181818;
-  border-radius: 10px;
-  box-shadow: 0 16px 40px rgba(0, 0, 0, 0.85);
-  border: 1px solid rgba(255, 255, 255, 0.12);
-  z-index: 999;
+  border-radius: 12px;
+  box-shadow: 0 20px 50px rgba(0, 0, 0, 0.85), 0 0 1px 1px rgba(255, 255, 255, 0.08);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  z-index: 9999;
   overflow: hidden;
   display: flex;
   flex-direction: column;
+  user-select: none;
+  animation: spPipFadeIn 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+/* Native Always-On-Top Document Picture-in-Picture OS Window */
+.spotify-mini-player-pip.pip-native-window {
+  position: static !important;
+  width: 100vw !important;
+  height: 100vh !important;
+  max-width: none !important;
+  max-height: none !important;
+  border-radius: 0 !important;
+  border: none !important;
+  box-shadow: none !important;
+  background: #181818 !important;
+  animation: none !important;
+  display: flex !important;
+  flex-direction: column !important;
+  justify-content: space-between !important;
+  padding: 0 !important;
+  overflow: hidden !important;
+}
+
+.spotify-mini-player-pip.pip-native-window .sp-pip-cover-box {
+  flex: 1;
+  min-height: 0;
+  margin: 4px 8px 0 8px;
+  aspect-ratio: auto;
+}
+
+.spotify-mini-player-pip.pip-native-window .sp-pip-header {
+  padding: 6px 12px 4px;
+}
+
+.spotify-mini-player-pip.pip-native-window .sp-pip-info-row {
+  padding: 8px 14px 12px;
+}
+
+@keyframes spPipFadeIn {
+  from { opacity: 0; transform: scale(0.95) translateY(10px); }
+  to { opacity: 1; transform: scale(1) translateY(0); }
 }
 
 .sp-pip-header {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 6px 10px;
-  background: #121212;
-  cursor: move;
+  padding: 8px 12px 6px;
+  background: #181818;
+  cursor: grab;
+}
+.sp-pip-header:active {
+  cursor: grabbing;
 }
 
-.sp-pip-drag-handle {
-  color: rgba(255, 255, 255, 0.4);
-  font-size: 11px;
-  letter-spacing: 1px;
+.sp-pip-drag-dots {
+  display: grid;
+  grid-template-columns: repeat(3, 4px);
+  gap: 3px;
+  padding: 4px;
+  cursor: grab;
+}
+.sp-pip-drag-dots span {
+  width: 3px;
+  height: 3px;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.4);
 }
 
 .sp-pip-close-btn {
@@ -2566,19 +2618,25 @@ body.is-electron .sp-titlebar {
   cursor: pointer;
   display: flex;
   align-items: center;
-  padding: 2px;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
   border-radius: 50%;
+  transition: color 0.15s, background 0.15s;
 }
-
 .sp-pip-close-btn:hover {
-  color: #fff;
+  color: #ffffff;
+  background: rgba(255, 255, 255, 0.1);
 }
 
 .sp-pip-cover-box {
-  width: 100%;
-  aspect-ratio: 1;
   position: relative;
+  margin: 0 14px;
+  aspect-ratio: 1;
+  border-radius: 8px;
   overflow: hidden;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.5);
+  background: #282828;
 }
 
 .sp-pip-cover-img {
@@ -2591,17 +2649,46 @@ body.is-electron .sp-titlebar {
 .sp-pip-overlay-controls {
   position: absolute;
   inset: 0;
-  background: rgba(0, 0, 0, 0.45);
+  background: rgba(0, 0, 0, 0.52);
   display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 12px;
+  flex-direction: column;
+  justify-content: space-between;
+  padding: 10px;
   opacity: 0;
-  transition: opacity 0.2s ease;
+  transition: opacity 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+  border-radius: inherit;
 }
 
 .sp-pip-cover-box:hover .sp-pip-overlay-controls {
   opacity: 1;
+}
+
+.sp-pip-vol-btn {
+  align-self: flex-start;
+  background: none;
+  border: none;
+  color: #ffffff;
+  width: 28px;
+  height: 28px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: transform 0.15s, opacity 0.15s;
+  opacity: 0.85;
+}
+.sp-pip-vol-btn:hover {
+  transform: scale(1.1);
+  opacity: 1;
+}
+
+.sp-pip-transport-row {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  margin-bottom: auto;
+  margin-top: auto;
 }
 
 .sp-pip-ctrl {
@@ -2612,16 +2699,22 @@ body.is-electron .sp-titlebar {
   display: flex;
   align-items: center;
   justify-content: center;
-  transition: transform 0.15s;
+  width: 30px;
+  height: 30px;
+  border-radius: 50%;
+  transition: transform 0.15s, color 0.15s;
 }
-
 .sp-pip-ctrl:hover {
   transform: scale(1.15);
+  color: #ffffff;
+}
+.sp-pip-ctrl.active-green {
+  color: #1ed760 !important;
 }
 
 .sp-pip-play-btn {
-  width: 38px;
-  height: 38px;
+  width: 44px;
+  height: 44px;
   border-radius: 50%;
   background: #ffffff;
   border: none;
@@ -2629,68 +2722,151 @@ body.is-electron .sp-titlebar {
   align-items: center;
   justify-content: center;
   cursor: pointer;
-  transition: transform 0.15s;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.5);
+  transition: transform 0.15s, background 0.15s;
 }
-
 .sp-pip-play-btn:hover {
   transform: scale(1.08);
-  background: #f0f0f0;
+  background: #f4f4f4;
 }
 
 .sp-pip-seek-row {
-  padding: 6px 12px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 6px 2px;
+  width: 100%;
+}
+
+.sp-pip-time {
+  font-size: 11px;
+  color: #a7a7a7;
+  font-family: inherit;
+  font-variant-numeric: tabular-nums;
 }
 
 .sp-pip-seek-track {
-  width: 100%;
-  height: 3px;
+  flex: 1;
+  height: 4px;
   background: rgba(255, 255, 255, 0.2);
   border-radius: 2px;
+  position: relative;
   cursor: pointer;
+}
+.sp-pip-seek-track:hover .sp-pip-seek-fill {
+  background: #1ed760;
+}
+.sp-pip-seek-track:hover .sp-pip-seek-thumb {
+  opacity: 1;
 }
 
 .sp-pip-seek-fill {
   height: 100%;
-  background: #1ed760;
+  background: #ffffff;
   border-radius: 2px;
+  transition: background 0.15s;
+}
+
+.sp-pip-seek-thumb {
+  position: absolute;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: #ffffff;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.5);
+  opacity: 0;
+  transition: opacity 0.15s;
 }
 
 .sp-pip-info-row {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 8px 12px 12px;
+  padding: 8px 14px 14px;
+  gap: 10px;
 }
 
 .sp-pip-titles {
   display: flex;
   flex-direction: column;
   overflow: hidden;
-  padding-right: 8px;
+  flex: 1;
 }
 
 .sp-pip-title {
-  font-size: 13px;
+  font-size: 14px;
   font-weight: 700;
   color: #ffffff;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+  letter-spacing: -0.01em;
 }
 
 .sp-pip-artist {
-  font-size: 11px;
-  color: #b3b3b3;
+  font-size: 12px;
+  color: #a7a7a7;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+  margin-top: 2px;
 }
 
-.sp-pip-like-btn {
+.sp-pip-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-shrink: 0;
+  margin-right: 14px; /* Leaves clear breathing space for the corner resize grip */
+}
+
+.sp-pip-action-btn {
   background: none;
   border: none;
   cursor: pointer;
-  padding: 2px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 4px;
+  border-radius: 50%;
+  color: #b3b3b3;
+  transition: color 0.15s, transform 0.15s;
+}
+.sp-pip-action-btn:hover {
+  color: #ffffff;
+  transform: scale(1.1);
+}
+.sp-pip-action-btn.active {
+  color: #1ed760;
+}
+
+/* Bottom-Right Resize Handle */
+.sp-pip-resize-grip {
+  position: absolute;
+  bottom: 8px;
+  right: 10px;
+  width: 18px;
+  height: 18px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  pointer-events: auto !important;
+  user-select: none;
+  opacity: 0.55;
+  transition: opacity 0.15s, transform 0.15s;
+  z-index: 50;
+}
+
+.sp-pip-resize-grip:hover {
+  opacity: 1;
+  transform: scale(1.15);
+}
+
+.sp-pip-resize-grip:hover path {
+  stroke: #1ed760 !important;
 }
 
 /* ══════════════════════════════════════════════════════

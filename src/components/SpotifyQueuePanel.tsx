@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { X, Play, MoreHorizontal } from 'lucide-react';
+import { X, Play, MoreHorizontal, Trash2, ListPlus } from 'lucide-react';
 import type { Song, Playlist } from '../types';
 import { SpotifySongContextMenu } from './SpotifySongContextMenu';
 
@@ -16,6 +16,8 @@ export interface SpotifyQueuePanelProps {
   onToggleLike: (songId: string) => void;
   onAddToPlaylist: (song: Song, playlistId?: string) => void;
   onRemoveFromQueue?: (index: number) => void;
+  onClearQueue?: () => void;
+  onSaveQueueToPlaylist?: () => void;
   onAddToQueue?: (song: Song) => void;
   onSelectArtist?: (artistName: string) => void;
   onOpenSleepTimer?: () => void;
@@ -35,6 +37,8 @@ export const SpotifyQueuePanel: React.FC<SpotifyQueuePanelProps> = ({
   onToggleLike,
   onAddToPlaylist,
   onRemoveFromQueue,
+  onClearQueue,
+  onSaveQueueToPlaylist,
   onAddToQueue,
   onSelectArtist,
   onOpenSleepTimer,
@@ -120,14 +124,36 @@ export const SpotifyQueuePanel: React.FC<SpotifyQueuePanelProps> = ({
           </button>
         </div>
 
-        <button
-          className="sp-qp-close-btn"
-          onClick={onClose}
-          title="Close Queue"
-          aria-label="Close"
-        >
-          <X size={18} />
-        </button>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+          {onSaveQueueToPlaylist && queue.length > 0 && (
+            <button
+              className="sp-qp-close-btn"
+              onClick={onSaveQueueToPlaylist}
+              title="Save Queue to Playlist"
+              aria-label="Save Queue to Playlist"
+            >
+              <ListPlus size={18} />
+            </button>
+          )}
+          {onClearQueue && (
+            <button
+              className="sp-qp-close-btn"
+              onClick={onClearQueue}
+              title="Clear Queue"
+              aria-label="Clear Queue"
+            >
+              <Trash2 size={16} />
+            </button>
+          )}
+          <button
+            className="sp-qp-close-btn"
+            onClick={onClose}
+            title="Close Queue"
+            aria-label="Close"
+          >
+            <X size={18} />
+          </button>
+        </div>
       </div>
 
       {/* ── Tab 1: Queue Content ── */}

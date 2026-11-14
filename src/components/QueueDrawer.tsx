@@ -1,5 +1,5 @@
 import React from 'react';
-import { ListMusic, X, Trash2 } from 'lucide-react';
+import { ListMusic, X, Trash2, ListPlus } from 'lucide-react';
 import type { Song } from '../types';
 
 interface Props {
@@ -8,6 +8,7 @@ interface Props {
   onPlaySong: (song: Song) => void;
   onRemoveFromQueue: (index: number) => void;
   onClearQueue: () => void;
+  onSaveQueueToPlaylist?: () => void;
   onClose: () => void;
 }
 
@@ -17,6 +18,7 @@ export const QueueDrawer: React.FC<Props> = ({
   onPlaySong,
   onRemoveFromQueue,
   onClearQueue,
+  onSaveQueueToPlaylist,
   onClose,
 }) => {
   return (
@@ -29,6 +31,16 @@ export const QueueDrawer: React.FC<Props> = ({
           </span>
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+          {onSaveQueueToPlaylist && queue.length > 0 && (
+            <button
+              className="icon-btn"
+              style={{ width: '32px', height: '32px' }}
+              onClick={onSaveQueueToPlaylist}
+              title="Save Queue to Playlist"
+            >
+              <ListPlus size={16} />
+            </button>
+          )}
           <button className="icon-btn" style={{ width: '32px', height: '32px' }} onClick={onClearQueue} title="Clear Queue">
             <Trash2 size={14} />
           </button>

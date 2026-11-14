@@ -8,7 +8,6 @@ import {
   Edit2,
   Check,
   X,
-  Clock,
   ListMusic,
   Heart,
   Music,
@@ -92,9 +91,13 @@ export const PlaylistScreen: React.FC<Props> = ({
     <div className="app-viewport playlist-viewport">
       {/* Top Back Nav Button */}
       <div className="playlist-top-bar">
-        <button className="icon-btn back-btn" onClick={onBack} title="Back">
+        <button
+          className="back-btn"
+          onClick={onBack}
+          title="Go back"
+          aria-label="Go back"
+        >
           <ArrowLeft size={18} />
-          <span>Back</span>
         </button>
       </div>
 
@@ -260,11 +263,11 @@ export const PlaylistScreen: React.FC<Props> = ({
       <div className="playlist-tracklist-section">
         <div className="playlist-table-header">
           <div className="col-index">#</div>
+          <div className="col-thumb-spacer" />
           <div className="col-title">Title</div>
           <div className="col-album">Album</div>
-          <div className="col-actions">
-            <Clock size={15} style={{ marginRight: '16px' }} />
-          </div>
+          <div className="col-duration">Duration</div>
+          <div className="col-actions-spacer" />
         </div>
 
         {playlist.songs.length === 0 ? (
@@ -321,16 +324,13 @@ export const PlaylistScreen: React.FC<Props> = ({
 
                     <div className="song-row-album">{song.album || 'Single'}</div>
 
-                    <div
-                      style={{
-                        display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'flex-end',
-                        gap: '14px',
-                      }}
-                    >
+                    <span className="song-row-duration">
+                      {formatSongDuration(song.duration)}
+                    </span>
+
+                    <div className="song-row-actions">
                       <Heart
-                        size={16}
+                        size={17}
                         className={`like-btn ${song.isLiked ? 'liked' : ''}`}
                         onClick={(e) => {
                           e.stopPropagation();
@@ -338,10 +338,6 @@ export const PlaylistScreen: React.FC<Props> = ({
                         }}
                         fill={song.isLiked ? 'var(--accent)' : 'none'}
                       />
-
-                      <span className="song-row-duration">
-                        {formatSongDuration(song.duration)}
-                      </span>
 
                       <button
                         className="icon-btn remove-track-btn"
@@ -351,7 +347,7 @@ export const PlaylistScreen: React.FC<Props> = ({
                         }}
                         title="Remove from this playlist"
                       >
-                        <Trash2 size={14} />
+                        <Trash2 size={15} />
                       </button>
                     </div>
                   </div>

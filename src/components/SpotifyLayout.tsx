@@ -12,7 +12,7 @@ import {
   Home, Search, Bell, Users, ChevronLeft, ChevronRight, Plus, Check, Maximize2, Minimize2,
   Play, Pause, SkipBack, SkipForward, Shuffle, Repeat, Repeat1, Volume2, VolumeX, Volume1,
   Heart, Mic2, ListMusic, PlusCircle, Moon, X,
-  MoreHorizontal, Laptop, PictureInPicture2
+  MoreHorizontal, Laptop
 } from 'lucide-react';
 import type { Song, Playlist, Album, DailyDiscoverItem } from '../types';
 import type { TasteProfile } from '../services/historyService';
@@ -29,6 +29,7 @@ import { RosePinkLyricsView } from './RosePinkLyricsView';
 import { LyricReelExportModal } from './LyricReelExportModal';
 import { isInvalidCoverUrl } from '../services/playlistService';
 import { SpotifyLogoIcon } from './Header';
+import { MiniPlayer, SpotifyMiniplayerIcon } from './MiniPlayer';
 import '../rose-pink-lyrics.css';
 
 interface SpotifyLayoutProps {
@@ -97,6 +98,10 @@ interface SpotifyLayoutProps {
   onLogout?: () => void;
   onRemoveSong?: (playlistId: string, songId: string, index?: number) => void;
   onRemoveFromQueue?: (index: number) => void;
+  onClearQueue?: () => void;
+  onSaveQueueToPlaylist?: () => void;
+  isMiniPlayerOpen?: boolean;
+  onToggleMiniPlayer?: () => void;
 }
 
 function formatTime(secs: number) {
@@ -167,7 +172,9 @@ export const SpotifyLayout: React.FC<SpotifyLayoutProps> = ({
   onCreatePlaylist, onSelectPlaylist, onSelectAlbum,
   setActiveView, onOpenLibrary, onOpenAuth, onOpenProfile,
   onSelectSong, onOpenListenTogether, onOpenSettings, onGoSunoNa, onLogout,
-  onRemoveSong, onRemoveFromQueue,
+  onRemoveSong, onRemoveFromQueue, onClearQueue, onSaveQueueToPlaylist,
+  isMiniPlayerOpen: propIsMiniPlayerOpen,
+  onToggleMiniPlayer: propOnToggleMiniPlayer,
 }) => {
   const [spotifyLibTab, setSpotifyLibTab] = useState<'playlists' | 'albums' | 'artists' | null>(null);
   const [selectedArtist, setSelectedArtist] = useState<string | null>(null);
@@ -305,7 +312,9 @@ export const SpotifyLayout: React.FC<SpotifyLayoutProps> = ({
     return () => window.removeEventListener('mousedown', handleClickOutside);
   }, [showRecentsMenu]);
 
-  const [isMiniPlayerOpen, setIsMiniPlayerOpen] = useState(false);
+  const [localIsMiniPlayerOpen, setLocalIsMiniPlayerOpen] = useState(false);
+  const isMiniPlayerOpen = propIsMiniPlayerOpen !== undefined ? propIsMiniPlayerOpen : localIsMiniPlayerOpen;
+  const handleToggleMiniPlayer = propOnToggleMiniPlayer || (() => setLocalIsMiniPlayerOpen((prev) => !prev));
   const [isSongViewActive, setIsSongViewActive] = useState(false);
   const [lyricsTheme, setLyricsTheme] = useState<'classic' | 'rose'>('rose');
   const [isReelExportOpen, setIsReelExportOpen] = useState(false);
@@ -1892,6 +1901,8 @@ export const SpotifyLayout: React.FC<SpotifyLayoutProps> = ({
               onToggleLike={onToggleLike}
               onAddToPlaylist={onAddToPlaylist}
               onRemoveFromQueue={onRemoveFromQueue}
+              onClearQueue={onClearQueue}
+              onSaveQueueToPlaylist={onSaveQueueToPlaylist}
               onAddToQueue={(song) => onPlaySong(song, [...queue, song])}
               onSelectArtist={(artistName) => {
                 setSelectedArtist(artistName);
@@ -1916,58 +1927,30 @@ export const SpotifyLayout: React.FC<SpotifyLayoutProps> = ({
       </div>
 
       {/* ══════════════════════════════════════════════════════
-          FLOATING MINI PLAYER (PiP Window - Screenshot 442)
+          FLOATING MINI PLAYER (PiP Window - Images 2, 3, 4 Parity)
           ══════════════════════════════════════════════════════ */}
-      {isMiniPlayerOpen && currentSong && (
-        <div className="spotify-mini-player-pip">
-          <div className="sp-pip-header">
-            <span className="sp-pip-drag-handle">⠿⠿</span>
-            <button className="sp-pip-close-btn" onClick={() => setIsMiniPlayerOpen(false)}>
-              <X size={14} />
-            </button>
-          </div>
-          <div className="sp-pip-cover-box">
-            <img src={currentSong.coverUrl} alt={currentSong.title} className="sp-pip-cover-img" />
-            <div className="sp-pip-overlay-controls">
-              <button className="sp-pip-ctrl" onClick={onToggleShuffle}>
-                <Shuffle size={14} color={isShuffle ? '#1ed760' : '#fff'} />
-              </button>
-              <button className="sp-pip-ctrl" onClick={onPrev}>
-                <SkipBack size={16} />
-              </button>
-              <button className="sp-pip-play-btn" onClick={onTogglePlay}>
-                {isPlaying ? <Pause size={18} fill="#000" /> : <Play size={18} fill="#000" />}
-              </button>
-              <button className="sp-pip-ctrl" onClick={onNext}>
-                <SkipForward size={16} />
-              </button>
-              <button className="sp-pip-ctrl" onClick={onToggleRepeat}>
-                <RepeatIcon size={14} color={repeatMode !== 'off' ? '#1ed760' : '#fff'} />
-              </button>
-            </div>
-          </div>
-          <div className="sp-pip-seek-row">
-            <div className="sp-pip-seek-track" onClick={(e) => {
-              const rect = e.currentTarget.getBoundingClientRect();
-              const ratio = (e.clientX - rect.left) / rect.width;
-              onSeek(ratio * duration);
-            }}>
-              <div className="sp-pip-seek-fill" style={{ width: `${progressPercent}%` }} />
-            </div>
-          </div>
-          <div className="sp-pip-info-row">
-            <div className="sp-pip-titles">
-              <span className="sp-pip-title">{currentSong.title}</span>
-              <span className="sp-pip-artist">{currentSong.artist}</span>
-            </div>
-            <button
-              className={`sp-pip-like-btn ${isCurrentSongLiked ? 'active' : ''}`}
-              onClick={() => onToggleLike(currentSong.id)}
-            >
-              <PlusCircle size={18} color={isCurrentSongLiked ? '#1ed760' : '#fff'} />
-            </button>
-          </div>
-        </div>
+      {!propOnToggleMiniPlayer && isMiniPlayerOpen && currentSong && (
+        <MiniPlayer
+          currentSong={currentSong}
+          isPlaying={isPlaying}
+          currentTime={currentTime}
+          duration={duration}
+          volume={volume}
+          isMuted={isMuted}
+          isShuffle={isShuffle}
+          repeatMode={repeatMode}
+          isCurrentSongLiked={isCurrentSongLiked}
+          onTogglePlay={onTogglePlay}
+          onPrev={onPrev}
+          onNext={onNext}
+          onSeek={onSeek}
+          onToggleShuffle={onToggleShuffle}
+          onToggleRepeat={onToggleRepeat}
+          onToggleLike={onToggleLike}
+          onToggleMute={onToggleMute}
+          onClose={handleToggleMiniPlayer}
+          onExpand={handleToggleMiniPlayer}
+        />
       )}
 
       {/* ══════════════════════════════════════════════════════
@@ -2133,10 +2116,10 @@ export const SpotifyLayout: React.FC<SpotifyLayoutProps> = ({
           {/* Mini Player (PiP) */}
           <button
             className={`sp-pb-icon-btn ${isMiniPlayerOpen ? 'active-green' : ''}`}
-            onClick={() => setIsMiniPlayerOpen(prev => !prev)}
-            title="Mini Player"
+            onClick={handleToggleMiniPlayer}
+            title="Open Miniplayer"
           >
-            <PictureInPicture2 size={16} />
+            <SpotifyMiniplayerIcon size={16} />
           </button>
 
           {/* Fullscreen */}

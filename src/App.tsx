@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
+import { createPortal } from 'react-dom';
 import { RotateCcw, Trash2, X } from 'lucide-react';
 import type { Song, ThemePreset, LyricLine, DailyDiscoverItem, Playlist } from './types';
 import { INITIAL_SONGS, INITIAL_ALBUMS, THEME_PRESETS, MOODS } from './data/musicData';
@@ -30,6 +31,7 @@ import { AuthModal } from './components/AuthModal';
 import { UserProfileModal } from './components/UserProfileModal';
 import { UpdateModal, type UpdateState } from './components/UpdateModal';
 import { SpotifyLayout } from './components/SpotifyLayout';
+import { MiniPlayer, copyStylesToPip } from './components/MiniPlayer';
 import { authService, type UserProfile } from './services/authService';
 import { cloudSyncService } from './services/cloudSyncService';
 
@@ -163,6 +165,9 @@ export const App: React.FC = () => {
   });
   const [isLoadingLyrics, setIsLoadingLyrics] = useState<boolean>(false);
   const [isNowPlayingOpen, setIsNowPlayingOpen] = useState<boolean>(false);
+  const [isMiniPlayerOpen, setIsMiniPlayerOpen] = useState<boolean>(false);
+  const [pipContainer, setPipContainer] = useState<HTMLElement | null>(null);
+  const pipWindowRef = useRef<Window | null>(null);
 
   // Persistent Liked Songs Collection (User-scoped and clean)
   const [likedSongs, setLikedSongs] = useState<Song[]>(() => {
@@ -191,6 +196,7 @@ export const App: React.FC = () => {
   const [selectedPlaylistId, setSelectedPlaylistId] = useState<string | null>(null);
   const [isCreatePlaylistOpen, setIsCreatePlaylistOpen] = useState<boolean>(false);
   const [songToAddToPlaylist, setSongToAddToPlaylist] = useState<Song | null>(null);
+  const [queueToAddToPlaylist, setQueueToAddToPlaylist] = useState<Song[] | null>(null);
   const [toastMessage, setToastMessage] = useState<string | null>(null);
   const toastTimerRef = useRef<any>(null);
 
@@ -1417,6 +1423,26 @@ export const App: React.FC = () => {
     setSongToAddToPlaylist(null);
   }, [showToast]);
 
+  const handleAddMultipleToPlaylist = useCallback((playlistId: string, songs: Song[]) => {
+    const res = playlistService.addSongsToPlaylist(playlistId, songs);
+    const pl = playlistService.getPlaylist(playlistId);
+    setPlaylists(playlistService.getPlaylists());
+    if (res.addedCount > 0) {
+      showToast(`Added ${res.addedCount} songs to "${pl?.title || 'Playlist'}"`);
+    } else {
+      showToast(`All songs already in "${pl?.title || 'Playlist'}"`);
+    }
+    setQueueToAddToPlaylist(null);
+  }, [showToast]);
+
+  const handleCreateAndAddMultiple = useCallback((title: string, songs: Song[]) => {
+    const created = playlistService.createPlaylist(title);
+    playlistService.addSongsToPlaylist(created.id, songs);
+    setPlaylists(playlistService.getPlaylists());
+    showToast(`Created "${created.title}" with ${songs.length} songs`);
+    setQueueToAddToPlaylist(null);
+  }, [showToast]);
+
   const handleRemoveSongFromPlaylist = useCallback((playlistId: string, songId: string, index?: number) => {
     const pl = playlists.find((p) => p.id === playlistId);
     const songIndex = index ?? (pl?.songs.findIndex((s) => s.id === songId) ?? -1);
@@ -1641,6 +1667,107 @@ export const App: React.FC = () => {
   const likedCount = likedSongs.length;
   const cachedCount = songs.filter((s) => s.isCached).length;
 
+  // Floating Always-On-Top Miniplayer (Document Picture-in-Picture with exact Spotify UI)
+  const handleCloseMiniPlayer = useCallback(() => {
+    if (pipWindowRef.current) {
+      try {
+        pipWindowRef.current.close();
+      } catch {}
+      pipWindowRef.current = null;
+    }
+    setPipContainer(null);
+    setIsMiniPlayerOpen(false);
+  }, []);
+
+  const handleToggleMiniPlayer = useCallback(async () => {
+    if (isMiniPlayerOpen) {
+      handleCloseMiniPlayer();
+      return;
+    }
+
+    if (!currentSong) return;
+
+    // 1. Document Picture-in-Picture window (Genuine OS Always-on-Top window with exact Spotify React UI)
+    if (typeof window !== 'undefined' && 'documentPictureInPicture' in window) {
+      try {
+        const pipWin = await (window as any).documentPictureInPicture.requestWindow({
+          width: 320,
+          height: 380,
+        });
+
+        copyStylesToPip(pipWin);
+
+        pipWin.document.body.style.margin = '0';
+        pipWin.document.body.style.background = '#181818';
+        pipWin.document.body.style.overflow = 'hidden';
+        pipWin.document.body.style.userSelect = 'none';
+        pipWin.document.title = 'SunoNa Miniplayer';
+
+        pipWin.addEventListener('pagehide', () => {
+          setPipContainer(null);
+          pipWindowRef.current = null;
+          setIsMiniPlayerOpen(false);
+        });
+
+        pipWindowRef.current = pipWin;
+        setPipContainer(pipWin.document.body);
+        setIsMiniPlayerOpen(true);
+        return;
+      } catch (err) {
+        console.warn('Document Picture-in-Picture failed, using in-app floating overlay:', err);
+      }
+    }
+
+    // Fallback: in-app floating overlay
+    setPipContainer(null);
+    setIsMiniPlayerOpen(true);
+  }, [isMiniPlayerOpen, currentSong, handleCloseMiniPlayer]);
+
+  const handleExpandMiniPlayer = useCallback(() => {
+    handleCloseMiniPlayer();
+    try {
+      window.focus();
+    } catch {}
+    if (uiMode !== 'spotify') {
+      setIsNowPlayingOpen(true);
+    }
+  }, [handleCloseMiniPlayer, uiMode]);
+
+  const renderMiniPlayer = () => {
+    if (!isMiniPlayerOpen || !currentSong) return null;
+
+    const miniPlayerEl = (
+      <MiniPlayer
+        currentSong={currentSong}
+        isPlaying={isPlaying}
+        currentTime={currentTime}
+        duration={duration}
+        volume={volume}
+        isMuted={isMuted}
+        isShuffle={isShuffle}
+        repeatMode={repeatMode}
+        isCurrentSongLiked={likedSongs.some((s) => s.id === currentSong.id)}
+        onTogglePlay={handleTogglePlay}
+        onPrev={handlePrev}
+        onNext={handleNext}
+        onSeek={handleSeek}
+        onToggleShuffle={handleToggleShuffle}
+        onToggleRepeat={handleToggleRepeat}
+        onToggleLike={handleToggleLike}
+        onToggleMute={handleToggleMute}
+        onClose={handleCloseMiniPlayer}
+        onExpand={handleExpandMiniPlayer}
+        isPipWindow={Boolean(pipContainer)}
+      />
+    );
+
+    if (pipContainer) {
+      return createPortal(miniPlayerEl, pipContainer);
+    }
+
+    return miniPlayerEl;
+  };
+
   // Intro Screen temporarily commented out as requested (code preserved)
   /*
   if (!hasEntered) {
@@ -1721,7 +1848,14 @@ export const App: React.FC = () => {
           }}
           onRemoveSong={handleRemoveSongFromPlaylist}
           onRemoveFromQueue={handleRemoveSongFromQueue}
+          onClearQueue={() => setQueue(currentSong ? [currentSong] : [])}
+          onSaveQueueToPlaylist={() => setQueueToAddToPlaylist(queue)}
+          isMiniPlayerOpen={isMiniPlayerOpen}
+          onToggleMiniPlayer={handleToggleMiniPlayer}
         />
+
+        {/* Floating OS-level / In-App Miniplayer */}
+        {renderMiniPlayer()}
 
         {/* Fullscreen Now Playing Showcase Modal */}
         {isNowPlayingOpen && currentSong && (
@@ -1754,12 +1888,18 @@ export const App: React.FC = () => {
 
         {/* Add To Playlist Modal */}
         <AddToPlaylistModal
-          isOpen={Boolean(songToAddToPlaylist)}
+          isOpen={Boolean(songToAddToPlaylist || queueToAddToPlaylist)}
           song={songToAddToPlaylist}
+          songs={queueToAddToPlaylist}
           playlists={playlists}
-          onClose={() => setSongToAddToPlaylist(null)}
+          onClose={() => {
+            setSongToAddToPlaylist(null);
+            setQueueToAddToPlaylist(null);
+          }}
           onAddToPlaylist={handleAddToPlaylist}
           onCreateAndAdd={handleCreateAndAdd}
+          onAddMultipleToPlaylist={handleAddMultipleToPlaylist}
+          onCreateAndAddMultiple={handleCreateAndAddMultiple}
         />
 
         {/* Create Playlist Modal */}
@@ -2087,6 +2227,7 @@ export const App: React.FC = () => {
             onPlaySong={playSong}
             onRemoveFromQueue={handleRemoveSongFromQueue}
             onClearQueue={() => setQueue(currentSong ? [currentSong] : [])}
+            onSaveQueueToPlaylist={() => setQueueToAddToPlaylist(queue)}
             onClose={() => setActiveDrawer(null)}
           />
         )}
@@ -2109,6 +2250,8 @@ export const App: React.FC = () => {
         isNowPlayingViewOpen={isNowPlayingViewOpen}
         onToggleNowPlayingView={() => setIsNowPlayingViewOpen((prev) => !prev)}
         onOpenNowPlaying={() => setIsNowPlayingOpen(true)}
+        isMiniPlayerOpen={isMiniPlayerOpen}
+        onToggleMiniPlayer={handleToggleMiniPlayer}
         onTogglePlay={handleTogglePlay}
         onNext={handleNext}
         onPrev={handlePrev}
@@ -2132,6 +2275,9 @@ export const App: React.FC = () => {
         onOpenSleepTimer={() => setIsSleepModalOpen(true)}
         likedSongs={likedSongs}
       />
+
+      {/* Floating OS-level / In-App Miniplayer */}
+      {renderMiniPlayer()}
 
       {/* Fullscreen Now Playing Showcase Modal */}
       {isNowPlayingOpen && currentSong && (
@@ -2164,12 +2310,18 @@ export const App: React.FC = () => {
 
       {/* Add To Playlist Modal */}
       <AddToPlaylistModal
-        isOpen={Boolean(songToAddToPlaylist)}
+        isOpen={Boolean(songToAddToPlaylist || queueToAddToPlaylist)}
         song={songToAddToPlaylist}
+        songs={queueToAddToPlaylist}
         playlists={playlists}
-        onClose={() => setSongToAddToPlaylist(null)}
+        onClose={() => {
+          setSongToAddToPlaylist(null);
+          setQueueToAddToPlaylist(null);
+        }}
         onAddToPlaylist={handleAddToPlaylist}
         onCreateAndAdd={handleCreateAndAdd}
+        onAddMultipleToPlaylist={handleAddMultipleToPlaylist}
+        onCreateAndAddMultiple={handleCreateAndAddMultiple}
       />
 
       {/* Create Playlist Modal */}

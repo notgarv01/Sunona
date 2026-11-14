@@ -155,12 +155,16 @@ async function createWindow() {
       contextIsolation: true,
       preload: path.join(__dirname, 'preload.cjs'),
       webSecurity: true,
+      backgroundThrottling: false,
     },
   });
 
   // Ready to show cleanly without flash
   mainWindow.once('ready-to-show', () => {
     mainWindow.show();
+    setTimeout(() => {
+      updateThumbarButtons(false);
+    }, 600);
   });
 
   // Handle external link clicks and allow Google Auth popup strictly
@@ -190,6 +194,28 @@ async function createWindow() {
           webPreferences: {
             nodeIntegration: false,
             contextIsolation: true,
+          },
+        },
+      };
+    }
+
+    // Allow Document Picture-in-Picture & floating auxiliary miniplayer windows
+    if (url === 'about:blank' || parsedUrl.protocol === 'about:') {
+      return {
+        action: 'allow',
+        overrideBrowserWindowOptions: {
+          width: 340,
+          height: 420,
+          minWidth: 260,
+          minHeight: 320,
+          alwaysOnTop: true,
+          frame: false,
+          autoHideMenuBar: true,
+          backgroundColor: '#181818',
+          webPreferences: {
+            nodeIntegration: false,
+            contextIsolation: true,
+            backgroundThrottling: false,
           },
         },
       };
@@ -314,6 +340,8 @@ ipcMain.on('window-close', () => {
 });
 
 // Windows Taskbar Thumbnail Toolbar Buttons (SMTC media buttons on hover)
+let thumbarInitialized = false;
+
 function updateThumbarButtons(isPlaying) {
   if (process.platform !== 'win32' || !mainWindow || mainWindow.isDestroyed()) return;
   try {
@@ -324,7 +352,7 @@ function updateThumbarButtons(isPlaying) {
     const iconPause = nativeImage.createFromPath(path.join(assetsDir, 'thumb-pause.png'));
     const iconNext = nativeImage.createFromPath(path.join(assetsDir, 'thumb-next.png'));
 
-    mainWindow.setThumbarButtons([
+    const success = mainWindow.setThumbarButtons([
       {
         tooltip: 'Add to playlist',
         icon: iconAdd,
@@ -362,6 +390,12 @@ function updateThumbarButtons(isPlaying) {
         },
       },
     ]);
+
+    if (success) {
+      thumbarInitialized = true;
+    } else if (!thumbarInitialized) {
+      setTimeout(() => updateThumbarButtons(isPlaying), 800);
+    }
   } catch (err) {
     console.warn('Failed to update taskbar thumbnail buttons:', err ? err.message : err);
   }

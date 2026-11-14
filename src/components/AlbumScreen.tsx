@@ -4,7 +4,6 @@ import {
   Play,
   Pause,
   Shuffle,
-  Clock,
   Heart,
   ListPlus,
   Music,
@@ -79,9 +78,13 @@ export const AlbumScreen: React.FC<Props> = ({
     <div className="app-viewport playlist-viewport album-viewport">
       {/* Top Back Nav Button */}
       <div className="playlist-top-bar">
-        <button className="icon-btn back-btn" onClick={onBack} title="Back to Home">
+        <button
+          className="back-btn"
+          onClick={onBack}
+          title="Go back"
+          aria-label="Go back"
+        >
           <ArrowLeft size={18} />
-          <span>Back</span>
         </button>
       </div>
 
@@ -179,11 +182,11 @@ export const AlbumScreen: React.FC<Props> = ({
       <div className="playlist-tracklist-section">
         <div className="playlist-table-header">
           <div className="col-index">#</div>
+          <div className="col-thumb-spacer" />
           <div className="col-title">Title</div>
           <div className="col-album">Album</div>
-          <div className="col-actions">
-            <Clock size={15} style={{ marginRight: '16px' }} />
-          </div>
+          <div className="col-duration">Duration</div>
+          <div className="col-actions-spacer" />
         </div>
 
         {album.songs.length === 0 ? (
@@ -234,14 +237,11 @@ export const AlbumScreen: React.FC<Props> = ({
 
                   <div className="song-row-album">{song.album || album.title}</div>
 
-                  <div
-                    style={{
-                      display: 'flex',
-                      alignItems: 'center',
-                      justifyContent: 'flex-end',
-                      gap: '14px',
-                    }}
-                  >
+                  <span className="song-row-duration">
+                    {formatSongDuration(song.duration)}
+                  </span>
+
+                  <div className="song-row-actions">
                     <Heart
                       size={16}
                       className={`like-btn ${liked ? 'liked' : ''}`}
@@ -278,10 +278,6 @@ export const AlbumScreen: React.FC<Props> = ({
                         <ListPlus size={15} />
                       </button>
                     )}
-
-                    <span className="song-row-duration">
-                      {formatSongDuration(song.duration)}
-                    </span>
                   </div>
                 </div>
               );

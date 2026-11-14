@@ -4,23 +4,33 @@ import type { Playlist, Song } from '../types';
 
 interface Props {
   isOpen: boolean;
-  song: Song | null;
+  song?: Song | null;
+  songs?: Song[] | null;
   playlists: Playlist[];
   onClose: () => void;
   onAddToPlaylist: (playlistId: string, song: Song) => void;
   onCreateAndAdd: (playlistTitle: string, song: Song) => void;
+  onAddMultipleToPlaylist?: (playlistId: string, songs: Song[]) => void;
+  onCreateAndAddMultiple?: (playlistTitle: string, songs: Song[]) => void;
 }
 
 export const AddToPlaylistModal: React.FC<Props> = ({
   isOpen,
   song,
+  songs,
   playlists,
   onClose,
   onAddToPlaylist,
   onCreateAndAdd,
+  onAddMultipleToPlaylist,
+  onCreateAndAddMultiple,
 }) => {
   const [newTitle, setNewTitle] = useState('');
   const [isCreating, setIsCreating] = useState(false);
+
+  const isMultiple = Boolean(songs && songs.length > 0);
+  const activeSong = song || (songs && songs[0]) || null;
+  const songCount = songs?.length || (song ? 1 : 0);
 
   useEffect(() => {
     if (!isOpen) {
@@ -39,14 +49,26 @@ export const AddToPlaylistModal: React.FC<Props> = ({
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [isOpen, onClose]);
 
-  if (!isOpen || !song) return null;
+  if (!isOpen || (!song && !isMultiple)) return null;
 
   const handleCreateSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    if (newTitle.trim()) {
-      onCreateAndAdd(newTitle.trim(), song);
-      setNewTitle('');
-      setIsCreating(false);
+    if (!newTitle.trim()) return;
+
+    if (isMultiple && songs && onCreateAndAddMultiple) {
+      onCreateAndAddMultiple(newTitle.trim(), songs);
+    } else if (activeSong) {
+      onCreateAndAdd(newTitle.trim(), activeSong);
+    }
+    setNewTitle('');
+    setIsCreating(false);
+  };
+
+  const handleSelectPlaylist = (playlistId: string) => {
+    if (isMultiple && songs && onAddMultipleToPlaylist) {
+      onAddMultipleToPlaylist(playlistId, songs);
+    } else if (activeSong) {
+      onAddToPlaylist(playlistId, activeSong);
     }
   };
 
@@ -61,7 +83,7 @@ export const AddToPlaylistModal: React.FC<Props> = ({
           <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
             <ListPlus size={20} style={{ color: 'var(--primary)' }} />
             <h3 style={{ margin: 0, fontSize: '1.15rem', fontWeight: 700 }}>
-              Add to Playlist
+              {isMultiple ? `Save Queue to Playlist (${songCount} tracks)` : 'Add to Playlist'}
             </h3>
           </div>
           <button className="icon-btn" onClick={onClose} title="Close">
@@ -69,18 +91,26 @@ export const AddToPlaylistModal: React.FC<Props> = ({
           </button>
         </div>
 
-        {/* Selected Song Preview Banner */}
-        <div className="modal-song-preview">
-          <img
-            src={song.coverUrl}
-            alt={song.title}
-            className="modal-song-thumb"
-          />
-          <div className="modal-song-info">
-            <div className="modal-song-title">{song.title}</div>
-            <div className="modal-song-artist">{song.artist}</div>
+        {/* Selected Song / Queue Preview Banner */}
+        {activeSong && (
+          <div className="modal-song-preview">
+            <img
+              src={activeSong.coverUrl}
+              alt={activeSong.title}
+              className="modal-song-thumb"
+            />
+            <div className="modal-song-info">
+              <div className="modal-song-title">
+                {isMultiple ? `Current Queue (${songCount} tracks)` : activeSong.title}
+              </div>
+              <div className="modal-song-artist">
+                {isMultiple && songs
+                  ? songs.slice(0, 3).map((s) => s.title).join(', ') + (songs.length > 3 ? '...' : '')
+                  : activeSong.artist}
+              </div>
+            </div>
           </div>
-        </div>
+        )}
 
         {/* Create New Playlist Inline Toggle */}
         {isCreating ? (
@@ -88,7 +118,7 @@ export const AddToPlaylistModal: React.FC<Props> = ({
             <input
               type="text"
               className="modal-create-input"
-              placeholder="Enter new playlist name..."
+              placeholder={isMultiple ? "Enter playlist name for queue..." : "Enter new playlist name..."}
               value={newTitle}
               onChange={(e) => setNewTitle(e.target.value)}
               autoFocus
@@ -99,7 +129,7 @@ export const AddToPlaylistModal: React.FC<Props> = ({
                 className="modal-submit-btn"
                 disabled={!newTitle.trim()}
               >
-                Create & Add
+                {isMultiple ? `Create & Save (${songCount})` : 'Create & Add'}
               </button>
               <button
                 type="button"
@@ -123,7 +153,7 @@ export const AddToPlaylistModal: React.FC<Props> = ({
         {/* Playlists List */}
         <div className="modal-playlists-list">
           {playlists.map((pl) => {
-            const isAlreadyAdded = pl.songs.some((s) => s.id === song.id);
+            const isAlreadyAdded = !isMultiple && activeSong && pl.songs.some((s) => s.id === activeSong.id);
 
             return (
               <div
@@ -131,7 +161,7 @@ export const AddToPlaylistModal: React.FC<Props> = ({
                 className={`modal-playlist-item ${isAlreadyAdded ? 'added' : ''}`}
                 onClick={() => {
                   if (!isAlreadyAdded) {
-                    onAddToPlaylist(pl.id, song);
+                    handleSelectPlaylist(pl.id);
                   }
                 }}
               >
@@ -163,7 +193,7 @@ export const AddToPlaylistModal: React.FC<Props> = ({
                   ) : (
                     <button
                       className="add-to-pl-circle-btn"
-                      title="Add to this playlist"
+                      title={isMultiple ? `Add queue to ${pl.title}` : 'Add to this playlist'}
                     >
                       <Plus size={16} />
                     </button>
@@ -177,4 +207,3 @@ export const AddToPlaylistModal: React.FC<Props> = ({
     </div>
   );
 };
-

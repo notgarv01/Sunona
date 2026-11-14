@@ -20,8 +20,8 @@ import {
   PanelRight,
   Tv2,
   PlusCircle,
-  PictureInPicture2,
 } from 'lucide-react';
+import { SpotifyMiniplayerIcon } from './MiniPlayer';
 import type { Song, ThemePreset } from '../types';
 import { AudioVisualizer } from './AudioVisualizer';
 
@@ -41,6 +41,8 @@ interface Props {
   isNowPlayingViewOpen?: boolean;
   onToggleNowPlayingView?: () => void;
   onOpenNowPlaying?: () => void;
+  isMiniPlayerOpen?: boolean;
+  onToggleMiniPlayer?: () => void;
   onTogglePlay: () => void;
   onNext: () => void;
   onPrev: () => void;
@@ -75,6 +77,8 @@ export const PlayerBar: React.FC<Props> = ({
   isNowPlayingViewOpen = false,
   onToggleNowPlayingView,
   onOpenNowPlaying,
+  isMiniPlayerOpen = false,
+  onToggleMiniPlayer,
   onTogglePlay,
   onNext,
   onPrev,
@@ -381,11 +385,11 @@ export const PlayerBar: React.FC<Props> = ({
           </div>
 
           <button
-            className="spotify-pb-icon-btn"
-            onClick={onOpenNowPlaying}
-            title="Miniplayer"
+            className={`spotify-pb-icon-btn ${isMiniPlayerOpen ? 'active' : ''}`}
+            onClick={onToggleMiniPlayer || onOpenNowPlaying}
+            title="Open Miniplayer"
           >
-            <PictureInPicture2 size={16} />
+            <SpotifyMiniplayerIcon size={16} />
           </button>
 
           <button
@@ -608,6 +612,17 @@ export const PlayerBar: React.FC<Props> = ({
         >
           <ListMusic size={16} />
         </button>
+
+        {/* Floating Miniplayer Button (Image 2) */}
+        {onToggleMiniPlayer && (
+          <button
+            className={`icon-btn ${isMiniPlayerOpen ? 'active' : ''}`}
+            onClick={onToggleMiniPlayer}
+            title="Open Miniplayer"
+          >
+            <SpotifyMiniplayerIcon size={16} />
+          </button>
+        )}
 
         {/* Full-Screen Now Playing Button */}
         <button

@@ -121,6 +121,18 @@ body {
   user-select: none;
 }
 
+/* PWA Window Controls Overlay Integration for SunoNa Header */
+@media (display-mode: window-controls-overlay) {
+  .app-header {
+    padding-left: max(24px, env(titlebar-area-x, 24px));
+    padding-right: max(250px, calc(100vw - env(titlebar-area-width, 100vw) + 24px));
+  }
+}
+
+body.is-wco .app-header {
+  padding-right: max(250px, calc(100vw - env(titlebar-area-width, 100vw) + 24px));
+}
+
 body.is-electron .app-header {
   padding-right: 145px;
 }
@@ -2384,11 +2396,16 @@ body.is-electron .app-header {
     justify-content: center;
     padding: 12px;
   }
-  .song-row {
-    grid-template-columns: 32px 40px 1fr 100px;
+  .song-row,
+  .playlist-tracklist-section .song-row {
+    grid-template-columns: 32px 40px 1fr 60px 70px;
   }
-  .song-row-album, .song-row-stats {
+  .song-row-album, .song-row-stats,
+  .playlist-table-header .col-album {
     display: none;
+  }
+  .playlist-table-header {
+    grid-template-columns: 32px 40px 1fr 60px 70px;
   }
 }
 /* =========================================
@@ -3133,23 +3150,37 @@ body.is-electron .coverflow-header {
 }
 
 .back-btn {
+  width: 36px;
+  height: 36px;
+  min-width: 36px;
+  min-height: 36px;
+  border-radius: 50%;
+  background: rgba(0, 0, 0, 0.65);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  color: #ffffff;
   display: inline-flex;
   align-items: center;
-  gap: 8px;
-  padding: 8px 16px;
-  border-radius: 20px;
-  background: rgba(255, 255, 255, 0.05);
-  border: 1px solid var(--border-glass);
-  color: #f8fafc;
-  font-size: 0.88rem;
-  font-weight: 600;
+  justify-content: center;
   cursor: pointer;
-  transition: all 0.2s ease;
+  padding: 0;
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.35);
 }
 
 .back-btn:hover {
-  background: rgba(255, 255, 255, 0.1);
-  transform: translateX(-2px);
+  background: rgba(255, 255, 255, 0.18);
+  border-color: rgba(255, 255, 255, 0.28);
+  transform: scale(1.06);
+  color: #ffffff;
+}
+
+.back-btn:active {
+  transform: scale(0.95);
+}
+
+.back-btn svg {
+  display: block;
+  stroke-width: 2.2px;
 }
 
 /* Playlist Hero Section */
@@ -3417,20 +3448,47 @@ body.is-electron .coverflow-header {
 /* Table Header */
 .playlist-table-header {
   display: grid;
-  grid-template-columns: 48px 1fr 180px 100px;
-  padding: 10px 16px;
-  font-size: 0.78rem;
+  grid-template-columns: 36px 44px 4fr 3fr 80px 80px;
+  align-items: center;
+  gap: 16px;
+  padding: 10px 14px;
+  font-size: 0.76rem;
   font-weight: 700;
   text-transform: uppercase;
-  letter-spacing: 0.05em;
+  letter-spacing: 0.08em;
   color: var(--text-muted);
-  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
   margin-bottom: 8px;
 }
 
-.playlist-table-header .col-actions {
+.playlist-table-header .col-index {
+  text-align: center;
+}
+
+.playlist-table-header .col-thumb-spacer {
+  width: 44px;
+}
+
+.playlist-table-header .col-duration {
+  text-align: right;
+}
+
+.playlist-table-header .col-actions-spacer {
+  width: 80px;
+}
+
+/* Ensure PlaylistScreen & AlbumScreen song rows match the table header grid */
+.playlist-tracklist-section .song-row {
+  grid-template-columns: 36px 44px 4fr 3fr 80px 80px;
+  gap: 16px;
+  padding: 8px 14px;
+}
+
+.song-row-actions {
   display: flex;
+  align-items: center;
   justify-content: flex-end;
+  gap: 18px;
 }
 
 /* Empty State */

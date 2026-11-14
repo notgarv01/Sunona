@@ -163,14 +163,24 @@ async function createWindow() {
     mainWindow.show();
   });
 
-  // Handle external link clicks and allow Google Auth popup
+  // Handle external link clicks and allow Google Auth popup strictly
   mainWindow.webContents.setWindowOpenHandler(({ url }) => {
-    // Allow Google Account & Firebase Auth popup window
-    if (
-      url.includes('firebaseapp.com') ||
-      url.includes('accounts.google.com') ||
-      url.includes('google.com/o/oauth2')
-    ) {
+    let parsedUrl = null;
+    try {
+      parsedUrl = new URL(url);
+    } catch {
+      return { action: 'deny' };
+    }
+
+    // Strictly validate Google Account & Firebase Auth popup hostnames
+    const hostname = parsedUrl.hostname.toLowerCase();
+    const isGoogleAuth =
+      (hostname === 'accounts.google.com' ||
+        hostname.endsWith('.firebaseapp.com') ||
+        hostname === 'studybychat.firebaseapp.com') &&
+      parsedUrl.protocol === 'https:';
+
+    if (isGoogleAuth) {
       return {
         action: 'allow',
         overrideBrowserWindowOptions: {
@@ -185,9 +195,30 @@ async function createWindow() {
       };
     }
 
-    const { shell } = require('electron');
-    shell.openExternal(url);
+    // Strictly whitelist safe web protocols for external opening
+    if (parsedUrl.protocol === 'http:' || parsedUrl.protocol === 'https:') {
+      const { shell } = require('electron');
+      shell.openExternal(url);
+    }
     return { action: 'deny' };
+  });
+
+  // Prevent top-level window navigation away from trusted local app origin
+  mainWindow.webContents.on('will-navigate', (event, navigationUrl) => {
+    try {
+      const parsed = new URL(navigationUrl);
+      const isDevOrigin = parsed.origin === 'http://127.0.0.1:5173' || parsed.origin === 'http://localhost:5173';
+      const isProdOrigin = apiServer && parsed.origin === `http://127.0.0.1:${apiServer.port}`;
+      if (!isDevOrigin && !isProdOrigin) {
+        event.preventDefault();
+        if (parsed.protocol === 'http:' || parsed.protocol === 'https:') {
+          const { shell } = require('electron');
+          shell.openExternal(navigationUrl);
+        }
+      }
+    } catch {
+      event.preventDefault();
+    }
   });
 
   // Enable F12 and Ctrl+Shift+I for developer tools toggle

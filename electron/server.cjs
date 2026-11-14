@@ -73,7 +73,7 @@ function matchAcronym(str, query) {
 }
 
 function escapeRegExp(s) {
-  return s.replace(/[-[\]{}()*+?.,\\^$|#\s]/g, '\\function createServer(staticDir) {');
+  return s.replace(/[-[\]{}()*+?.,\\^$|#\s]/g, '\\$&');
 }
 
 const ARTIST_COLLAB_MAP = {
@@ -142,7 +142,31 @@ function createServer(staticDir) {
       res.setHeader('X-Content-Type-Options', 'nosniff');
       res.setHeader('X-Frame-Options', 'SAMEORIGIN');
       res.setHeader('Referrer-Policy', 'strict-origin-when-cross-origin');
-      res.setHeader('Access-Control-Allow-Origin', '*');
+      // Restrict CORS to trusted local loopback origins
+      const origin = req.headers.origin;
+      if (origin) {
+        try {
+          const originUrl = new URL(origin);
+          if (
+            originUrl.hostname === '127.0.0.1' ||
+            originUrl.hostname === 'localhost' ||
+            originUrl.protocol === 'app:' ||
+            originUrl.protocol === 'file:'
+          ) {
+            res.setHeader('Access-Control-Allow-Origin', origin);
+            res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
+            res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Range');
+          }
+        } catch {}
+      } else {
+        res.setHeader('Access-Control-Allow-Origin', '*');
+      }
+
+      if (req.method === 'OPTIONS') {
+        res.statusCode = 204;
+        res.end();
+        return;
+      }
 
       const reqUrl = new URL(req.url, 'http://localhost');
       const pathname = reqUrl.pathname;
@@ -369,8 +393,8 @@ function createServer(staticDir) {
               .map((c) => (c.searchSuggestionRenderer?.suggestion?.runs || []).map((r) => r.text).join(''))
               .filter(Boolean);
 
-            const suggestions[] = [];
-            const seenSuggs = new Set<string>();
+            const suggestions = [];
+            const seenSuggs = new Set();
             for (const s of rawSuggs) {
               const clean = s
                 .replace(/\b(?:song|songs|video|audio|lyrics?|full|hd)\b/gi, '')
@@ -385,8 +409,8 @@ function createServer(staticDir) {
             }
 
             // 2. Metrolist-style Recommended Music Items (Section 1)
-            const results[] = [];
-            const seenIds = new Set<string>();
+            const results = [];
+            const seenIds = new Set();
 
             for (const c of sections[1]?.searchSuggestionsSectionRenderer?.contents || []) {
               const item = c.musicResponsiveListItemRenderer;
@@ -397,8 +421,8 @@ function createServer(staticDir) {
               if (!title) continue;
 
               const metaRuns = item.flexColumns?.[1]?.musicResponsiveListItemFlexColumnRenderer?.text?.runs || [];
-              const metaParts[] = [];
-              let cur[] = [];
+              const metaParts = [];
+              let cur = [];
               for (const r of metaRuns) {
                 if (r.text && r.text.includes('•')) {
                   if (cur.length) metaParts.push(cur.map((x) => x.text).join('').trim());
@@ -1032,9 +1056,19 @@ function createServer(staticDir) {
 
       // STATIC FILE SERVING from staticDir (e.g. dist/)
       if (staticDir && fs.existsSync(staticDir)) {
-        let filePath = path.join(staticDir, decodeURIComponent(pathname));
+        let safePath;
+        try {
+          const decoded = decodeURIComponent(pathname);
+          safePath = path.resolve(staticDir, '.' + path.normalize(decoded));
+        } catch (_) {
+          res.statusCode = 400;
+          res.end('Bad Request');
+          return;
+        }
+        let filePath = safePath;
         // Prevent directory traversal attacks
-        if (!filePath.startsWith(staticDir)) {
+        const relative = path.relative(staticDir, filePath);
+        if (relative.startsWith('..') || path.isAbsolute(relative)) {
           res.statusCode = 403;
           res.end('Forbidden');
           return;

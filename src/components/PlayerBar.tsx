@@ -202,6 +202,10 @@ export const PlayerBar: React.FC<Props> = ({
     : 0;
   const progressPercent = Math.max(0, Math.min(100, activeRatio * 100));
 
+  if (!currentSong) {
+    return null;
+  }
+
   if (uiMode === 'spotify') {
     return (
       <footer className="player-bar spotify-desktop-player-bar">

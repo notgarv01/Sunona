@@ -32,10 +32,9 @@ export const LyricReelExportModal: React.FC<LyricReelExportModalProps> = ({
     }
   }, [isOpen, currentTime]);
 
-  if (!isOpen || !currentSong) return null;
-
   // Render preview frame on canvas
   const drawFrame = (timeOffset: number) => {
+    if (!currentSong) return;
     const canvas = canvasRef.current;
     if (!canvas) return;
     const ctx = canvas.getContext('2d');
@@ -169,6 +168,7 @@ export const LyricReelExportModal: React.FC<LyricReelExportModalProps> = ({
 
   // Live preview loop when modal is open
   useEffect(() => {
+    if (!isOpen || !currentSong) return;
     let t = 0;
     const loop = () => {
       t += 0.05;
@@ -180,7 +180,7 @@ export const LyricReelExportModal: React.FC<LyricReelExportModalProps> = ({
     return () => {
       if (animFrameRef.current) cancelAnimationFrame(animFrameRef.current);
     };
-  }, [startTime, durationSecs, currentSong]);
+  }, [isOpen, currentSong, startTime, durationSecs]);
 
   // Actual recording export function
   const handleExportReel = async () => {
@@ -231,6 +231,8 @@ export const LyricReelExportModal: React.FC<LyricReelExportModalProps> = ({
       setIsRendering(false);
     }
   };
+
+  if (!isOpen || !currentSong) return null;
 
   return (
     <div className="rose-modal-overlay" onClick={onClose}>

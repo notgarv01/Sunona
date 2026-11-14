@@ -571,7 +571,7 @@ export const SpotifyLayout: React.FC<SpotifyLayoutProps> = ({
 
   // Right panel visibility logic:
   // In Screenshot 442, when isLyricsOpen is true, right panel shows Queue!
-  const showRightPanel = isNowPlayingViewOpen || isLyricsOpen || isQueueOpen;
+  const showRightPanel = Boolean((isNowPlayingViewOpen && currentSong) || isLyricsOpen || isQueueOpen);
 
   // Toggle fullscreen via Windows button
   const toggleFullscreen = () => {
@@ -1356,7 +1356,8 @@ export const SpotifyLayout: React.FC<SpotifyLayoutProps> = ({
       {/* ══════════════════════════════════════════════════════
           BOTTOM PLAYER BAR (Exact Spotify 90px bottom bar)
           ══════════════════════════════════════════════════════ */}
-      <footer className="sp-player">
+      {currentSong && (
+        <footer className="sp-player">
         {/* Left: Track info */}
         <div className="sp-pb-left">
           {currentSong ? (
@@ -1541,6 +1542,7 @@ export const SpotifyLayout: React.FC<SpotifyLayoutProps> = ({
           )}
         </div>
       </footer>
+      )}
 
       {/* 9:16 Lyric Reel Exporter Modal (from Pink Rose Lyric Guide) */}
       <LyricReelExportModal

@@ -61,11 +61,16 @@ interface StoredPlaybackSession {
 
 const getStoredPlaybackSession = (): StoredPlaybackSession | null => {
   try {
-    const raw = localStorage.getItem('sunona_last_playback_session');
-    if (!raw) return null;
-    const parsed = JSON.parse(raw);
-    if (parsed && parsed.song && parsed.song.id) {
-      return parsed;
+    if (typeof window !== 'undefined' && window.localStorage) {
+      localStorage.removeItem('sunona_last_playback_session'); // Clean legacy unisolated key
+      const activeUser = authService.getCurrentUser();
+      if (!activeUser || !activeUser.uid) return null;
+      const raw = localStorage.getItem(`sunona_playback_${activeUser.uid}`);
+      if (!raw) return null;
+      const parsed = JSON.parse(raw);
+      if (parsed && parsed.song && parsed.song.id) {
+        return parsed;
+      }
     }
   } catch (err) {
     console.warn('Failed to parse last playback session:', err);
@@ -77,9 +82,9 @@ export const App: React.FC = () => {
   const initialSession = useRef<StoredPlaybackSession | null>(getStoredPlaybackSession()).current;
 
   const [songs, setSongs] = useState<Song[]>(INITIAL_SONGS);
-  const [currentSong, setCurrentSong] = useState<Song | null>(() => (initialSession ? initialSession.song : INITIAL_SONGS[0]));
-  const [queue, setQueue] = useState<Song[]>(() => ((initialSession?.queue && initialSession.queue.length > 0) ? initialSession.queue : INITIAL_SONGS));
-  const queueRef = useRef<Song[]>((initialSession?.queue && initialSession.queue.length > 0) ? initialSession.queue : INITIAL_SONGS);
+  const [currentSong, setCurrentSong] = useState<Song | null>(() => (initialSession ? initialSession.song : null));
+  const [queue, setQueue] = useState<Song[]>(() => ((initialSession?.queue && initialSession.queue.length > 0) ? initialSession.queue : []));
+  const queueRef = useRef<Song[]>((initialSession?.queue && initialSession.queue.length > 0) ? initialSession.queue : []);
   const playbackContextRef = useRef<'radio' | 'playlist'>('radio');
 
   useEffect(() => {
@@ -87,7 +92,7 @@ export const App: React.FC = () => {
   }, [queue]);
   const [isPlaying, setIsPlaying] = useState<boolean>(false);
   const [currentTime, setCurrentTime] = useState<number>(() => (initialSession ? initialSession.currentTime : 0));
-  const [duration, setDuration] = useState<number>(() => (initialSession ? (initialSession.duration || initialSession.song.duration || 0) : (INITIAL_SONGS[0]?.duration || 0)));
+  const [duration, setDuration] = useState<number>(() => (initialSession ? (initialSession.duration || initialSession.song.duration || 0) : 0));
   const [volume, setVolume] = useState<number>(0.85);
   const [isMuted, setIsMuted] = useState<boolean>(false);
   const [isShuffle, setIsShuffle] = useState<boolean>(false);
@@ -121,7 +126,7 @@ export const App: React.FC = () => {
     }
   });
 
-  const [isNowPlayingViewOpen, setIsNowPlayingViewOpen] = useState<boolean>(true);
+  const [isNowPlayingViewOpen, setIsNowPlayingViewOpen] = useState<boolean>(false);
 
   const handleToggleUiMode = useCallback((mode: 'sunona' | 'spotify') => {
     setUiMode(mode);
@@ -296,8 +301,33 @@ export const App: React.FC = () => {
   const [isSettingsOpen, setIsSettingsOpen] = useState<boolean>(false);
 
   // Google Auth Subscription & Cloud Data Synchronization
+  const activeUserUidRef = useRef<string | null>(authService.getCurrentUser()?.uid || null);
+
   useEffect(() => {
     return authService.subscribe(async (user) => {
+      const prevUid = activeUserUidRef.current;
+      const newUid = user?.uid || null;
+
+      // Detect Account Switch (e.g. from user A to user B, or user A to null)
+      if (prevUid !== newUid) {
+        activeUserUidRef.current = newUid;
+
+        // Immediately STOP any running playback and clear previous account's music
+        try {
+          audioEngine.stopAndRelease();
+        } catch {}
+
+        setCurrentSong(null);
+        currentSongRef.current = null;
+        setIsPlaying(false);
+        setCurrentTime(0);
+        setDuration(0);
+        setQueue([]);
+        queueRef.current = [];
+        setIsNowPlayingViewOpen(false);
+        setActiveDrawer(null);
+      }
+
       setCurrentUser(user);
       if (user) {
         setIsAuthModalOpen(false);
@@ -328,8 +358,28 @@ export const App: React.FC = () => {
         setLikedSongs(activeLikedList);
 
         // Immediately re-sync currentSong and songs list to this user's like state
-        setCurrentSong((prev) => (prev ? { ...prev, isLiked: activeLikedList.some((s) => s.id === prev.id) } : null));
         setSongs((prev) => prev.map((s) => ({ ...s, isLiked: activeLikedList.some((l) => l.id === s.id) })));
+
+        // 4. Restore this user's isolated playback session if they had one (paused on login)
+        try {
+          const rawSession = localStorage.getItem(`sunona_playback_${user.uid}`);
+          if (rawSession) {
+            const session = JSON.parse(rawSession);
+            if (session && session.song && session.song.id) {
+              const isLiked = activeLikedList.some((s) => s.id === session.song.id);
+              const restoredSong = { ...session.song, isLiked };
+              setCurrentSong(restoredSong);
+              currentSongRef.current = restoredSong;
+              setIsPlaying(false);
+              setCurrentTime(session.currentTime || 0);
+              setDuration(session.duration || session.song.duration || 0);
+              if (Array.isArray(session.queue) && session.queue.length > 0) {
+                setQueue(session.queue);
+                queueRef.current = session.queue;
+              }
+            }
+          }
+        } catch {}
 
         // Load Daily Discover only if user has listening seeds
         const userSeeds = historyService.getDiscoverySeeds();
@@ -712,6 +762,22 @@ export const App: React.FC = () => {
     }
     setDuration(song.duration);
 
+    // Save playback session for this active user immediately
+    const activeUid = authService.getCurrentUser()?.uid;
+    if (activeUid) {
+      try {
+        localStorage.setItem(
+          `sunona_playback_${activeUid}`,
+          JSON.stringify({
+            song: enrichedSong,
+            currentTime: startOffset,
+            duration: song.duration,
+            queue: (customQueue && customQueue.length > 0) ? customQueue : queueRef.current,
+          })
+        );
+      } catch {}
+    }
+
     // Broadcast play event to Listen Together room
     listenTogetherService.broadcastHostPlay(song, startOffset);
 
@@ -1014,16 +1080,17 @@ export const App: React.FC = () => {
     });
   }, [showToast]);
 
-  // Persist current playback session so returning users resume where they left off
+  // Persist current playback session per-user so returning users resume where they left off
   const lastSavedTimeRef = useRef<number>(0);
   useEffect(() => {
-    if (!currentSong) return;
+    if (!currentSong || !currentUser?.uid) return;
     const now = Date.now();
     if (now - lastSavedTimeRef.current > 1500 || !isPlaying) {
       lastSavedTimeRef.current = now;
       try {
+        const storageKey = `sunona_playback_${currentUser.uid}`;
         localStorage.setItem(
-          'sunona_last_playback_session',
+          storageKey,
           JSON.stringify({
             song: currentSong,
             currentTime: Math.floor(currentTime),
@@ -1035,7 +1102,7 @@ export const App: React.FC = () => {
         // storage quota fallback
       }
     }
-  }, [currentSong, currentTime, duration, isPlaying]);
+  }, [currentSong, currentTime, duration, isPlaying, currentUser]);
 
   // Electron Native Integration: Keyboard Media Keys & Native Frame Support
   useEffect(() => {
@@ -1660,8 +1727,35 @@ export const App: React.FC = () => {
             likedSongsCount={likedSongs.length}
             playlistsCount={playlists.length}
             onSignOut={() => {
+              // Commit active playback session for this user before wiping memory state
+              const activeUid = currentUser?.uid || authService.getCurrentUser()?.uid;
+              if (activeUid && currentSong) {
+                try {
+                  localStorage.setItem(
+                    `sunona_playback_${activeUid}`,
+                    JSON.stringify({
+                      song: currentSong,
+                      currentTime: Math.floor(currentTime),
+                      duration: duration || currentSong.duration,
+                      queue: queueRef.current,
+                    })
+                  );
+                } catch {}
+              }
               setIsProfileModalOpen(false);
               authService.signOut();
+              try {
+                audioEngine.stopAndRelease();
+              } catch {}
+              setCurrentSong(null);
+              currentSongRef.current = null;
+              setIsPlaying(false);
+              setCurrentTime(0);
+              setDuration(0);
+              setQueue([]);
+              queueRef.current = [];
+              setIsNowPlayingViewOpen(false);
+              setActiveDrawer(null);
               setCurrentUser(null);
               historyService.setUser('guest');
               playlistService.setUser('guest');
@@ -2052,8 +2146,35 @@ export const App: React.FC = () => {
           likedSongsCount={likedSongs.length}
           playlistsCount={playlists.length}
           onSignOut={() => {
+            // Commit active playback session for this user before wiping memory state
+            const activeUid = currentUser?.uid || authService.getCurrentUser()?.uid;
+            if (activeUid && currentSong) {
+              try {
+                localStorage.setItem(
+                  `sunona_playback_${activeUid}`,
+                  JSON.stringify({
+                    song: currentSong,
+                    currentTime: Math.floor(currentTime),
+                    duration: duration || currentSong.duration,
+                    queue: queueRef.current,
+                  })
+                );
+              } catch {}
+            }
             setIsProfileModalOpen(false);
             authService.signOut();
+            try {
+              audioEngine.stopAndRelease();
+            } catch {}
+            setCurrentSong(null);
+            currentSongRef.current = null;
+            setIsPlaying(false);
+            setCurrentTime(0);
+            setDuration(0);
+            setQueue([]);
+            queueRef.current = [];
+            setIsNowPlayingViewOpen(false);
+            setActiveDrawer(null);
             setCurrentUser(null);
             historyService.setUser('guest');
             playlistService.setUser('guest');

@@ -83,6 +83,30 @@ app.get(['/health', '/ping', '/'], (req, res) => {
   });
 });
 
+app.get('/api/debug-stream', async (req, res) => {
+  const testId = req.query.id || '9CmAUpXtVFc';
+  try {
+    const yt = ytInstance || new Ytdl();
+    const info = await yt.getInfo(testId);
+    const audioFormats = (info.formats || []).filter((f) => f.hasAudio);
+    const chosen = chooseFormat(info.formats, { filter: (f) => f.hasAudio && !f.hasVideo });
+    res.json({
+      success: true,
+      title: info.videoDetails?.title,
+      formatsCount: info.formats?.length,
+      audioFormatsCount: audioFormats.length,
+      chosenHasUrl: Boolean(chosen?.url),
+    });
+  } catch (err) {
+    res.status(500).json({
+      success: false,
+      errorName: err.name,
+      errorMessage: err.message,
+      stack: err.stack,
+    });
+  }
+});
+
 // ── Audio Stream Proxy (/api/stream?id=...&title=...&artist=...) ──
 app.get('/api/stream', async (req, res) => {
   try {

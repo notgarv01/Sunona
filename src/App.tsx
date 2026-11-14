@@ -36,6 +36,7 @@ import { MiniPlayer, copyStylesToPip } from './components/MiniPlayer';
 import { authService, type UserProfile } from './services/authService';
 import { cloudSyncService } from './services/cloudSyncService';
 import { useSleepTimer } from './hooks/useSleepTimer';
+import { LandingPage } from './components/LandingPage';
 
 // Helper to parse LRC formatted lyrics into LyricLine[]
 function parseLrcLyrics(lrcText: string): LyricLine[] {
@@ -114,6 +115,16 @@ const getStoredPlaybackSession = (): StoredPlaybackSession | null => {
 };
 
 export const App: React.FC = () => {
+  const isPWAOrElectron =
+    typeof window !== 'undefined' &&
+    (Boolean((window as any).electronAPI?.isElectron) ||
+      Boolean(window.matchMedia && window.matchMedia('(display-mode: standalone)').matches) ||
+      Boolean((window.navigator as any)?.standalone) ||
+      window.location.search.includes('pwa=true') ||
+      window.location.search.includes('song=') ||
+      sessionStorage.getItem('sunona_open_player') === 'true');
+
+  const [showPlayer, setShowPlayer] = useState<boolean>(Boolean(isPWAOrElectron));
   const initialSession = useRef<StoredPlaybackSession | null>(getStoredPlaybackSession()).current;
 
   const [songs, setSongs] = useState<Song[]>(INITIAL_SONGS);
@@ -1806,6 +1817,18 @@ export const App: React.FC = () => {
     return <IntroScreen onEnter={() => setHasEntered(true)} />;
   }
   */
+
+  // If visiting in normal browser tab (not installed PWA and not Electron), show Landing Page
+  if (!showPlayer) {
+    return (
+      <LandingPage
+        onOpenPlayer={() => {
+          sessionStorage.setItem('sunona_open_player', 'true');
+          setShowPlayer(true);
+        }}
+      />
+    );
+  }
 
   // ══ SPOTIFY LAYOUT MODE ══
   if (uiMode === 'spotify') {

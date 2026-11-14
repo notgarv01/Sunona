@@ -33,9 +33,9 @@ export const HomeScreen: React.FC<Props> = ({
   currentSong,
   isPlaying,
   dailyDiscover = [],
-  listenAgain = [],
+  listenAgain: _listenAgain = [],
   similarShelf,
-  mostPlayed = [],
+  mostPlayed: _mostPlayed = [],
   tasteProfile: _tasteProfile,
   favoriteArtistShelf,
   onPlaySong,
@@ -157,52 +157,6 @@ export const HomeScreen: React.FC<Props> = ({
         </>
       )}
 
-      {/* 2. On Repeat / Most Played Songs (Frequency Check) */}
-      {mostPlayed && mostPlayed.length > 0 && (
-        <>
-          <div className="section-header">
-            <div className="section-title">On Repeat • Your Most Played</div>
-            <span className="section-action">{mostPlayed.length} top tracks</span>
-          </div>
-
-          <div className="most-played-grid">
-            {mostPlayed.map(({ song, playCount, genreType }, idx) => {
-              const isThisPlaying = currentSong?.id === song.id && isPlaying;
-
-              return (
-                <div
-                  key={`most_played_${song.id}_${idx}`}
-                  className="most-played-card"
-                  onClick={() => onPlaySong(song)}
-                >
-                  <div className="most-played-cover-wrap">
-                    <img src={song.coverUrl} alt={song.title} className="most-played-cover" />
-                    <div className="most-played-overlay">
-                      <div className="most-played-play-btn">
-                        {isThisPlaying ? (
-                          <Pause size={18} fill="#0b0914" color="#0b0914" />
-                        ) : (
-                          <Play size={18} fill="#0b0914" color="#0b0914" style={{ marginLeft: '2px' }} />
-                        )}
-                      </div>
-                    </div>
-                  </div>
-                  <div className="most-played-info">
-                    <div className="most-played-title">{song.title}</div>
-                    <div className="most-played-artist">{song.artist}</div>
-                    <div className="most-played-meta-pill">
-                      <span>Played {playCount}×</span>
-                      <span style={{ opacity: 0.4 }}>•</span>
-                      <span>{genreType}</span>
-                    </div>
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-        </>
-      )}
-
       {/* 3. Because You Love [Top Artist / Genre] */}
       {favoriteArtistShelf && favoriteArtistShelf.songs.length > 0 && (
         <>
@@ -233,30 +187,6 @@ export const HomeScreen: React.FC<Props> = ({
                 </div>
                 <div className="card-title">{song.title}</div>
                 <div className="card-artist">{song.artist}</div>
-              </div>
-            ))}
-          </div>
-        </>
-      )}
-
-      {/* 4. Listen Again & Recent History */}
-      {listenAgain && listenAgain.length > 0 && (
-        <>
-          <div className="section-header">
-            <div className="section-title">Listen Again</div>
-          </div>
-          <div className="listen-again-strip">
-            {listenAgain.map((song) => (
-              <div
-                key={`history_${song.id}`}
-                className="listen-again-pill"
-                onClick={() => onPlaySong(song)}
-              >
-                <img src={song.coverUrl} alt={song.title} className="listen-again-thumb" />
-                <div style={{ overflow: 'hidden' }}>
-                  <div className="listen-again-title">{song.title}</div>
-                  <div className="listen-again-artist">{song.artist}</div>
-                </div>
               </div>
             ))}
           </div>

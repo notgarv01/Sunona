@@ -605,9 +605,10 @@ export const NowPlayingModal: React.FC<Props> = ({
           <button
             className={`coverflow-pill-btn sub ${isShuffle ? 'active' : ''}`}
             onClick={onToggleShuffle}
-            title="Shuffle"
+            title={`Shuffle: ${isShuffle ? 'On' : 'Off'}`}
           >
             <Shuffle size={18} />
+            {isShuffle && <span className="spotify-pb-dot" />}
           </button>
 
           <button className="coverflow-pill-btn" onClick={onPrev} title="Previous (Left Arrow)">
@@ -636,6 +637,7 @@ export const NowPlayingModal: React.FC<Props> = ({
             title={`Repeat: ${repeatMode}`}
           >
             {repeatMode === 'one' ? <Repeat1 size={18} /> : <Repeat size={18} />}
+            {repeatMode !== 'off' && <span className="spotify-pb-dot" />}
           </button>
         </div>
 

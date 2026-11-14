@@ -12,7 +12,7 @@ import {
   PlusCircle,
   Camera,
 } from 'lucide-react';
-import type { Playlist, Song } from '../types';
+import type { Playlist, Song, PlaybackSource } from '../types';
 import type { UserProfile } from '../services/authService';
 import { playlistService, isInvalidCoverUrl } from '../services/playlistService';
 import { SwipeableSongRow } from './SwipeableSongRow';
@@ -21,7 +21,7 @@ interface Props {
   playlist: Playlist;
   currentSong: Song | null;
   isPlaying: boolean;
-  onPlaySong: (song: Song, customQueue?: Song[]) => void;
+  onPlaySong: (song: Song, customQueue?: Song[], contextMode?: 'playlist' | 'radio', seekTime?: number, sourceInfo?: PlaybackSource) => void;
   onTogglePlay: () => void;
   onBack: () => void;
   onToggleLike: (songId: string) => void;
@@ -47,8 +47,29 @@ export const SpotifyPlaylistView: React.FC<Props> = ({
   const [contextMenu, setContextMenu] = useState<{ x: number; y: number; song: Song } | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [customCover, setCustomCover] = useState<string | null>(null);
+  const [liveAlbumSongs, setLiveAlbumSongs] = useState<Song[]>([]);
 
-  const validSongCover = playlist.songs?.find(s => !isInvalidCoverUrl(s.coverUrl))?.coverUrl;
+  React.useEffect(() => {
+    let isMounted = true;
+    if (playlist.isCurated && (!playlist.songs || playlist.songs.length === 0)) {
+      fetch(`/api/search?q=${encodeURIComponent(playlist.title)}`)
+        .then((res) => res.json())
+        .then((data) => {
+          if (!isMounted) return;
+          if (data && Array.isArray(data.results) && data.results.length > 0) {
+            setLiveAlbumSongs(data.results);
+          }
+        })
+        .catch(() => {});
+    }
+    return () => {
+      isMounted = false;
+    };
+  }, [playlist.id, playlist.title, playlist.isCurated, playlist.songs]);
+
+  const effectiveSongs = playlist.songs && playlist.songs.length > 0 ? playlist.songs : liveAlbumSongs;
+
+  const validSongCover = effectiveSongs.find((s) => !isInvalidCoverUrl(s.coverUrl))?.coverUrl;
   const cleanCoverUrl = !isInvalidCoverUrl(playlist.coverUrl)
     ? playlist.coverUrl
     : (validSongCover || 'https://images.unsplash.com/photo-1511671782779-c97d3d27a1d4?w=500&auto=format&fit=crop&q=80');
@@ -79,13 +100,13 @@ export const SpotifyPlaylistView: React.FC<Props> = ({
   const isCurrentPlaylistPlaying =
     isPlaying &&
     currentSong &&
-    playlist.songs.some((s) => s.id === currentSong.id);
+    effectiveSongs.some((s) => s.id === currentSong.id);
 
   const isLikedSongs =
     playlist.id === 'liked-songs' ||
     playlist.title.toLowerCase().includes('liked');
 
-  const totalDurationSecs = playlist.songs.reduce((acc, s) => acc + (s.duration || 210), 0);
+  const totalDurationSecs = effectiveSongs.reduce((acc, s) => acc + (s.duration || 210), 0);
   const totalHours = Math.floor(totalDurationSecs / 3600);
   const totalMins = Math.floor((totalDurationSecs % 3600) / 60);
   const durationText =
@@ -93,7 +114,7 @@ export const SpotifyPlaylistView: React.FC<Props> = ({
       ? `${totalHours} hr ${totalMins} min`
       : `${totalMins} min`;
 
-  const filteredSongs = playlist.songs.filter((s) => {
+  const filteredSongs = effectiveSongs.filter((s) => {
     if (!filterQuery.trim()) return true;
     const q = filterQuery.toLowerCase();
     return (
@@ -104,11 +125,11 @@ export const SpotifyPlaylistView: React.FC<Props> = ({
   });
 
   const handleBigPlay = () => {
-    if (playlist.songs.length === 0) return;
+    if (effectiveSongs.length === 0) return;
     if (isCurrentPlaylistPlaying) {
       onTogglePlay();
     } else {
-      onPlaySong(playlist.songs[0], playlist.songs);
+      onPlaySong(effectiveSongs[0], effectiveSongs, 'playlist', undefined, { type: 'playlist', id: playlist.id, name: playlist.title });
     }
   };
 
@@ -191,7 +212,7 @@ export const SpotifyPlaylistView: React.FC<Props> = ({
               {playlist.isCurated ? 'SunoNa Curated' : (user?.displayName || 'My Library')}
             </span>
             <span className="spotify-pl-dot">•</span>
-            <span>{playlist.songs.length} songs</span>
+            <span>{effectiveSongs.length} songs</span>
             <span className="spotify-pl-dot">•</span>
             <span className="spotify-pl-time-dim">{durationText}</span>
           </div>
@@ -289,8 +310,8 @@ export const SpotifyPlaylistView: React.FC<Props> = ({
               >
                 <div
                   className={`spotify-tl-row ${isThisActive ? 'active' : ''}`}
-                  onClick={() => onPlaySong(song, playlist.songs)}
-                  onDoubleClick={() => onPlaySong(song, playlist.songs)}
+                  onClick={() => onPlaySong(song, effectiveSongs, 'playlist', undefined, { type: 'playlist', id: playlist.id, name: playlist.title })}
+                  onDoubleClick={() => onPlaySong(song, effectiveSongs, 'playlist', undefined, { type: 'playlist', id: playlist.id, name: playlist.title })}
                   onContextMenu={(e) => {
                     e.preventDefault();
                     setContextMenu({
@@ -317,7 +338,7 @@ export const SpotifyPlaylistView: React.FC<Props> = ({
                           className="spotify-tl-idx-play"
                           onClick={(e) => {
                             e.stopPropagation();
-                            onPlaySong(song, playlist.songs);
+                            onPlaySong(song, effectiveSongs, 'playlist', undefined, { type: 'playlist', id: playlist.id, name: playlist.title });
                           }}
                           title={`Play ${song.title}`}
                         >
@@ -347,7 +368,7 @@ export const SpotifyPlaylistView: React.FC<Props> = ({
                     <div className="spotify-tl-title-wrap">
                       <span
                         className={`spotify-tl-track-name ${isThisActive ? 'is-playing' : ''}`}
-                        onClick={() => onPlaySong(song, playlist.songs)}
+                        onClick={() => onPlaySong(song, effectiveSongs)}
                       >
                         {song.title}
                       </span>

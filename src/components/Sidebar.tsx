@@ -1,13 +1,13 @@
 import React, { useState } from 'react';
-import { Home, Compass, Library, Users, Heart, Download, Sliders, ListMusic, Plus, FolderHeart, Maximize2, Search, ArrowUpDown } from 'lucide-react';
+import { Home, Compass, Library, Users, Heart, Download, Sliders, ListMusic, Plus, FolderHeart, Maximize2, Search, ArrowUpDown, History, Volume2 } from 'lucide-react';
 import { THEME_PRESETS } from '../data/musicData';
-import type { ThemePreset, Playlist } from '../types';
+import type { ThemePreset, Playlist, PlaybackSource, Song } from '../types';
 import type { UserProfile } from '../services/authService';
 import { isInvalidCoverUrl } from '../services/playlistService';
 
 interface Props {
-  activeView: 'home' | 'explore' | 'library' | 'my-playlists' | 'playlist' | 'album' | 'artist';
-  setActiveView: (view: 'home' | 'explore' | 'library' | 'my-playlists' | 'playlist' | 'album' | 'artist') => void;
+  activeView: 'home' | 'explore' | 'library' | 'my-playlists' | 'playlist' | 'album' | 'artist' | 'history';
+  setActiveView: (view: 'home' | 'explore' | 'library' | 'my-playlists' | 'playlist' | 'album' | 'artist' | 'history') => void;
   onOpenLibrary?: (filter: 'all' | 'liked' | 'cached' | 'playlists') => void;
   libraryFilter?: 'all' | 'liked' | 'cached' | 'playlists';
   playlists: Playlist[];
@@ -23,6 +23,9 @@ interface Props {
   cachedCount: number;
   uiMode?: 'sunona' | 'spotify';
   user?: UserProfile | null;
+  playbackSource?: PlaybackSource | null;
+  isPlaying?: boolean;
+  currentSong?: Song | null;
 }
 
 export const Sidebar: React.FC<Props> = ({
@@ -33,7 +36,7 @@ export const Sidebar: React.FC<Props> = ({
   playlists,
   selectedPlaylistId,
   onSelectPlaylist,
-  onSelectAlbum,
+  onSelectAlbum: _onSelectAlbum,
   onCreatePlaylist,
   onOpenListenTogether,
   onOpenSettings,
@@ -43,6 +46,9 @@ export const Sidebar: React.FC<Props> = ({
   cachedCount,
   uiMode = 'sunona',
   user,
+  playbackSource,
+  isPlaying = false,
+  currentSong,
 }) => {
   const [spotifyLibTab, setSpotifyLibTab] = useState<'playlists' | 'albums' | 'artists' | null>(null);
 
@@ -163,129 +169,21 @@ export const Sidebar: React.FC<Props> = ({
               </div>
             )}
 
-            {/* Best Bollywood Love Songs */}
-            {(!spotifyLibTab || spotifyLibTab === 'playlists') && (
-              <div
-                className="spotify-library-item"
-                onClick={() => {
-                  if (playlists.length > 0) onSelectPlaylist(playlists[0].id);
-                }}
-              >
-                <img
-                  src="https://images.unsplash.com/photo-1518495973542-4542c06a5843?w=100&auto=format&fit=crop&q=80"
-                  alt="Best Bollywood Love Songs"
-                  className="spotify-playlist-thumb"
-                />
-                <div className="spotify-library-item-meta">
-                  <div className="spotify-library-item-title">Best Bollywood Love Songs</div>
-                  <div className="spotify-library-item-subtitle">Playlist • Revibe</div>
-                </div>
-              </div>
-            )}
-
-            {/* International Villager */}
-            {(!spotifyLibTab || spotifyLibTab === 'albums') && (
-              <div
-                className="spotify-library-item"
-                onClick={() => {
-                  if (onSelectAlbum) {
-                    onSelectAlbum('alb-iv');
-                  } else {
-                    setActiveView('album');
-                  }
-                }}
-              >
-                <img
-                  src="https://i.ytimg.com/vi/12CeaxLiMgE/hqdefault.jpg"
-                  alt="International Villager"
-                  className="spotify-playlist-thumb"
-                />
-                <div className="spotify-library-item-meta">
-                  <div className="spotify-library-item-title">International Villager</div>
-                  <div className="spotify-library-item-subtitle">Album • Yo Yo Honey Singh</div>
-                </div>
-              </div>
-            )}
-
-            {/* Desi Kalakaar */}
-            {(!spotifyLibTab || spotifyLibTab === 'albums') && (
-              <div
-                className="spotify-library-item"
-                onClick={() => {
-                  if (onSelectAlbum) {
-                    onSelectAlbum('alb-dk');
-                  } else {
-                    setActiveView('album');
-                  }
-                }}
-              >
-                <img
-                  src="https://i.ytimg.com/vi/KhnVcAC5bIM/hqdefault.jpg"
-                  alt="Desi Kalakaar"
-                  className="spotify-playlist-thumb"
-                />
-                <div className="spotify-library-item-meta">
-                  <div className="spotify-library-item-title">Desi Kalakaar</div>
-                  <div className="spotify-library-item-subtitle">Album • Yo Yo Honey Singh</div>
-                </div>
-              </div>
-            )}
-
-            {/* Imran Khan (Artist - Circular Avatar) */}
-            {(!spotifyLibTab || spotifyLibTab === 'artists') && (
-              <div className="spotify-library-item" onClick={() => setActiveView('home')}>
-                <img
-                  src="https://i.ytimg.com/vi/uuCFRaFWjwY/hqdefault.jpg"
-                  alt="Imran Khan"
-                  className="spotify-playlist-thumb circular"
-                />
-                <div className="spotify-library-item-meta">
-                  <div className="spotify-library-item-title">Imran Khan</div>
-                  <div className="spotify-library-item-subtitle">Artist</div>
-                </div>
-              </div>
-            )}
-
-            {/* Yo Yo Honey Singh (Artist - Circular Avatar) */}
-            {(!spotifyLibTab || spotifyLibTab === 'artists') && (
-              <div className="spotify-library-item" onClick={() => setActiveView('home')}>
-                <img
-                  src="https://i.ytimg.com/vi/v6F7Bw9cXFg/hqdefault.jpg"
-                  alt="Yo Yo Honey Singh"
-                  className="spotify-playlist-thumb circular"
-                />
-                <div className="spotify-library-item-meta">
-                  <div className="spotify-library-item-title">Yo Yo Honey Singh</div>
-                  <div className="spotify-library-item-subtitle">Artist</div>
-                </div>
-              </div>
-            )}
-
-            {/* Diljit Dosanjh (Artist - Circular Avatar) */}
-            {(!spotifyLibTab || spotifyLibTab === 'artists') && (
-              <div className="spotify-library-item" onClick={() => setActiveView('home')}>
-                <img
-                  src="https://i.ytimg.com/vi/cl0a3i2wFcc/hqdefault.jpg"
-                  alt="Diljit Dosanjh"
-                  className="spotify-playlist-thumb circular"
-                />
-                <div className="spotify-library-item-meta">
-                  <div className="spotify-library-item-title">Diljit Dosanjh</div>
-                  <div className="spotify-library-item-subtitle">Artist</div>
-                </div>
-              </div>
-            )}
-
-            {/* User Custom Playlists */}
+            {/* User Custom Playlists (e.g. garv1, etc.) */}
             {playlists.map((pl) => {
               const validSongCover = pl.songs?.find(s => !isInvalidCoverUrl(s.coverUrl))?.coverUrl;
               const cleanCover = !isInvalidCoverUrl(pl.coverUrl)
                 ? pl.coverUrl
                 : (validSongCover || 'https://images.unsplash.com/photo-1514525253161-7a46d19cd819?w=100');
+              const isPlayingThis = isPlaying && Boolean(
+                (playbackSource?.type === 'playlist' && (playbackSource.id === pl.id || playbackSource.name.toLowerCase() === pl.title.toLowerCase())) ||
+                (!playbackSource && currentSong && pl.songs?.some((s) => s.id === currentSong.id))
+              );
+
               return (
                 <div
                   key={pl.id}
-                  className={`spotify-library-item ${activeView === 'playlist' && selectedPlaylistId === pl.id ? 'active' : ''}`}
+                  className={`spotify-library-item ${activeView === 'playlist' && selectedPlaylistId === pl.id ? 'active' : ''} ${isPlayingThis ? 'is-playing' : ''}`}
                   onClick={() => onSelectPlaylist(pl.id)}
                 >
                   <img
@@ -299,6 +197,9 @@ export const Sidebar: React.FC<Props> = ({
                       Playlist • {pl.songs.length} songs
                     </div>
                   </div>
+                  {isPlayingThis && (
+                    <Volume2 size={16} color="#1ed760" className="sp-playing-icon" style={{ marginLeft: 'auto', flexShrink: 0 }} />
+                  )}
                 </div>
               );
             })}
@@ -347,6 +248,13 @@ export const Sidebar: React.FC<Props> = ({
           <span>Your Library</span>
         </div>
         <div
+          className={`nav-item ${activeView === 'history' ? 'active' : ''}`}
+          onClick={() => setActiveView('history')}
+        >
+          <History className="nav-item-icon" style={{ color: 'var(--primary)' }} />
+          <span>Listening History</span>
+        </div>
+        <div
           className={`nav-item ${activeView === 'my-playlists' ? 'active' : ''}`}
           onClick={() => setActiveView('my-playlists')}
         >
@@ -360,6 +268,9 @@ export const Sidebar: React.FC<Props> = ({
         >
           <Heart className="nav-item-icon" style={{ color: 'var(--accent)' }} />
           <span>Liked Songs</span>
+          {isPlaying && (playbackSource?.id === 'liked-songs' || playbackSource?.name === 'Liked Songs') && (
+            <Volume2 size={14} style={{ color: 'var(--accent)', marginLeft: 'auto', marginRight: '6px' }} />
+          )}
           <span className="nav-count">{likedCount}</span>
         </div>
         <div
@@ -400,15 +311,31 @@ export const Sidebar: React.FC<Props> = ({
           )}
           {playlists.map((pl) => {
             const isSelected = activeView === 'playlist' && selectedPlaylistId === pl.id;
+            const isPlayingThis = isPlaying && Boolean(
+              (playbackSource?.type === 'playlist' && (playbackSource.id === pl.id || playbackSource.name.toLowerCase() === pl.title.toLowerCase())) ||
+              (!playbackSource && currentSong && pl.songs?.some((s) => s.id === currentSong.id))
+            );
 
             return (
               <div
                 key={pl.id}
-                className={`nav-item playlist-nav-item ${isSelected ? 'active' : ''}`}
+                className={`nav-item playlist-nav-item ${isSelected ? 'active' : ''} ${isPlayingThis ? 'is-playing' : ''}`}
                 onClick={() => onSelectPlaylist(pl.id)}
+                title={isPlayingThis ? `Currently playing: ${pl.title}` : pl.title}
               >
-                <ListMusic className="nav-item-icon" />
-                <span className="playlist-title-truncate">{pl.title}</span>
+                <ListMusic className="nav-item-icon" style={{ color: isPlayingThis ? 'var(--primary)' : undefined }} />
+                <span
+                  className="playlist-title-truncate"
+                  style={{
+                    color: isPlayingThis ? 'var(--primary)' : undefined,
+                    fontWeight: isPlayingThis ? 700 : undefined,
+                  }}
+                >
+                  {pl.title}
+                </span>
+                {isPlayingThis && (
+                  <Volume2 size={14} style={{ color: 'var(--primary)', marginLeft: 'auto', flexShrink: 0 }} />
+                )}
               </div>
             );
           })}

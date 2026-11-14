@@ -1,5 +1,11 @@
 export const METROLIST_VERSION = '13.7.0';
 
+export interface PlaybackSource {
+  type: 'playlist' | 'album' | 'liked-songs' | 'radio' | 'artist';
+  id?: string;
+  name: string;
+}
+
 export interface LyricLine {
   time: number; // in seconds
   text: string;

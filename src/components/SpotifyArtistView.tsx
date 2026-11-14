@@ -29,14 +29,36 @@ export const SpotifyArtistView: React.FC<SpotifyArtistViewProps> = ({
 }) => {
   const [isFollowing, setIsFollowing] = useState(false);
   const [discographyTab, setDiscographyTab] = useState<'popular' | 'albums' | 'singles'>('popular');
+  const [liveSongs, setLiveSongs] = useState<Song[]>([]);
+  const [_isLoading, setIsLoading] = useState(false);
 
-  // Filter songs for this artist
-  const artistSongs = songs.filter(
+  React.useEffect(() => {
+    let isMounted = true;
+    setIsLoading(true);
+    fetch(`/api/search?q=${encodeURIComponent(artistName + ' songs')}`)
+      .then((res) => res.json())
+      .then((data) => {
+        if (!isMounted) return;
+        if (data && Array.isArray(data.results) && data.results.length > 0) {
+          setLiveSongs(data.results);
+        }
+      })
+      .catch(() => {})
+      .finally(() => {
+        if (isMounted) setIsLoading(false);
+      });
+    return () => {
+      isMounted = false;
+    };
+  }, [artistName]);
+
+  // Prioritize live verified songs for this artist; fall back to matched local songs
+  const matchedLocal = songs.filter(
     (s) =>
       (s.artist || '').toLowerCase().includes(artistName.toLowerCase()) ||
       (s.title || '').toLowerCase().includes(artistName.toLowerCase())
   );
-  const displaySongs = artistSongs.length > 0 ? artistSongs : songs.slice(0, 10);
+  const displaySongs = liveSongs.length > 0 ? liveSongs : matchedLocal;
   const popularSongs = displaySongs.slice(0, 5);
 
   const artistAlbums = albums.filter((a) =>

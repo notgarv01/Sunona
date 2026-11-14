@@ -24,6 +24,7 @@ interface Props {
   onAddToPlaylist?: (song: Song) => void;
   onOpenLikedSongs?: () => void;
   onSelectArtist?: (artistName: string) => void;
+  onOpenHistory?: () => void;
 }
 
 interface SpotifyCardItem {
@@ -82,6 +83,7 @@ export const SpotifyHome: React.FC<Props> = ({
   onSelectAlbum,
   onOpenLikedSongs,
   onSelectArtist,
+  onOpenHistory,
 }) => {
   const [filterTag, setFilterTag] = useState<'all' | 'music' | 'podcasts'>('all');
 
@@ -99,55 +101,30 @@ export const SpotifyHome: React.FC<Props> = ({
       type: 'playlist',
     });
 
-    // Rich Spotify curated defaults with local extracted artwork
-    const defaultTiles: { id: string; title: string; coverUrl: string; type: 'playlist' | 'album' | 'song'; data?: Song | Playlist | Album }[] = [
-      { id: 'qa-val-hits', title: "Trending Valentine's Hits", coverUrl: 'https://images.unsplash.com/photo-1493225457124-a3eb161ffa5f?w=500&auto=format&fit=crop&q=80', type: 'playlist' },
-      { id: 'qa-bolly-mush', title: 'Bollywood Mush', coverUrl: 'https://images.unsplash.com/photo-1518495973542-4542c06a5843?w=500&auto=format&fit=crop&q=80', type: 'playlist' },
-      { id: 'qa-bolly-chill', title: 'Bollywood & Chill', coverUrl: 'https://images.unsplash.com/photo-1470225620780-dba8ba36b745?w=500&auto=format&fit=crop&q=80', type: 'playlist' },
-      { id: 'qa-1am-feels', title: '1 AM Feels Hindi', coverUrl: 'https://images.unsplash.com/photo-1508700115892-45ecd05ae2ad?w=500&auto=format&fit=crop&q=80', type: 'playlist' },
-      { id: 'qa-ipop-icons', title: 'I-Pop Icons', coverUrl: 'https://images.unsplash.com/photo-1511671782779-c97d3d27a1d4?w=500&auto=format&fit=crop&q=80', type: 'playlist' },
-    ];
-
-    // Priority user items (custom playlists, albums, songs)
+    // Priority user items (custom playlists like garv1, and live songs)
     const userPool: { id: string; title: string; coverUrl: string; type: 'song' | 'playlist' | 'album'; data?: Song | Playlist | Album }[] = [];
     for (const pl of playlists.filter(p => p.id !== 'liked-songs')) {
       const validSongCover = pl.songs?.find(s => !isInvalidCoverUrl(s.coverUrl))?.coverUrl;
       const cover = !isInvalidCoverUrl(pl.coverUrl)
         ? pl.coverUrl
-        : (validSongCover || 'https://images.unsplash.com/photo-1518495973542-4542c06a5843?w=500&auto=format&fit=crop&q=80');
+        : (validSongCover || 'https://images.unsplash.com/photo-1511671782779-c97d3d27a1d4?w=500&auto=format&fit=crop&q=80');
       userPool.push({ id: pl.id, title: pl.title, coverUrl: cover, type: 'playlist', data: pl });
-    }
-    for (const alb of albums) {
-      const cover = !isInvalidCoverUrl(alb.coverUrl)
-        ? alb.coverUrl
-        : 'https://images.unsplash.com/photo-1511671782779-c97d3d27a1d4?w=500&auto=format&fit=crop&q=80';
-      userPool.push({ id: alb.id, title: alb.title, coverUrl: cover, type: 'album', data: alb });
     }
     for (const s of songs) {
       const cover = !isInvalidCoverUrl(s.coverUrl)
         ? s.coverUrl
-        : (s.id ? `https://i.ytimg.com/vi/${s.id}/hqdefault.jpg` : 'https://images.unsplash.com/photo-1493225457124-a3eb161ffa5f?w=500&auto=format&fit=crop&q=80');
+        : (s.id ? `https://i.ytimg.com/vi/${s.id}/hqdefault.jpg` : 'https://images.unsplash.com/photo-1511671782779-c97d3d27a1d4?w=500&auto=format&fit=crop&q=80');
       userPool.push({ id: s.id, title: s.title, coverUrl: cover, type: 'song', data: s });
     }
 
-    let userIdx = 0;
-    while (items.length < 6) {
-      if (userIdx < userPool.length) {
-        const candidate = userPool[userIdx++];
-        if (!items.some(it => it.title === candidate.title)) {
-          items.push(candidate);
-        }
-      } else {
-        const def = defaultTiles[items.length - 1];
-        if (def && !items.some(it => it.title === def.title)) {
-          items.push(def);
-        } else {
-          break;
-        }
+    for (const candidate of userPool) {
+      if (items.length >= 6) break;
+      if (!items.some(it => it.title === candidate.title)) {
+        items.push(candidate);
       }
     }
 
-    return items.slice(0, 6);
+    return items;
   }, [playlists, albums, songs]);
 
   // Section 1: Based on your recent listening (Screenshot 426)
@@ -557,6 +534,15 @@ export const SpotifyHome: React.FC<Props> = ({
         >
           Podcasts
         </button>
+        {onOpenHistory && (
+          <button
+            className="spotify-filter-pill"
+            onClick={onOpenHistory}
+            title="Listening History"
+          >
+            History
+          </button>
+        )}
       </div>
 
       {/* ══════════════════════════════════════════════════════

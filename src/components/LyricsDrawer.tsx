@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { Mic2, X, Languages, RotateCcw, ExternalLink, Loader2, MicOff } from 'lucide-react';
+import { Mic2, X, RotateCcw, Loader2, MicOff } from 'lucide-react';
 import type { Song, LyricLine } from '../types';
 
 interface Props {
@@ -62,22 +62,7 @@ export const LyricsDrawer: React.FC<Props> = ({
           </span>
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-          {currentSong?.geniusUrl && (
-            <a
-              href={currentSong.geniusUrl}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="icon-btn"
-              style={{ width: '32px', height: '32px', color: '#facc15' }}
-              title="Open Verified Story on Genius"
-            >
-              <ExternalLink size={14} />
-            </a>
-          )}
-          <button className="icon-btn" style={{ width: '32px', height: '32px' }} title="Translate Lyrics">
-            <Languages size={15} />
-          </button>
-          <button className="icon-btn" style={{ width: '32px', height: '32px' }} onClick={onClose}>
+          <button className="icon-btn" style={{ width: '32px', height: '32px' }} onClick={onClose} title="Close Lyrics">
             <X size={15} />
           </button>
         </div>

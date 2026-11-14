@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Heart, Download, FolderPlus, Play, CheckCircle2, ListPlus, Plus, Music2 } from 'lucide-react';
-import type { Song, Playlist } from '../types';
+import type { Song, Playlist, PlaybackSource } from '../types';
 
 interface Props {
   songs: Song[];
@@ -9,7 +9,7 @@ interface Props {
   playlists: Playlist[];
   currentSong: Song | null;
   isPlaying?: boolean;
-  onPlaySong: (song: Song, customQueue?: Song[]) => void;
+  onPlaySong: (song: Song, customQueue?: Song[], contextMode?: 'playlist' | 'radio', seekTime?: number, sourceInfo?: PlaybackSource) => void;
   onToggleLike: (songId: string, song?: Song) => void;
   onSelectPlaylist?: (playlistId: string) => void;
   onCreatePlaylist?: () => void;
@@ -100,7 +100,7 @@ export const LibraryScreen: React.FC<Props> = ({
           <button
             className="glow-pill-btn-red"
             style={{ padding: '8px 20px', fontSize: '0.78rem' }}
-            onClick={() => onPlaySong(filteredSongs[0], filteredSongs)}
+            onClick={() => onPlaySong(filteredSongs[0], filteredSongs, 'playlist', undefined, { type: 'playlist', id: 'liked-songs', name: 'Liked Songs' })}
           >
             <Play size={14} fill="#fff" />
             <span>Play Liked Songs</span>
@@ -224,7 +224,7 @@ export const LibraryScreen: React.FC<Props> = ({
               <div
                 key={song.id}
                 className={`song-row ${isCurrent ? 'playing' : ''}`}
-                onClick={() => onPlaySong(song, filteredSongs)}
+                onClick={() => onPlaySong(song, filteredSongs, 'playlist', undefined, filter === 'liked' ? { type: 'playlist', id: 'liked-songs', name: 'Liked Songs' } : undefined)}
               >
                 <div className="song-index">{index + 1}</div>
                 <img

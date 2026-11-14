@@ -52,6 +52,11 @@ class PlaylistService {
   private sanitizePlaylist(pl: Playlist): Playlist {
     if (pl.songs && Array.isArray(pl.songs)) {
       pl.songs = pl.songs.map((s: Song) => {
+        // Self-healing: Correct hardcoded/seeded YouTube ID for Brown Rang
+        if (s.id === '12CeaxLiMgE') {
+          s.id = 'O3-6zB3kg8M';
+          s.coverUrl = 'https://i.ytimg.com/vi/O3-6zB3kg8M/hqdefault.jpg';
+        }
         if (isInvalidCoverUrl(s.coverUrl)) {
           s.coverUrl = s.id ? `https://i.ytimg.com/vi/${s.id}/hqdefault.jpg` : 'https://images.unsplash.com/photo-1511671782779-c97d3d27a1d4?w=500&auto=format&fit=crop&q=80';
         }
@@ -77,7 +82,7 @@ class PlaylistService {
           if (k && (k.startsWith('sunona_playlists_') || k.startsWith('metrolist_playlists_'))) {
             try {
               const raw = localStorage.getItem(k);
-              if (raw && (raw.includes('onboarding-card') || raw.includes('keyboard-shortcuts') || raw.includes('Ej74Baox') || raw.includes('producer.webp'))) {
+              if (raw && (raw.includes('12CeaxLiMgE') || raw.includes('onboarding-card') || raw.includes('keyboard-shortcuts') || raw.includes('Ej74Baox') || raw.includes('producer.webp'))) {
                 const arr = JSON.parse(raw);
                 if (Array.isArray(arr)) {
                   const cleaned = arr.map((item: Playlist) => this.sanitizePlaylist(item));

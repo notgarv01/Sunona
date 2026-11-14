@@ -12,14 +12,14 @@ import {
   Heart,
   Music,
 } from 'lucide-react';
-import type { Playlist, Song } from '../types';
+import type { Playlist, Song, PlaybackSource } from '../types';
 import { SwipeableSongRow } from './SwipeableSongRow';
 
 interface Props {
   playlist: Playlist;
   currentSong: Song | null;
   isPlaying: boolean;
-  onPlaySong: (song: Song, customQueue?: Song[]) => void;
+  onPlaySong: (song: Song, customQueue?: Song[], contextMode?: 'playlist' | 'radio', seekTime?: number, sourceInfo?: PlaybackSource) => void;
   onTogglePlay: () => void;
   onBack: () => void;
   onDeletePlaylist: (id: string) => void;
@@ -63,14 +63,15 @@ export const PlaylistScreen: React.FC<Props> = ({
     if (isPlaylistPlaying) {
       onTogglePlay();
     } else {
-      onPlaySong(playlist.songs[0], playlist.songs);
+      onPlaySong(playlist.songs[0], playlist.songs, 'playlist', undefined, { type: 'playlist', id: playlist.id, name: playlist.title });
     }
   };
 
   const handleShufflePlay = () => {
     if (playlist.songs.length === 0) return;
-    const shuffled = [...playlist.songs].sort(() => Math.random() - 0.5);
-    onPlaySong(shuffled[0], shuffled);
+    const randomIndex = Math.floor(Math.random() * playlist.songs.length);
+    // Keep playlist songs in original order as queue, and start playing from a random song
+    onPlaySong(playlist.songs[randomIndex], playlist.songs, 'playlist', undefined, { type: 'playlist', id: playlist.id, name: playlist.title });
   };
 
   const handleSaveEdit = () => {
@@ -294,7 +295,7 @@ export const PlaylistScreen: React.FC<Props> = ({
                 >
                   <div
                     className={`song-row ${isCurrent ? 'playing' : ''}`}
-                    onClick={() => onPlaySong(song, playlist.songs)}
+                    onClick={() => onPlaySong(song, playlist.songs, 'playlist', undefined, { type: 'playlist', id: playlist.id, name: playlist.title })}
                   >
                     <div className="song-index">
                       {isThisPlaying ? (

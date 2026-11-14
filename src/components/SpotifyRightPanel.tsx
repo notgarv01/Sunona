@@ -119,7 +119,10 @@ export const SpotifyRightPanel: React.FC<Props> = ({
                 className="spotify-rp-menu-item"
                 onClick={() => {
                   if (navigator.clipboard) {
-                    navigator.clipboard.writeText(window.location.href);
+                    const shareUrl = currentSong
+                      ? `${window.location.origin}/?song=${encodeURIComponent(currentSong.id)}`
+                      : window.location.href;
+                    navigator.clipboard.writeText(shareUrl);
                   }
                   setShowMoreMenu(false);
                 }}

@@ -22,7 +22,7 @@ import {
   PlusCircle,
 } from 'lucide-react';
 import { SpotifyMiniplayerIcon } from './MiniPlayer';
-import type { Song, ThemePreset } from '../types';
+import type { Song, ThemePreset, PlaybackSource } from '../types';
 import { AudioVisualizer } from './AudioVisualizer';
 
 interface Props {
@@ -59,6 +59,7 @@ interface Props {
   sleepRemainingText?: string | null;
   onOpenSleepTimer?: () => void;
   likedSongs?: Song[];
+  playbackSource?: PlaybackSource | null;
 }
 
 export const PlayerBar: React.FC<Props> = ({
@@ -95,6 +96,7 @@ export const PlayerBar: React.FC<Props> = ({
   sleepRemainingText = null,
   onOpenSleepTimer,
   likedSongs = [],
+  playbackSource,
 }) => {
   const isCurrentSongLiked = currentSong
     ? likedSongs.some((s) => s.id === currentSong.id)
@@ -463,7 +465,21 @@ export const PlayerBar: React.FC<Props> = ({
           <div className="player-track-meta">
             <div className="player-track-title">{currentSong.title || 'Untitled Track'}</div>
             <div className="player-track-artist">
-              {currentSong.artist || 'Unknown Artist'}{currentSong.album ? ` • ${currentSong.album}` : ''}
+              {currentSong.artist || 'Unknown Artist'}
+              {currentSong.album ? ` • ${currentSong.album}` : ''}
+              {playbackSource && (playbackSource.type === 'playlist' || playbackSource.type === 'album') && (
+                <span
+                  style={{
+                    color: 'var(--primary)',
+                    fontWeight: 600,
+                    fontSize: '0.74rem',
+                    marginLeft: '6px',
+                  }}
+                  title={`Now playing from ${playbackSource.type}: ${playbackSource.name}`}
+                >
+                  • From {playbackSource.name}
+                </span>
+              )}
             </div>
           </div>
           <Heart
@@ -518,9 +534,10 @@ export const PlayerBar: React.FC<Props> = ({
           <button
             className={`transport-btn ${isShuffle ? 'active' : ''}`}
             onClick={onToggleShuffle}
-            title="Shuffle"
+            title={`Shuffle: ${isShuffle ? 'On' : 'Off'}`}
           >
             <Shuffle size={16} />
+            {isShuffle && <span className="spotify-pb-dot" />}
           </button>
           <button className="transport-btn" onClick={onPrev} title="Previous (Left Arrow)">
             <SkipBack size={18} />
@@ -541,6 +558,7 @@ export const PlayerBar: React.FC<Props> = ({
             title={`Repeat: ${repeatMode}`}
           >
             {repeatMode === 'one' ? <Repeat1 size={17} /> : <Repeat size={16} />}
+            {repeatMode !== 'off' && <span className="spotify-pb-dot" />}
           </button>
         </div>
 

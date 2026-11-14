@@ -53,9 +53,9 @@ export const SpotifyQueuePanel: React.FC<SpotifyQueuePanelProps> = ({
   } | null>(null);
   const [creditsSong, setCreditsSong] = useState<Song | null>(null);
 
-  // Dynamic context title: matching screenshot 23be7311 "Next from: Dilfek"
+  // Dynamic context title: matching screenshot 23be7311 "Next from: <Playlist/Album/Context>"
   const resolvedContextTitle =
-    contextTitle || currentSong?.album || 'Dilfek';
+    contextTitle || currentSong?.album || 'Queue';
 
   // Upcoming queue items (excluding the currently playing song)
   const upcomingQueue = queue.filter((s, idx) => {

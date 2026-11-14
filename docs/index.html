@@ -203,7 +203,7 @@
       box-shadow: 0 8px 32px rgba(255, 255, 255, 0.25);
     }
 
-    .btn-secondary-portable {
+    .btn-secondary-action {
       display: inline-flex;
       align-items: center;
       gap: 10px;
@@ -219,7 +219,7 @@
       font-family: var(--font-mono);
     }
 
-    .btn-secondary-portable:hover {
+    .btn-secondary-action:hover {
       background: rgba(255, 255, 255, 0.08);
       border-color: var(--border-focus);
     }
@@ -614,10 +614,7 @@
     <div class="telemetry-row">
       <div class="telemetry-item">
         <span class="status-indicator"></span>
-        <span>Engine: Online</span>
-      </div>
-      <div class="telemetry-item" style="display:none; @media(min-width:600px){display:flex;}">
-        <span>Build: v1.0.11-multiarch</span>
+        <span>Build v1.0.11</span>
       </div>
     </div>
   </header>
@@ -715,7 +712,7 @@
 
           <a 
             href="/"
-            class="btn-secondary-portable"
+            class="btn-secondary-action"
             title="Launch SunoNa directly in your browser"
           >
             <span>Open Web Player</span>
@@ -775,7 +772,7 @@
           <div class="meta-value">&lt; 120ms (HTTP Range)</div>
         </div>
         <div class="meta-box">
-          <div class="meta-label">Audio Engine</div>
+          <div class="meta-label">Audio Pipeline</div>
           <div class="meta-value">Localhost Proxy (Node 22)</div>
         </div>
         <div class="meta-box">

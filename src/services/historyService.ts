@@ -8,6 +8,12 @@ export interface HistoryItem {
   genreType: string;
 }
 
+export interface PlayHistoryEvent {
+  id: string;
+  song: Song;
+  playedAt: number;
+}
+
 export interface TasteProfile {
   primaryGenre: string;
   favoriteArtist: string;
@@ -86,6 +92,7 @@ export function detectGenreType(title: string, artist: string): string {
 
 class HistoryService {
   private history: Record<string, HistoryItem> = {};
+  private events: PlayHistoryEvent[] = [];
   private currentUserId: string = 'guest';
 
   constructor() {
@@ -103,6 +110,10 @@ class HistoryService {
     return `sunona_history_${this.currentUserId}`;
   }
 
+  private getEventsStorageKey(): string {
+    return `sunona_history_events_${this.currentUserId}`;
+  }
+
   public setUser(userId: string | null) {
     this.currentUserId = userId?.trim() || 'guest';
     this.load();
@@ -110,9 +121,11 @@ class HistoryService {
 
   public clear() {
     this.history = {};
+    this.events = [];
     try {
       if (typeof window !== 'undefined' && window.localStorage) {
         window.localStorage.removeItem(this.getStorageKey());
+        window.localStorage.removeItem(this.getEventsStorageKey());
       }
     } catch {}
   }
@@ -123,13 +136,62 @@ class HistoryService {
         const raw = window.localStorage.getItem(this.getStorageKey());
         if (raw) {
           this.history = JSON.parse(raw);
-          return;
+          // Self-heal: Remap legacy/wrong YouTube ID for Brown Rang
+          if (this.history['12CeaxLiMgE']) {
+            const badItem = this.history['12CeaxLiMgE'];
+            badItem.song.id = 'O3-6zB3kg8M';
+            badItem.song.coverUrl = 'https://i.ytimg.com/vi/O3-6zB3kg8M/hqdefault.jpg';
+            if (this.history['O3-6zB3kg8M']) {
+              this.history['O3-6zB3kg8M'].playCount += badItem.playCount;
+              this.history['O3-6zB3kg8M'].lastPlayedAt = Math.max(this.history['O3-6zB3kg8M'].lastPlayedAt, badItem.lastPlayedAt);
+            } else {
+              this.history['O3-6zB3kg8M'] = badItem;
+            }
+            delete this.history['12CeaxLiMgE'];
+            this.save();
+          }
+        } else {
+          this.history = {};
         }
+
+        const rawEvents = window.localStorage.getItem(this.getEventsStorageKey());
+        if (rawEvents) {
+          this.events = JSON.parse(rawEvents);
+          let changed = false;
+          this.events.forEach((ev) => {
+            if (ev.song && ev.song.id === '12CeaxLiMgE') {
+              ev.song.id = 'O3-6zB3kg8M';
+              ev.song.coverUrl = 'https://i.ytimg.com/vi/O3-6zB3kg8M/hqdefault.jpg';
+              ev.id = `O3-6zB3kg8M_${ev.playedAt}`;
+              changed = true;
+            }
+          });
+          if (changed) {
+            this.saveEvents();
+          }
+        } else {
+          // Pre-seed from existing aggregated history if events list is empty
+          const items = Object.values(this.history);
+          if (items.length > 0) {
+            this.events = items
+              .map((it) => ({
+                id: `${it.song.id}_${it.lastPlayedAt}`,
+                song: it.song,
+                playedAt: it.lastPlayedAt,
+              }))
+              .sort((a, b) => b.playedAt - a.playedAt);
+            this.saveEvents();
+          } else {
+            this.events = [];
+          }
+        }
+        return;
       }
     } catch (e) {
       console.warn('Failed to load history from localStorage', e);
     }
     this.history = {};
+    this.events = [];
   }
 
   private save() {
@@ -139,6 +201,16 @@ class HistoryService {
       }
     } catch (e) {
       console.warn('Failed to save history to localStorage', e);
+    }
+  }
+
+  private saveEvents() {
+    try {
+      if (typeof window !== 'undefined' && window.localStorage) {
+        window.localStorage.setItem(this.getEventsStorageKey(), JSON.stringify(this.events));
+      }
+    } catch (e) {
+      console.warn('Failed to save history events to localStorage', e);
     }
   }
 
@@ -164,6 +236,50 @@ class HistoryService {
       this.history[song.id].genreType = genre;
     }
     this.save();
+
+    // Log chronological playback event
+    const event: PlayHistoryEvent = {
+      id: `${song.id}_${now}_${Math.random().toString(36).slice(2, 6)}`,
+      song,
+      playedAt: now,
+    };
+    this.events.unshift(event);
+    if (this.events.length > 3000) {
+      this.events = this.events.slice(0, 3000);
+    }
+    this.saveEvents();
+    if (typeof window !== 'undefined') {
+      window.dispatchEvent(new CustomEvent('sunona:history-updated'));
+    }
+  }
+
+  /**
+   * Returns all played songs in chronological order (latest first)
+   */
+  public getPlayHistory(): PlayHistoryEvent[] {
+    return [...this.events];
+  }
+
+  /**
+   * Removes a single event from history
+   */
+  public removePlayEvent(eventId: string) {
+    this.events = this.events.filter((e) => e.id !== eventId);
+    this.saveEvents();
+    if (typeof window !== 'undefined') {
+      window.dispatchEvent(new CustomEvent('sunona:history-updated'));
+    }
+  }
+
+  /**
+   * Clears all chronological listening history
+   */
+  public clearPlayHistory() {
+    this.events = [];
+    this.saveEvents();
+    if (typeof window !== 'undefined') {
+      window.dispatchEvent(new CustomEvent('sunona:history-updated'));
+    }
   }
 
   /**

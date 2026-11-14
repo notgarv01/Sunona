@@ -704,6 +704,15 @@ body.is-electron .app-header {
   border-left: 3px solid var(--primary);
 }
 
+.nav-item.playlist-nav-item.is-playing {
+  color: var(--primary) !important;
+  font-weight: 700;
+}
+
+.nav-item.playlist-nav-item.is-playing .nav-item-icon {
+  color: var(--primary);
+}
+
 .nav-item-icon {
   width: 20px;
   height: 20px;
@@ -2159,8 +2168,12 @@ body.is-electron .app-header {
   transform: scale(1.1);
 }
 
+.transport-btn {
+  position: relative;
+}
+
 .transport-btn.active {
-  color: var(--primary);
+  color: #1ed760 !important;
 }
 
 .play-pause-btn {
@@ -2966,8 +2979,12 @@ body.is-electron .coverflow-header {
   color: #ffffff;
 }
 
+.coverflow-pill-btn {
+  position: relative;
+}
+
 .coverflow-pill-btn.active {
-  color: var(--accent, #10b981);
+  color: #1ed760 !important;
 }
 
 .coverflow-pill-play-btn {
@@ -6055,6 +6072,11 @@ body.is-electron .coverflow-header {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.spotify-library-item.is-playing .spotify-library-item-title {
+  color: #1ed760 !important;
+  font-weight: 700;
 }
 
 .spotify-library-item-subtitle {

@@ -9,14 +9,14 @@ import {
   Music,
   Disc,
 } from 'lucide-react';
-import type { Album, Song } from '../types';
+import type { Album, Song, PlaybackSource } from '../types';
 
 interface Props {
   album: Album;
   currentSong: Song | null;
   isPlaying: boolean;
   songsState?: Song[];
-  onPlaySong: (song: Song, customQueue?: Song[]) => void;
+  onPlaySong: (song: Song, customQueue?: Song[], contextMode?: 'playlist' | 'radio', seekTime?: number, sourceInfo?: PlaybackSource) => void;
   onTogglePlay: () => void;
   onBack: () => void;
   onToggleLike: (songId: string) => void;
@@ -34,7 +34,48 @@ export const AlbumScreen: React.FC<Props> = ({
   onToggleLike,
   onAddToPlaylist,
 }) => {
-  const totalDurationSeconds = album.songs.reduce((acc, s) => acc + (s.duration || 210), 0);
+  const [songsList, setSongsList] = React.useState<Song[]>(album.songs || []);
+  const [isLoadingTracks, setIsLoadingTracks] = React.useState<boolean>(false);
+
+  React.useEffect(() => {
+    let isMounted = true;
+    if (!album.songs || album.songs.length === 0) {
+      setIsLoadingTracks(true);
+      fetch(`/api/search?q=${encodeURIComponent(album.title + ' ' + (album.artist || ''))}`)
+        .then((res) => res.json())
+        .then((data) => {
+          if (!isMounted) return;
+          if (data && Array.isArray(data.results) && data.results.length > 0) {
+            setSongsList(
+              data.results.map((r: any) => ({
+                id: r.id,
+                title: r.title,
+                artist: r.artist || album.artist,
+                album: album.title,
+                duration: r.duration || 210,
+                coverUrl: r.coverUrl || album.coverUrl,
+                audioUrl: '',
+                views: r.views || '1M views',
+                likes: '100K',
+                isLiked: false,
+                lyrics: [],
+              }))
+            );
+          }
+        })
+        .catch(() => {})
+        .finally(() => {
+          if (isMounted) setIsLoadingTracks(false);
+        });
+    } else {
+      setSongsList(album.songs);
+    }
+    return () => {
+      isMounted = false;
+    };
+  }, [album.id, album.title, album.artist, album.songs]);
+
+  const totalDurationSeconds = songsList.reduce((acc, s) => acc + (s.duration || 210), 0);
   const totalMinutes = Math.floor(totalDurationSeconds / 60);
   const totalHours = Math.floor(totalMinutes / 60);
   const formattedDuration =
@@ -45,21 +86,21 @@ export const AlbumScreen: React.FC<Props> = ({
   const isAlbumPlaying =
     isPlaying &&
     currentSong &&
-    album.songs.some((s) => s.id === currentSong.id);
+    songsList.some((s) => s.id === currentSong.id);
 
   const handlePlayAll = () => {
-    if (album.songs.length === 0) return;
+    if (songsList.length === 0) return;
     if (isAlbumPlaying) {
       onTogglePlay();
     } else {
-      onPlaySong(album.songs[0], album.songs);
+      onPlaySong(songsList[0], songsList, 'playlist', undefined, { type: 'album', id: album.id, name: album.title });
     }
   };
 
   const handleShufflePlay = () => {
-    if (album.songs.length === 0) return;
-    const shuffled = [...album.songs].sort(() => Math.random() - 0.5);
-    onPlaySong(shuffled[0], shuffled);
+    if (songsList.length === 0) return;
+    const randomIndex = Math.floor(Math.random() * songsList.length);
+    onPlaySong(songsList[randomIndex], songsList, 'playlist', undefined, { type: 'album', id: album.id, name: album.title });
   };
 
   const formatSongDuration = (secs?: number) => {
@@ -135,8 +176,8 @@ export const AlbumScreen: React.FC<Props> = ({
 
           <div className="playlist-meta-row">
             <span>
-              <strong>{album.songs.length}</strong>{' '}
-              {album.songs.length === 1 ? 'song' : 'songs'}
+              <strong>{songsList.length}</strong>{' '}
+              {songsList.length === 1 ? 'song' : 'songs'}
             </span>
             <span className="meta-dot">•</span>
             <span>{formattedDuration}</span>
@@ -149,7 +190,7 @@ export const AlbumScreen: React.FC<Props> = ({
             <button
               className="playlist-play-all-btn"
               onClick={handlePlayAll}
-              disabled={album.songs.length === 0}
+              disabled={songsList.length === 0}
               title={isAlbumPlaying ? 'Pause Album' : 'Play Album'}
             >
               {isAlbumPlaying ? (
@@ -168,7 +209,7 @@ export const AlbumScreen: React.FC<Props> = ({
             <button
               className="playlist-shuffle-btn"
               onClick={handleShufflePlay}
-              disabled={album.songs.length === 0}
+              disabled={songsList.length === 0}
               title="Shuffle Play Album"
             >
               <Shuffle size={16} />
@@ -189,7 +230,14 @@ export const AlbumScreen: React.FC<Props> = ({
           <div className="col-actions-spacer" />
         </div>
 
-        {album.songs.length === 0 ? (
+        {isLoadingTracks ? (
+          <div className="playlist-empty-state">
+            <div className="playlist-empty-icon-wrap">
+              <Disc size={40} className="spinning" style={{ color: 'var(--primary)' }} />
+            </div>
+            <h3>Loading verified tracks from YouTube...</h3>
+          </div>
+        ) : songsList.length === 0 ? (
           <div className="playlist-empty-state">
             <div className="playlist-empty-icon-wrap">
               <Music size={40} style={{ color: 'var(--primary)' }} />
@@ -198,7 +246,7 @@ export const AlbumScreen: React.FC<Props> = ({
           </div>
         ) : (
           <div className="song-list-table">
-            {album.songs.map((song, idx) => {
+            {songsList.map((song, idx) => {
               const isThisPlaying = currentSong?.id === song.id && isPlaying;
               const isCurrent = currentSong?.id === song.id;
               const liked = isSongLiked(song);
@@ -207,7 +255,7 @@ export const AlbumScreen: React.FC<Props> = ({
                 <div
                   key={`${song.id}_${idx}`}
                   className={`song-row ${isCurrent ? 'playing' : ''}`}
-                  onClick={() => onPlaySong(song, album.songs)}
+                  onClick={() => onPlaySong(song, songsList, 'playlist', undefined, { type: 'album', id: album.id, name: album.title })}
                 >
                   <div className="song-index">
                     {isThisPlaying ? (

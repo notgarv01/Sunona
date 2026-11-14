@@ -874,6 +874,22 @@ body.is-electron .sp-titlebar {
   text-overflow: ellipsis;
 }
 
+.sp-lib-item.is-playing .sp-lib-item-title {
+  color: #1ed760 !important;
+  font-weight: 600;
+}
+
+.sp-playing-icon {
+  color: #1ed760;
+  flex-shrink: 0;
+  animation: spPlayingPulse 1.6s ease-in-out infinite alternate;
+}
+
+@keyframes spPlayingPulse {
+  0% { transform: scale(0.95); opacity: 0.8; }
+  100% { transform: scale(1.08); opacity: 1; }
+}
+
 /* ── CENTER CONTENT ── */
 .sp-content {
   background: #121212;
@@ -1188,10 +1204,23 @@ body.is-electron .sp-titlebar {
   cursor: pointer;
   padding: 4px;
   border-radius: 50%;
+  position: relative;
   transition: color 0.15s, transform 0.15s;
 }
 .sp-pb-ctrl-btn:hover { color: #fff; transform: scale(1.08); }
-.sp-pb-ctrl-btn.active-green { color: #1ed760; }
+.sp-pb-ctrl-btn.active-green { color: #1ed760 !important; }
+.sp-pb-ctrl-btn.active-green:hover { color: #1fdf64 !important; }
+.sp-pb-dot {
+  position: absolute;
+  bottom: -3px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 4px;
+  height: 4px;
+  border-radius: 50%;
+  background: #1ed760;
+  box-shadow: 0 0 6px rgba(30, 215, 96, 0.8);
+}
 .sp-pb-play-btn {
   width: 36px;
   height: 36px;

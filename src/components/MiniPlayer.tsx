@@ -233,9 +233,11 @@ export const MiniPlayer: React.FC<MiniPlayerProps> = ({
             <button
               className={`sp-pip-ctrl ${isShuffle ? 'active-green' : ''}`}
               onClick={onToggleShuffle}
-              title="Shuffle"
+              title={`Shuffle: ${isShuffle ? 'On' : 'Off'}`}
+              style={{ position: 'relative' }}
             >
               <Shuffle size={14} color={isShuffle ? '#1ed760' : '#ffffff'} />
+              {isShuffle && <span className="sp-pb-dot" style={{ bottom: '-3px', width: '3px', height: '3px' }} />}
             </button>
 
             <button className="sp-pip-ctrl" onClick={onPrev} title="Previous track">
@@ -262,12 +264,14 @@ export const MiniPlayer: React.FC<MiniPlayerProps> = ({
               className={`sp-pip-ctrl ${repeatMode !== 'off' ? 'active-green' : ''}`}
               onClick={onToggleRepeat}
               title={`Repeat: ${repeatMode}`}
+              style={{ position: 'relative' }}
             >
               {repeatMode === 'one' ? (
                 <Repeat1 size={14} color="#1ed760" />
               ) : (
                 <Repeat size={14} color={repeatMode === 'all' ? '#1ed760' : '#ffffff'} />
               )}
+              {repeatMode !== 'off' && <span className="sp-pb-dot" style={{ bottom: '-3px', width: '3px', height: '3px' }} />}
             </button>
           </div>
 

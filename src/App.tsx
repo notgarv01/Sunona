@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import { RotateCcw, Trash2, X } from 'lucide-react';
-import type { Song, ThemePreset, LyricLine, DailyDiscoverItem, Playlist } from './types';
+import type { Song, ThemePreset, LyricLine, DailyDiscoverItem, Playlist, PlaybackSource } from './types';
 import { INITIAL_SONGS, INITIAL_ALBUMS, THEME_PRESETS, MOODS } from './data/musicData';
 import { audioEngine } from './services/audioEngine';
 import { historyService, type TasteProfile } from './services/historyService';
@@ -14,6 +14,7 @@ import { ExploreScreen } from './components/ExploreScreen';
 import { LibraryScreen } from './components/LibraryScreen';
 import { PlaylistScreen } from './components/PlaylistScreen';
 import { AlbumScreen } from './components/AlbumScreen';
+import { HistoryScreen } from './components/HistoryScreen';
 import { MyPlaylistsScreen } from './components/MyPlaylistsScreen';
 import { AddToPlaylistModal } from './components/AddToPlaylistModal';
 import { CreatePlaylistModal } from './components/CreatePlaylistModal';
@@ -61,6 +62,18 @@ interface StoredPlaybackSession {
   duration: number;
   queue?: Song[];
   isPlaying?: boolean;
+  contextMode?: 'playlist' | 'radio';
+}
+
+function healSong(s: Song): Song {
+  if (s && s.id === '12CeaxLiMgE') {
+    return {
+      ...s,
+      id: 'O3-6zB3kg8M',
+      coverUrl: 'https://i.ytimg.com/vi/O3-6zB3kg8M/hqdefault.jpg',
+    };
+  }
+  return s;
 }
 
 const getStoredPlaybackSession = (): StoredPlaybackSession | null => {
@@ -74,6 +87,8 @@ const getStoredPlaybackSession = (): StoredPlaybackSession | null => {
           if (parsed && parsed.song && parsed.song.id && Date.now() - (parsed.timestamp || 0) < 60000) {
             sessionStorage.removeItem('sunona_pwa_handover');
             localStorage.removeItem('sunona_pwa_handover');
+            parsed.song = healSong(parsed.song);
+            if (Array.isArray(parsed.queue)) parsed.queue = parsed.queue.map(healSong);
             return parsed;
           }
         } catch {}
@@ -87,7 +102,9 @@ const getStoredPlaybackSession = (): StoredPlaybackSession | null => {
       if (!raw) return null;
       const parsed = JSON.parse(raw);
       if (parsed && parsed.song && parsed.song.id) {
-        return parsed;
+        parsed.song = healSong(parsed.song);
+        if (Array.isArray(parsed.queue)) parsed.queue = parsed.queue.map(healSong);
+        return { ...parsed, isPlaying: false };
       }
     }
   } catch (err) {
@@ -107,7 +124,8 @@ export const App: React.FC = () => {
   }, [currentSong]);
   const [queue, setQueue] = useState<Song[]>(() => ((initialSession?.queue && initialSession.queue.length > 0) ? initialSession.queue : []));
   const queueRef = useRef<Song[]>((initialSession?.queue && initialSession.queue.length > 0) ? initialSession.queue : []);
-  const playbackContextRef = useRef<'radio' | 'playlist'>('radio');
+  const playbackContextRef = useRef<'radio' | 'playlist'>(initialSession?.contextMode || 'radio');
+  const shuffleHistoryRef = useRef<string[]>([]);
 
   useEffect(() => {
     queueRef.current = queue;
@@ -120,7 +138,7 @@ export const App: React.FC = () => {
   const [isShuffle, setIsShuffle] = useState<boolean>(false);
   const [repeatMode, setRepeatMode] = useState<'off' | 'all' | 'one'>('off');
 
-  const [activeView, setActiveView] = useState<'home' | 'explore' | 'library' | 'my-playlists' | 'playlist' | 'album' | 'artist'>(() => {
+  const [activeView, setActiveView] = useState<'home' | 'explore' | 'library' | 'my-playlists' | 'playlist' | 'album' | 'artist' | 'history'>(() => {
     try {
       const alb = new URLSearchParams(window.location.search).get('album');
       if (alb) return 'album';
@@ -134,6 +152,7 @@ export const App: React.FC = () => {
     } catch {}
     return null;
   });
+  const [selectedArtist, setSelectedArtist] = useState<string | null>(null);
 
   // UI/UX Mode: 'sunona' (MetroList classic) vs 'spotify' (Spotify desktop layout)
   const [uiMode, setUiMode] = useState<'sunona' | 'spotify'>(() => {
@@ -155,6 +174,10 @@ export const App: React.FC = () => {
     try {
       localStorage.setItem('sunona_ui_mode', mode);
     } catch {}
+    // When switching to SunoNa mode, always show SunoNa's dashboard (Home) if we were in Spotify-specific views
+    if (mode === 'sunona') {
+      setActiveView((curr) => (curr === 'artist' ? 'home' : curr));
+    }
     // Re-sync playback history, recommendations and search history so both UIs stay 100% in sync
     setListenAgain(historyService.getListenAgain());
     setMostPlayed(historyService.getMostPlayed());
@@ -162,6 +185,12 @@ export const App: React.FC = () => {
     setTasteProfile(tp.totalPlays > 0 ? tp : undefined);
     window.dispatchEvent(new CustomEvent('sunona:search-history-updated'));
   }, []);
+
+  useEffect(() => {
+    if (uiMode === 'sunona' && activeView === 'artist') {
+      setActiveView('home');
+    }
+  }, [uiMode, activeView]);
   // const [hasEntered, setHasEntered] = useState<boolean>(true); // Temporarily commented out
   const [activeDrawer, setActiveDrawer] = useState<'lyrics' | 'queue' | null>(() => {
     try {
@@ -170,6 +199,9 @@ export const App: React.FC = () => {
     } catch {}
     return null;
   });
+  const [playbackSource, setPlaybackSource] = useState<PlaybackSource | null>(null);
+  const playbackSourceRef = useRef<PlaybackSource | null>(null);
+  playbackSourceRef.current = playbackSource;
   const [isLoadingLyrics, setIsLoadingLyrics] = useState<boolean>(false);
   const [isNowPlayingOpen, setIsNowPlayingOpen] = useState<boolean>(false);
   const [isMiniPlayerOpen, setIsMiniPlayerOpen] = useState<boolean>(false);
@@ -383,7 +415,7 @@ export const App: React.FC = () => {
           if (localLiked) {
             const parsed = JSON.parse(localLiked);
             if (Array.isArray(parsed)) {
-              activeLikedList = parsed;
+              activeLikedList = parsed.map(healSong);
             }
           }
         } catch {}
@@ -398,16 +430,25 @@ export const App: React.FC = () => {
           if (rawSession) {
             const session = JSON.parse(rawSession);
             if (session && session.song && session.song.id) {
-              const isLiked = activeLikedList.some((s) => s.id === session.song.id);
-              const restoredSong = { ...session.song, isLiked };
+              const healed = healSong(session.song);
+              const isLiked = activeLikedList.some((s) => s.id === healed.id);
+              const restoredSong = { ...healed, isLiked };
               setCurrentSong(restoredSong);
               currentSongRef.current = restoredSong;
               setIsPlaying(false);
               setCurrentTime(session.currentTime || 0);
               setDuration(session.duration || session.song.duration || 0);
               if (Array.isArray(session.queue) && session.queue.length > 0) {
-                setQueue(session.queue);
-                queueRef.current = session.queue;
+                const healedQueue = session.queue.map(healSong);
+                setQueue(healedQueue);
+                queueRef.current = healedQueue;
+              }
+              if (session.contextMode) {
+                playbackContextRef.current = session.contextMode;
+              }
+              if (session.playbackSource) {
+                setPlaybackSource(session.playbackSource);
+                playbackSourceRef.current = session.playbackSource;
               }
             }
           }
@@ -518,8 +559,6 @@ export const App: React.FC = () => {
             isLiked: likedSongs.some((ls) => ls.id === s.id),
           }));
           setSongs(mapped);
-          setQueue(mapped);
-          queueRef.current = mapped;
         }
       })
       .catch((err) => console.error('Failed to load live home feed:', err));
@@ -708,9 +747,30 @@ export const App: React.FC = () => {
   }, []);
 
   // Play a specific song with auto lyrics resolution, history logging & live automix radio suggestions
-  const playSong = useCallback((song: Song, customQueue?: Song[], contextMode?: 'playlist' | 'radio', seekTime?: number) => {
+  const playSong = useCallback((
+    song: Song,
+    customQueue?: Song[],
+    contextMode?: 'playlist' | 'radio',
+    seekTime?: number,
+    sourceInfo?: PlaybackSource | null
+  ) => {
+    // Update playback source context
+    if (sourceInfo !== undefined) {
+      setPlaybackSource(sourceInfo);
+      playbackSourceRef.current = sourceInfo;
+    } else if (contextMode === 'radio') {
+      const radioSource: PlaybackSource = { type: 'radio', name: song.artist ? `${song.artist} Radio` : 'Radio' };
+      setPlaybackSource(radioSource);
+      playbackSourceRef.current = radioSource;
+    } else if (!playbackSourceRef.current && song.album) {
+      const albumSource: PlaybackSource = { type: 'album', name: song.album };
+      setPlaybackSource(albumSource);
+      playbackSourceRef.current = albumSource;
+    }
+
     const isLiked = likedSongs.some((ls) => ls.id === song.id) || !!song.isLiked;
     const enrichedSong: Song = { ...song, isLiked };
+    console.log(`%c🎵 [TEST_PLAY_EVENT] Title: "${enrichedSong.title}" | Artist: "${enrichedSong.artist}" | ID: "${enrichedSong.id}"`, 'background: #1ed760; color: #000; font-weight: bold; padding: 4px 8px; border-radius: 4px;');
     setCurrentSong(enrichedSong);
     audioEngine.playSong(enrichedSong);
     setIsPlaying(true);
@@ -734,6 +794,8 @@ export const App: React.FC = () => {
             currentTime: startOffset,
             duration: song.duration,
             queue: (customQueue && customQueue.length > 0) ? customQueue : queueRef.current,
+            contextMode: (customQueue && customQueue.length > 0) ? 'playlist' : (contextMode || playbackContextRef.current),
+            playbackSource: sourceInfo !== undefined ? sourceInfo : playbackSourceRef.current,
           })
         );
       } catch {}
@@ -785,8 +847,8 @@ export const App: React.FC = () => {
     // If a custom playlist queue is provided, set it as the active queue
     if (customQueue && customQueue.length > 0) {
       setQueue(customQueue);
-      setSongs(customQueue);
       queueRef.current = customQueue;
+      shuffleHistoryRef.current = [song.id];
     }
 
     // In Playlist Mode: NEVER append external songs to the queue
@@ -796,10 +858,9 @@ export const App: React.FC = () => {
 
       if (!isAlreadyInQueue) {
         // User selected a brand new song (from search, new album, or recommendation shelf)
-        // Reset queue & quick picks to start a fresh coherent Radio Station around this song!
+        // Reset queue to start a fresh coherent Radio Station around this song!
         const initialStation = [song];
         setQueue(initialStation);
-        setSongs(initialStation);
         queueRef.current = initialStation;
       }
 
@@ -814,10 +875,8 @@ export const App: React.FC = () => {
           }
           if (data.results && data.results.length > 0) {
             if (!isAlreadyInQueue) {
-              // Fresh station: Seed both the Cover Flow Queue and Home Quick Picks with the identical coherent list!
               const station = [song, ...data.results.filter((r: Song) => r.id !== song.id)];
               setQueue(station);
-              setSongs(station);
               queueRef.current = station;
             } else {
               // Progressing through existing queue (Cover Flow navigation, Next/Prev):
@@ -830,7 +889,6 @@ export const App: React.FC = () => {
                 );
                 if (newSuggestions.length === 0) return prev;
                 const updated = [...prev, ...newSuggestions];
-                setSongs(updated);
                 queueRef.current = updated;
                 return updated;
               });
@@ -878,6 +936,29 @@ export const App: React.FC = () => {
     }
   }, [fetchLyricsForSong]);
 
+  // Check for shared song URL parameter on load (?song=... or ?track=...)
+  useEffect(() => {
+    try {
+      const params = new URLSearchParams(window.location.search);
+      const songId = params.get('song') || params.get('track');
+      if (songId) {
+        const found = songs.find((s) => s.id === songId) || INITIAL_SONGS.find((s) => s.id === songId);
+        if (found) {
+          playSong(found);
+        } else {
+          fetch(`/api/similar?id=${encodeURIComponent(songId)}`)
+            .then((r) => r.json())
+            .then((d) => {
+              if (d && d.songs && d.songs.length > 0) {
+                playSong(d.songs[0]);
+              }
+            })
+            .catch(() => {});
+        }
+      }
+    } catch {}
+  }, [playSong, songs]);
+
   // Seamless PWA install & window handover preservation
   useEffect(() => {
     const persistHandover = () => {
@@ -888,7 +969,9 @@ export const App: React.FC = () => {
             currentTime: currentTime,
             duration: duration || currentSongRef.current.duration,
             queue: queueRef.current,
-            isPlaying: isPlaying,
+            isPlaying: false,
+            contextMode: playbackContextRef.current,
+            playbackSource: playbackSourceRef.current,
             timestamp: Date.now(),
           };
           sessionStorage.setItem('sunona_pwa_handover', JSON.stringify(handoverData));
@@ -905,16 +988,6 @@ export const App: React.FC = () => {
     };
   }, [currentTime, duration, isPlaying]);
 
-  // Seamless resume when launching from PWA install handover
-  useEffect(() => {
-    if (initialSession && initialSession.isPlaying && initialSession.song) {
-      const timer = setTimeout(() => {
-        playSong(initialSession.song, initialSession.queue || [], 'playlist', initialSession.currentTime || 0);
-      }, 150);
-      return () => clearTimeout(timer);
-    }
-  }, []);
-
   // Next track in queue with playlist boundary handling & radio lookahead auto-pagination
   const handleNext = useCallback(() => {
     if (!currentSong || queue.length === 0) return;
@@ -923,13 +996,31 @@ export const App: React.FC = () => {
     const isPlaylistMode = playbackContextRef.current === 'playlist';
 
     if (isShuffle && queue.length > 1) {
-      let randomIndex = Math.floor(Math.random() * queue.length);
-      let attempts = 0;
-      while (randomIndex === currentIndex && attempts < 10) {
-        randomIndex = Math.floor(Math.random() * queue.length);
-        attempts++;
+      // Find songs in queue that haven't been played in this shuffle cycle yet
+      let unplayed = queue.filter(
+        (s) => s.id !== currentSong.id && !shuffleHistoryRef.current.includes(s.id)
+      );
+
+      // If all songs in queue have been played once in this cycle
+      if (unplayed.length === 0) {
+        if (isPlaylistMode && repeatMode !== 'all') {
+          // Playlist finished in shuffle mode! Stop playback cleanly
+          audioEngine.pause();
+          setIsPlaying(false);
+          audioEngine.seek(0);
+          setCurrentTime(0);
+          shuffleHistoryRef.current = [];
+          return;
+        }
+        // Start a fresh shuffle cycle without repeating the current song immediately
+        shuffleHistoryRef.current = [currentSong.id];
+        unplayed = queue.filter((s) => s.id !== currentSong.id);
       }
-      playSong(queue[randomIndex], undefined, isPlaylistMode ? 'playlist' : 'radio');
+
+      const randomIndex = Math.floor(Math.random() * unplayed.length);
+      const nextSong = unplayed[randomIndex];
+      shuffleHistoryRef.current.push(nextSong.id);
+      playSong(nextSong, undefined, isPlaylistMode ? 'playlist' : 'radio', undefined, isPlaylistMode ? playbackSourceRef.current : undefined);
       return;
     }
 
@@ -937,7 +1028,7 @@ export const App: React.FC = () => {
       const isLastSong = currentIndex >= queue.length - 1;
       if (isLastSong) {
         if (repeatMode === 'all') {
-          playSong(queue[0], undefined, 'playlist');
+          playSong(queue[0], undefined, 'playlist', undefined, playbackSourceRef.current);
         } else {
           // Playlist finished! Stop playback cleanly - do NOT loop and do NOT add suggestions!
           audioEngine.pause();
@@ -949,7 +1040,7 @@ export const App: React.FC = () => {
       }
 
       // Not the last song - play next track in playlist
-      playSong(queue[currentIndex + 1], undefined, 'playlist');
+      playSong(queue[currentIndex + 1], undefined, 'playlist', undefined, playbackSourceRef.current);
       return;
     }
 
@@ -968,7 +1059,6 @@ export const App: React.FC = () => {
               const existingIds = new Set(prev.map((s) => s.id));
               const newUnique = data.results.filter((s: Song) => !existingIds.has(s.id));
               const updated = [...prev, ...newUnique];
-              setSongs(updated);
               queueRef.current = updated;
               return updated;
             });
@@ -996,6 +1086,18 @@ export const App: React.FC = () => {
       return;
     }
 
+    // If Shuffle is ON and we have previously played tracks in this shuffle session
+    if (isShuffle && shuffleHistoryRef.current.length > 1) {
+      shuffleHistoryRef.current.pop();
+      const previousSongId = shuffleHistoryRef.current[shuffleHistoryRef.current.length - 1];
+      const prevSong = queue.find((s) => s.id === previousSongId);
+      if (prevSong) {
+        const isPlaylistMode = playbackContextRef.current === 'playlist';
+        playSong(prevSong, undefined, isPlaylistMode ? 'playlist' : 'radio', undefined, isPlaylistMode ? playbackSourceRef.current : undefined);
+        return;
+      }
+    }
+
     const currentIndex = queue.findIndex((s) => s.id === currentSong.id);
 
     // If on the first song of the queue (or not found), restart it from beginning.
@@ -1008,8 +1110,8 @@ export const App: React.FC = () => {
 
     const isPlaylistMode = playbackContextRef.current === 'playlist';
     const prevIndex = currentIndex - 1;
-    playSong(queue[prevIndex], undefined, isPlaylistMode ? 'playlist' : 'radio');
-  }, [currentSong, queue, currentTime, playSong]);
+    playSong(queue[prevIndex], undefined, isPlaylistMode ? 'playlist' : 'radio', undefined, isPlaylistMode ? playbackSourceRef.current : undefined);
+  }, [currentSong, queue, currentTime, isShuffle, playSong]);
 
   // Toggle play/pause
   const handleTogglePlay = useCallback(() => {
@@ -1034,26 +1136,15 @@ export const App: React.FC = () => {
   const repeatModeRef = useRef(repeatMode);
   repeatModeRef.current = repeatMode;
 
-  // Toggle Shuffle with queue reordering & instant feedback
+  // Toggle Shuffle without mutating or reordering the queue list
   const handleToggleShuffle = useCallback(() => {
     setIsShuffle((prev) => {
       const nextState = !prev;
       if (nextState) {
-        setQueue((currQueue) => {
-          if (currQueue.length <= 1) return currQueue;
-          const currentId = currentSongRef.current?.id;
-          const remaining = currQueue.filter((s) => s.id !== currentId);
-          for (let i = remaining.length - 1; i > 0; i--) {
-            const j = Math.floor(Math.random() * (i + 1));
-            [remaining[i], remaining[j]] = [remaining[j], remaining[i]];
-          }
-          const newQueue = currentSongRef.current ? [currentSongRef.current, ...remaining] : remaining;
-          queueRef.current = newQueue;
-          setSongs(newQueue);
-          return newQueue;
-        });
+        shuffleHistoryRef.current = currentSongRef.current ? [currentSongRef.current.id] : [];
         showToast('Shuffle: On 🔀');
       } else {
+        shuffleHistoryRef.current = [];
         showToast('Shuffle: Off');
       }
       return nextState;
@@ -1317,6 +1408,11 @@ export const App: React.FC = () => {
   const handleSelectAlbum = useCallback((id: string) => {
     setSelectedAlbumId(id);
     setActiveView('album');
+  }, []);
+
+  const handleSelectArtist = useCallback((name: string) => {
+    setSelectedArtist(name);
+    setActiveView('artist');
   }, []);
 
   const handleCreatePlaylist = useCallback((title: string, desc?: string) => {
@@ -1763,6 +1859,8 @@ export const App: React.FC = () => {
           onCreatePlaylist={() => setIsCreatePlaylistOpen(true)}
           onSelectPlaylist={handleSelectPlaylist}
           onSelectAlbum={handleSelectAlbum}
+          selectedArtist={selectedArtist}
+          onSelectArtist={handleSelectArtist}
           setActiveView={setActiveView}
           onOpenLibrary={handleOpenLibrary}
           onOpenAuth={() => setIsAuthModalOpen(true)}
@@ -1782,6 +1880,7 @@ export const App: React.FC = () => {
           onSaveQueueToPlaylist={() => setQueueToAddToPlaylist(queue)}
           isMiniPlayerOpen={isMiniPlayerOpen}
           onToggleMiniPlayer={handleToggleMiniPlayer}
+          playbackSource={playbackSource}
         />
 
         {/* Floating OS-level / In-App Miniplayer */}
@@ -2035,9 +2134,12 @@ export const App: React.FC = () => {
           cachedCount={cachedCount}
           uiMode={uiMode}
           user={currentUser}
+          playbackSource={playbackSource}
+          isPlaying={isPlaying}
+          currentSong={currentSong}
         />
 
-        {activeView === 'home' && (
+        {(activeView === 'home' || activeView === 'artist' || !['explore', 'library', 'my-playlists', 'playlist', 'album', 'history'].includes(activeView)) && (
           <HomeScreen
             songs={songs}
             albums={INITIAL_ALBUMS}
@@ -2119,7 +2221,16 @@ export const App: React.FC = () => {
 
         {activeView === 'album' && (
           (() => {
-            const currentAlbum = INITIAL_ALBUMS.find((a) => a.id === selectedAlbumId) || INITIAL_ALBUMS[0];
+            const currentAlbum = INITIAL_ALBUMS.find((a) => a.id === selectedAlbumId) || {
+              id: selectedAlbumId || 'album',
+              title: selectedAlbumId?.replace(/^alb-/, '').replace(/-/g, ' ') || 'Album',
+              artist: 'Various Artists',
+              coverUrl: 'https://images.unsplash.com/photo-1511671782779-c97d3d27a1d4?w=500&auto=format&fit=crop&q=80',
+              year: 2026,
+              songCount: 0,
+              color: '#8b5cf6',
+              songs: [],
+            };
             if (!currentAlbum) return null;
             return (
               <AlbumScreen
@@ -2135,6 +2246,19 @@ export const App: React.FC = () => {
               />
             );
           })()
+        )}
+
+        {activeView === 'history' && (
+          <HistoryScreen
+            currentSong={currentSong}
+            isPlaying={isPlaying}
+            onPlaySong={playSong}
+            onTogglePlay={handleTogglePlay}
+            onToggleLike={handleToggleLike}
+            onBack={() => setActiveView('home')}
+            onAddToPlaylist={(song) => setSongToAddToPlaylist(song)}
+            uiMode="sunona"
+          />
         )}
 
         {/* Right Drawer: Live Synced Lyrics */}
@@ -2154,6 +2278,7 @@ export const App: React.FC = () => {
           <QueueDrawer
             queue={queue}
             currentSong={currentSong}
+            playbackSource={playbackSource}
             onPlaySong={playSong}
             onRemoveFromQueue={handleRemoveSongFromQueue}
             onClearQueue={() => setQueue(currentSong ? [currentSong] : [])}
@@ -2198,6 +2323,7 @@ export const App: React.FC = () => {
         sleepRemainingText={sleepRemainingText}
         onOpenSleepTimer={() => setIsSleepModalOpen(true)}
         likedSongs={likedSongs}
+        playbackSource={playbackSource}
       />
 
       {/* Floating OS-level / In-App Miniplayer */}

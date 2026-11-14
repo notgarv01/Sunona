@@ -14,7 +14,7 @@ import {
   Heart, Mic2, ListMusic, PlusCircle, Moon, X,
   MoreHorizontal, Laptop
 } from 'lucide-react';
-import type { Song, Playlist, Album, DailyDiscoverItem } from '../types';
+import type { Song, Playlist, Album, DailyDiscoverItem, PlaybackSource } from '../types';
 import type { TasteProfile } from '../services/historyService';
 import { authService, type UserProfile } from '../services/authService';
 import { SpotifyHome } from './SpotifyHome';
@@ -24,6 +24,7 @@ import { SpotifyRightPanel } from './SpotifyRightPanel';
 import { SpotifySongView } from './SpotifySongView';
 import { INITIAL_ALBUMS } from '../data/musicData';
 import { SpotifyArtistView } from './SpotifyArtistView';
+import { HistoryScreen } from './HistoryScreen';
 import { SpotifyQueuePanel } from './SpotifyQueuePanel';
 import { RosePinkLyricsView } from './RosePinkLyricsView';
 import { LyricReelExportModal } from './LyricReelExportModal';
@@ -57,7 +58,7 @@ interface SpotifyLayoutProps {
   // User
   user?: UserProfile | null;
   // Active view & navigation
-  activeView: 'home' | 'explore' | 'library' | 'my-playlists' | 'playlist' | 'album' | 'artist';
+  activeView: 'home' | 'explore' | 'library' | 'my-playlists' | 'playlist' | 'album' | 'artist' | 'history';
   selectedPlaylistId: string | null;
   selectedAlbumId: string | null;
   // Drawer state
@@ -87,7 +88,9 @@ interface SpotifyLayoutProps {
   onCreatePlaylist: () => void;
   onSelectPlaylist: (playlistId: string) => void;
   onSelectAlbum: (albumId: string) => void;
-  setActiveView: (view: 'home' | 'explore' | 'library' | 'my-playlists' | 'playlist' | 'album' | 'artist') => void;
+  selectedArtist?: string | null;
+  onSelectArtist?: (artistName: string) => void;
+  setActiveView: (view: 'home' | 'explore' | 'library' | 'my-playlists' | 'playlist' | 'album' | 'artist' | 'history') => void;
   onOpenLibrary: (filter?: 'all' | 'liked' | 'cached' | 'playlists') => void;
   onOpenAuth: () => void;
   onOpenProfile: () => void;
@@ -102,6 +105,7 @@ interface SpotifyLayoutProps {
   onSaveQueueToPlaylist?: () => void;
   isMiniPlayerOpen?: boolean;
   onToggleMiniPlayer?: () => void;
+  playbackSource?: PlaybackSource | null;
 }
 
 function formatTime(secs: number) {
@@ -170,14 +174,23 @@ export const SpotifyLayout: React.FC<SpotifyLayoutProps> = ({
   onToggleLike, onAddToPlaylist, onToggleLyrics, onToggleQueue,
   onToggleNowPlayingView, onOpenNowPlaying: _onOpenNowPlaying, onOpenSleepTimer,
   onCreatePlaylist, onSelectPlaylist, onSelectAlbum,
+  selectedArtist: propSelectedArtist, onSelectArtist: propOnSelectArtist,
   setActiveView, onOpenLibrary, onOpenAuth, onOpenProfile,
   onSelectSong, onOpenListenTogether, onOpenSettings, onGoSunoNa, onLogout,
   onRemoveSong, onRemoveFromQueue, onClearQueue, onSaveQueueToPlaylist,
   isMiniPlayerOpen: propIsMiniPlayerOpen,
   onToggleMiniPlayer: propOnToggleMiniPlayer,
+  playbackSource,
 }) => {
   const [spotifyLibTab, setSpotifyLibTab] = useState<'playlists' | 'albums' | 'artists' | null>(null);
-  const [selectedArtist, setSelectedArtist] = useState<string | null>(null);
+  const [internalSelectedArtist, setInternalSelectedArtist] = useState<string | null>(null);
+  const selectedArtist = propSelectedArtist !== undefined && propSelectedArtist !== null ? propSelectedArtist : internalSelectedArtist;
+  const setSelectedArtist = (name: string | null) => {
+    setInternalSelectedArtist(name);
+    if (name && propOnSelectArtist) {
+      propOnSelectArtist(name);
+    }
+  };
   const [searchQuery, setSearchQuery] = useState('');
   const [searchResults, setSearchResults] = useState<Song[]>([]);
   const [searchSuggestions, setSearchSuggestions] = useState<string[]>([]);
@@ -616,51 +629,6 @@ export const SpotifyLayout: React.FC<SpotifyLayoutProps> = ({
       coverUrl: '',
       isLiked: true,
       type: 'playlist',
-    },
-    {
-      id: 'best-bollywood-love',
-      title: 'Best Bollywood Love Songs',
-      sub: 'Playlist • Revibe',
-      coverUrl: 'https://images.unsplash.com/photo-1518495973542-4542c06a5843?w=300&auto=format&fit=crop&q=80',
-      type: 'playlist',
-    },
-    {
-      id: 'alb-iv',
-      title: 'International Villager',
-      sub: 'Album • Yo Yo Honey Singh',
-      coverUrl: 'https://i.ytimg.com/vi/12CeaxLiMgE/hqdefault.jpg',
-      type: 'album',
-    },
-    {
-      id: 'alb-dk',
-      title: 'Desi Kalakaar',
-      sub: 'Album • Yo Yo Honey Singh',
-      coverUrl: 'https://i.ytimg.com/vi/KhnVcAC5bIM/hqdefault.jpg',
-      type: 'album',
-    },
-    {
-      id: 'art-imran',
-      title: 'Imran Khan',
-      sub: 'Artist',
-      coverUrl: 'https://i.ytimg.com/vi/uuCFRaFWjwY/hqdefault.jpg',
-      isArtist: true,
-      type: 'artist',
-    },
-    {
-      id: 'art-yyhs',
-      title: 'Yo Yo Honey Singh',
-      sub: 'Artist',
-      coverUrl: 'https://i.ytimg.com/vi/v6F7Bw9cXFg/hqdefault.jpg',
-      isArtist: true,
-      type: 'artist',
-    },
-    {
-      id: 'art-diljit',
-      title: 'Diljit Dosanjh',
-      sub: 'Artist',
-      coverUrl: 'https://i.ytimg.com/vi/cl0a3i2wFcc/hqdefault.jpg',
-      isArtist: true,
-      type: 'artist',
     },
     ...playlists.filter(p => p.id !== 'liked-songs').map(p => {
       const validSongCover = p.songs?.find(s => !isInvalidCoverUrl(s.coverUrl))?.coverUrl;
@@ -1578,10 +1546,21 @@ export const SpotifyLayout: React.FC<SpotifyLayoutProps> = ({
                     const isActive = (selectedPlaylistId === item.id) ||
                       (activeView === 'library' && item.id === 'liked-songs');
                     const isLiked = item.id === 'liked-songs';
-                    const isNowPlaying = !!(currentSong && (
-                      (item.type === 'album' && currentSong.album === item.title) ||
-                      (item.type === 'playlist' && playlists.find(p => p.id === item.id)?.songs?.some(s => s.id === currentSong.id))
-                    ));
+                    const isNowPlaying = isPlaying && !!(
+                      (playbackSource?.type === 'playlist' && (
+                        playbackSource.id === item.id ||
+                        (playbackSource.id === 'liked-songs' && item.id === 'liked-songs') ||
+                        playbackSource.name.toLowerCase() === item.title.toLowerCase()
+                      )) ||
+                      (playbackSource?.type === 'album' && (
+                        playbackSource.id === item.id ||
+                        playbackSource.name.toLowerCase() === item.title.toLowerCase()
+                      )) ||
+                      (!playbackSource && currentSong && (
+                        (item.type === 'album' && currentSong.album === item.title) ||
+                        (item.type === 'playlist' && playlists.find(p => p.id === item.id)?.songs?.some(s => s.id === currentSong.id))
+                      ))
+                    );
 
                     return (
                       <button
@@ -1614,7 +1593,12 @@ export const SpotifyLayout: React.FC<SpotifyLayoutProps> = ({
                           )}
                         </div>
                         <div className="sp-lib-item-meta">
-                          <span className="sp-lib-item-title">{item.title}</span>
+                          <span
+                            className="sp-lib-item-title"
+                            style={{ color: isNowPlaying ? '#1ed760' : undefined, fontWeight: isNowPlaying ? 600 : undefined }}
+                          >
+                            {item.title}
+                          </span>
                           <span className="sp-lib-item-sub">
                             {isLiked && (
                               <svg className="sp-pin-icon" width="12" height="12" viewBox="0 0 24 24" fill="#1ed760" style={{ display: 'inline', verticalAlign: '-1px', marginRight: 4 }}>
@@ -1624,6 +1608,9 @@ export const SpotifyLayout: React.FC<SpotifyLayoutProps> = ({
                             {item.sub}
                           </span>
                         </div>
+                        {isNowPlaying && (
+                          <Volume2 size={16} color="#1ed760" className="sp-playing-icon" style={{ marginLeft: 'auto', flexShrink: 0 }} />
+                        )}
                       </button>
                     );
                   })}
@@ -1663,13 +1650,29 @@ export const SpotifyLayout: React.FC<SpotifyLayoutProps> = ({
                     const isActive = (selectedPlaylistId === item.id) ||
                       (activeView === 'library' && item.id === 'liked-songs');
                     const isLiked = item.id === 'liked-songs';
+                    const isNowPlaying = isPlaying && !!(
+                      (playbackSource?.type === 'playlist' && (
+                        playbackSource.id === item.id ||
+                        (playbackSource.id === 'liked-songs' && item.id === 'liked-songs') ||
+                        playbackSource.name.toLowerCase() === item.title.toLowerCase()
+                      )) ||
+                      (playbackSource?.type === 'album' && (
+                        playbackSource.id === item.id ||
+                        playbackSource.name.toLowerCase() === item.title.toLowerCase()
+                      )) ||
+                      (!playbackSource && currentSong && (
+                        (item.type === 'album' && currentSong.album === item.title) ||
+                        (item.type === 'playlist' && playlists.find(p => p.id === item.id)?.songs?.some(s => s.id === currentSong.id))
+                      ))
+                    );
 
                     return (
                       <button
                         key={item.id}
-                        className={`sp-collapsed-item-tile ${isActive ? 'active' : ''}`}
+                        className={`sp-collapsed-item-tile ${isActive ? 'active' : ''} ${isNowPlaying ? 'is-playing' : ''}`}
                         onClick={() => handleLibraryItemClick(item)}
-                        title={`${item.title} • ${item.sub || 'Playlist'}`}
+                        title={`${item.title} • ${item.sub || 'Playlist'}${isNowPlaying ? ' (Playing)' : ''}`}
+                        style={{ position: 'relative' }}
                       >
                         {isLiked ? (
                           <div className="sp-collapsed-liked-cover">
@@ -1689,6 +1692,20 @@ export const SpotifyLayout: React.FC<SpotifyLayoutProps> = ({
                           <div className="sp-collapsed-placeholder">
                             <ListMusic size={18} />
                           </div>
+                        )}
+                        {isNowPlaying && (
+                          <div
+                            style={{
+                              position: 'absolute',
+                              bottom: 4,
+                              right: 4,
+                              width: 8,
+                              height: 8,
+                              borderRadius: '50%',
+                              background: '#1ed760',
+                              boxShadow: '0 0 6px #1ed760',
+                            }}
+                          />
                         )}
                       </button>
                     );
@@ -1807,6 +1824,19 @@ export const SpotifyLayout: React.FC<SpotifyLayoutProps> = ({
                     setSelectedArtist(name);
                     setActiveView('artist');
                   }}
+                  onOpenHistory={() => setActiveView('history')}
+                />
+              )}
+              {activeView === 'history' && (
+                <HistoryScreen
+                  currentSong={currentSong}
+                  isPlaying={isPlaying}
+                  onPlaySong={onPlaySong}
+                  onTogglePlay={onTogglePlay}
+                  onToggleLike={onToggleLike}
+                  onBack={() => setActiveView('home')}
+                  onAddToPlaylist={onAddToPlaylist}
+                  uiMode="spotify"
                 />
               )}
               {activeView === 'explore' && (
@@ -1838,7 +1868,16 @@ export const SpotifyLayout: React.FC<SpotifyLayoutProps> = ({
                 );
               })()}
               {activeView === 'album' && (() => {
-                const currentAlbum = INITIAL_ALBUMS.find(a => a.id === selectedAlbumId) || INITIAL_ALBUMS[0];
+                const currentAlbum = INITIAL_ALBUMS.find(a => a.id === selectedAlbumId) || {
+                  id: selectedAlbumId || 'album',
+                  title: selectedAlbumId?.replace(/^alb-/, '').replace(/-/g, ' ') || 'Album',
+                  artist: 'Various Artists',
+                  coverUrl: 'https://images.unsplash.com/photo-1511671782779-c97d3d27a1d4?w=500&auto=format&fit=crop&q=80',
+                  year: 2026,
+                  songCount: 0,
+                  color: '#8b5cf6',
+                  songs: [],
+                };
                 if (!currentAlbum) return null;
                 const albumSongs = currentAlbum.songs && currentAlbum.songs.length > 0
                   ? currentAlbum.songs
@@ -1914,7 +1953,7 @@ export const SpotifyLayout: React.FC<SpotifyLayoutProps> = ({
               isPlaying={isPlaying}
               playlists={playlists}
               recentlyPlayed={listenAgain || songs.slice(0, 10)}
-              contextTitle={currentSong?.album || (selectedPlaylistId ? playlists.find(p => p.id === selectedPlaylistId)?.title : undefined) || 'Dilfek'}
+              contextTitle={playbackSource?.name || currentSong?.album || (selectedPlaylistId ? playlists.find(p => p.id === selectedPlaylistId)?.title : undefined) || 'Queue'}
               onPlaySong={onPlaySong}
               onTogglePlay={onTogglePlay}
               onClose={() => {
@@ -2059,9 +2098,10 @@ export const SpotifyLayout: React.FC<SpotifyLayoutProps> = ({
             <button
               className={`sp-pb-ctrl-btn ${isShuffle ? 'active-green' : ''}`}
               onClick={onToggleShuffle}
-              title="Shuffle"
+              title={`Shuffle: ${isShuffle ? 'On' : 'Off'}`}
             >
               <Shuffle size={16} />
+              {isShuffle && <span className="sp-pb-dot" />}
             </button>
             <button className="sp-pb-ctrl-btn" onClick={onPrev} title="Previous">
               <SkipBack size={18} />
@@ -2075,9 +2115,10 @@ export const SpotifyLayout: React.FC<SpotifyLayoutProps> = ({
             <button
               className={`sp-pb-ctrl-btn ${repeatMode !== 'off' ? 'active-green' : ''}`}
               onClick={onToggleRepeat}
-              title="Repeat"
+              title={`Repeat: ${repeatMode}`}
             >
               <RepeatIcon size={16} />
+              {repeatMode !== 'off' && <span className="sp-pb-dot" />}
             </button>
           </div>
 

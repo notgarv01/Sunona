@@ -1,6 +1,8 @@
 import react from '@vitejs/plugin-react';
 import { defineConfig, type Plugin } from 'vite';
 import { Ytdl, chooseFormat } from '@distube/ytdl-core';
+import fs from 'fs';
+import path from 'path';
 
 // Security: Strict validation patterns to prevent SSRF and injection
 const YOUTUBE_ID_REGEX = /^[a-zA-Z0-9_-]{11}$/;
@@ -73,8 +75,17 @@ function youtubeStreamingPlugin(): Plugin {
           try {
             const urlObj = new URL(req.url, 'http://localhost');
             let videoId = sanitizeString(urlObj.searchParams.get('id') || '', 40);
+            if (videoId === '12CeaxLiMgE') {
+              videoId = 'O3-6zB3kg8M';
+            }
             const titleParam = sanitizeString(urlObj.searchParams.get('title') || '', 120);
             const artistParam = sanitizeString(urlObj.searchParams.get('artist') || '', 120);
+
+            const streamLogLine = `[${new Date().toLocaleTimeString()}] NOW_PLAYING: "${titleParam}" by "${artistParam}" (ID: ${videoId})\n`;
+            console.log(`\n========================================\n🎵 ${streamLogLine}========================================\n`);
+            try {
+              fs.appendFileSync(path.resolve(__dirname, 'playback_log.txt'), streamLogLine);
+            } catch {}
 
             // If not a standard 11-char YouTube ID, resolve from title + artist or cache
             if (!videoId || !YOUTUBE_ID_REGEX.test(videoId)) {
@@ -88,6 +99,13 @@ function youtubeStreamingPlugin(): Plugin {
                 }
               }
               if (resolvedId) {
+                if (resolvedId !== videoId) {
+                  const resolvedLog = `[${new Date().toLocaleTimeString()}] RESOLVED_YT_ID: ${resolvedId} for "${titleParam}"\n`;
+                  console.log(resolvedLog);
+                  try {
+                    fs.appendFileSync(path.resolve(__dirname, 'playback_log.txt'), resolvedLog);
+                  } catch {}
+                }
                 videoId = resolvedId;
               }
             }

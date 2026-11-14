@@ -103,8 +103,8 @@ export const SpotifySongContextMenu: React.FC<SpotifySongContextMenuProps> = ({
 
   const handleCopyLink = () => {
     if (onShare) onShare(song);
-    const shareText = `https://open.spotify.com/track/${song.id || 'sample'} - ${song.title} by ${song.artist}`;
-    navigator.clipboard?.writeText?.(shareText);
+    const appUrl = `${window.location.origin}/?song=${encodeURIComponent(song.id || '')}`;
+    navigator.clipboard?.writeText?.(appUrl);
     setCopiedToast('Link copied to clipboard');
     setTimeout(() => {
       setCopiedToast(null);
@@ -113,7 +113,8 @@ export const SpotifySongContextMenu: React.FC<SpotifySongContextMenuProps> = ({
   };
 
   const handleCopyEmbed = () => {
-    const embed = `<iframe src="https://open.spotify.com/embed/track/${song.id || 'sample'}" width="100%" height="152" frameBorder="0" allowfullscreen="" allow="autoplay; clipboard-write; encrypted-media; fullscreen; picture-in-picture"></iframe>`;
+    const embedUrl = `${window.location.origin}/?song=${encodeURIComponent(song.id || '')}&embed=true`;
+    const embed = `<iframe src="${embedUrl}" width="100%" height="152" frameBorder="0" allowfullscreen="" allow="autoplay; clipboard-write; encrypted-media; fullscreen; picture-in-picture"></iframe>`;
     navigator.clipboard?.writeText?.(embed);
     setCopiedToast('Embed code copied');
     setTimeout(() => {

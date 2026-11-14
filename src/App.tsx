@@ -120,11 +120,9 @@ export const App: React.FC = () => {
     (Boolean((window as any).electronAPI?.isElectron) ||
       Boolean(window.matchMedia && window.matchMedia('(display-mode: standalone)').matches) ||
       Boolean((window.navigator as any)?.standalone) ||
-      window.location.search.includes('pwa=true') ||
-      window.location.search.includes('song=') ||
-      sessionStorage.getItem('sunona_open_player') === 'true');
+      window.location.search.includes('pwa=true'));
 
-  const [showPlayer, setShowPlayer] = useState<boolean>(Boolean(isPWAOrElectron));
+  const [showPlayer] = useState<boolean>(Boolean(isPWAOrElectron));
   const initialSession = useRef<StoredPlaybackSession | null>(getStoredPlaybackSession()).current;
 
   const [songs, setSongs] = useState<Song[]>(INITIAL_SONGS);
@@ -1820,14 +1818,7 @@ export const App: React.FC = () => {
 
   // If visiting in normal browser tab (not installed PWA and not Electron), show Landing Page
   if (!showPlayer) {
-    return (
-      <LandingPage
-        onOpenPlayer={() => {
-          sessionStorage.setItem('sunona_open_player', 'true');
-          setShowPlayer(true);
-        }}
-      />
-    );
+    return <LandingPage />;
   }
 
   // ══ SPOTIFY LAYOUT MODE ══

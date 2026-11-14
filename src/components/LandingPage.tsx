@@ -1,10 +1,6 @@
 import React, { useState, useEffect } from 'react';
 
-interface LandingPageProps {
-  onOpenPlayer: () => void;
-}
-
-export const LandingPage: React.FC<LandingPageProps> = ({ onOpenPlayer }) => {
+export const LandingPage: React.FC = () => {
   const [activeOS, setActiveOS] = useState<'win' | 'mac'>('win');
   const [deferredPrompt, setDeferredPrompt] = useState<any>(null);
 
@@ -25,6 +21,17 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onOpenPlayer }) => {
 
     window.addEventListener('beforeinstallprompt', handleBeforeInstall);
     return () => window.removeEventListener('beforeinstallprompt', handleBeforeInstall);
+  }, []);
+
+  useEffect(() => {
+    // Enable normal scrolling on body when on landing page
+    document.body.style.overflowY = 'auto';
+    document.body.style.overflowX = 'hidden';
+    document.body.style.userSelect = 'auto';
+    return () => {
+      document.body.style.overflow = 'hidden';
+      document.body.style.userSelect = 'none';
+    };
   }, []);
 
   const handleInstallPWA = () => {
@@ -48,12 +55,15 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onOpenPlayer }) => {
       <style>{`
         .landing-root {
           min-height: 100vh;
+          width: 100%;
+          overflow-y: auto;
+          overflow-x: hidden;
           background-color: #060608;
           color: #f4f4f7;
           font-family: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, sans-serif;
-          overflow-x: hidden;
           line-height: 1.5;
-          -webkit-font-smoothing: antialiased;
+          user-select: auto;
+          -webkit-overflow-scrolling: touch;
           background-image: 
             radial-gradient(120% 60% at 50% 0%, rgba(139, 92, 246, 0.12) 0%, transparent 70%),
             linear-gradient(180deg, #060608 0%, #09090b 100%);
@@ -419,13 +429,6 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onOpenPlayer }) => {
             <span className="landing-status-dot" />
             <span>Build v1.0.11</span>
           </div>
-          <button 
-            onClick={onOpenPlayer}
-            className="btn-secondary-action"
-            style={{ padding: '6px 14px', fontSize: '0.8rem', marginLeft: '12px' }}
-          >
-            Launch Web App →
-          </button>
         </div>
       </header>
 
@@ -492,18 +495,10 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onOpenPlayer }) => {
                   </svg>
                   <span>Install Web App (PWA)</span>
                 </button>
-
-                <button 
-                  type="button"
-                  className="btn-secondary-action"
-                  onClick={onOpenPlayer}
-                >
-                  <span>Open Web Player</span>
-                </button>
               </div>
 
               <div className="landing-subtext">
-                Windows 10 / 11 64-bit • Frameless Spotify Header (.exe) • Or Instant Web Player (PWA)
+                Windows 10 / 11 64-bit • Frameless Spotify Header (.exe) • Or 1-Click Web App (PWA)
               </div>
             </div>
           ) : (
@@ -520,14 +515,6 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onOpenPlayer }) => {
                     <line x1="12" y1="15" x2="12" y2="3" />
                   </svg>
                   <span>Install SunoNa for Mac (PWA)</span>
-                </button>
-
-                <button 
-                  type="button"
-                  className="btn-secondary-action"
-                  onClick={onOpenPlayer}
-                >
-                  <span>Open Web Player</span>
                 </button>
               </div>
 
@@ -566,9 +553,6 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onOpenPlayer }) => {
             src="/app-preview.png" 
             alt="SunoNa Desktop UI Interface" 
             className="landing-blueprint-img"
-            onClick={onOpenPlayer}
-            style={{ cursor: 'pointer' }}
-            title="Click to launch web player"
           />
 
           <div className="landing-meta-row">

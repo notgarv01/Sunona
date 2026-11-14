@@ -1,6 +1,10 @@
 import React, { useState, useEffect } from 'react';
 
-export const LandingPage: React.FC = () => {
+interface LandingPageProps {
+  onInstalled?: () => void;
+}
+
+export const LandingPage: React.FC<LandingPageProps> = ({ onInstalled }) => {
   const [activeOS, setActiveOS] = useState<'win' | 'mac'>('win');
   const [deferredPrompt, setDeferredPrompt] = useState<any>(null);
 
@@ -19,9 +23,17 @@ export const LandingPage: React.FC = () => {
       setDeferredPrompt(e);
     };
 
+    const handleAppInstalled = () => {
+      if (onInstalled) onInstalled();
+    };
+
     window.addEventListener('beforeinstallprompt', handleBeforeInstall);
-    return () => window.removeEventListener('beforeinstallprompt', handleBeforeInstall);
-  }, []);
+    window.addEventListener('appinstalled', handleAppInstalled);
+    return () => {
+      window.removeEventListener('beforeinstallprompt', handleBeforeInstall);
+      window.removeEventListener('appinstalled', handleAppInstalled);
+    };
+  }, [onInstalled]);
 
   useEffect(() => {
     // Enable normal scrolling on body when on landing page
@@ -37,7 +49,10 @@ export const LandingPage: React.FC = () => {
   const handleInstallPWA = () => {
     if (deferredPrompt) {
       deferredPrompt.prompt();
-      deferredPrompt.userChoice.then(() => {
+      deferredPrompt.userChoice.then((choiceResult: any) => {
+        if (choiceResult?.outcome === 'accepted') {
+          if (onInstalled) onInstalled();
+        }
         setDeferredPrompt(null);
       });
     } else {

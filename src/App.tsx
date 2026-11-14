@@ -114,15 +114,66 @@ const getStoredPlaybackSession = (): StoredPlaybackSession | null => {
   return null;
 };
 
-export const App: React.FC = () => {
-  const isPWAOrElectron =
-    typeof window !== 'undefined' &&
-    (Boolean((window as any).electronAPI?.isElectron) ||
-      Boolean(window.matchMedia && window.matchMedia('(display-mode: standalone)').matches) ||
-      Boolean((window.navigator as any)?.standalone) ||
-      window.location.search.includes('pwa=true'));
+function isPWAOrElectronEnvironment(): boolean {
+  if (typeof window === 'undefined') return false;
 
-  const [showPlayer] = useState<boolean>(Boolean(isPWAOrElectron));
+  // 1. Electron Desktop App
+  if (Boolean((window as any).electronAPI?.isElectron)) return true;
+
+  // 2. Explicit PWA Query Param
+  if (window.location.search.includes('pwa=true') || window.location.search.includes('app=true')) return true;
+
+  // 3. iOS Safari Standalone
+  if (Boolean((window.navigator as any)?.standalone)) return true;
+
+  // 4. Desktop Window Controls Overlay PWA
+  if (Boolean((window.navigator as any)?.windowControlsOverlay?.visible)) return true;
+
+  // 5. Chromium / Brave App Window (locationbar / address bar is hidden)
+  if (window.locationbar && window.locationbar.visible === false) return true;
+
+  // 6. Any display mode other than regular browser tab
+  if (typeof window.matchMedia === 'function') {
+    if (window.matchMedia('(display-mode: standalone)').matches) return true;
+    if (window.matchMedia('(display-mode: window-controls-overlay)').matches) return true;
+    if (window.matchMedia('(display-mode: minimal-ui)').matches) return true;
+    if (window.matchMedia('(display-mode: fullscreen)').matches) return true;
+    if (!window.matchMedia('(display-mode: browser)').matches) return true;
+  }
+
+  return false;
+}
+
+export const App: React.FC = () => {
+  const [showPlayer, setShowPlayer] = useState<boolean>(() => isPWAOrElectronEnvironment());
+
+  useEffect(() => {
+    const checkEnvironment = () => {
+      if (isPWAOrElectronEnvironment()) {
+        setShowPlayer(true);
+      }
+    };
+
+    // Re-check immediately after first mount (to catch post-hydration window properties)
+    checkEnvironment();
+
+    window.addEventListener('appinstalled', checkEnvironment);
+
+    const mqlStandalone = window.matchMedia ? window.matchMedia('(display-mode: standalone)') : null;
+    const mqlWco = window.matchMedia ? window.matchMedia('(display-mode: window-controls-overlay)') : null;
+    const mqlBrowser = window.matchMedia ? window.matchMedia('(display-mode: browser)') : null;
+
+    mqlStandalone?.addEventListener('change', checkEnvironment);
+    mqlWco?.addEventListener('change', checkEnvironment);
+    mqlBrowser?.addEventListener('change', checkEnvironment);
+
+    return () => {
+      window.removeEventListener('appinstalled', checkEnvironment);
+      mqlStandalone?.removeEventListener('change', checkEnvironment);
+      mqlWco?.removeEventListener('change', checkEnvironment);
+      mqlBrowser?.removeEventListener('change', checkEnvironment);
+    };
+  }, []);
   const initialSession = useRef<StoredPlaybackSession | null>(getStoredPlaybackSession()).current;
 
   const [songs, setSongs] = useState<Song[]>(INITIAL_SONGS);
@@ -1818,7 +1869,7 @@ export const App: React.FC = () => {
 
   // If visiting in normal browser tab (not installed PWA and not Electron), show Landing Page
   if (!showPlayer) {
-    return <LandingPage />;
+    return <LandingPage onInstalled={() => setShowPlayer(true)} />;
   }
 
   // ══ SPOTIFY LAYOUT MODE ══

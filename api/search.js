@@ -17,6 +17,17 @@ export default async function handler(req, res) {
     return;
   }
 
+  const renderBackend = (process.env.RENDER_BACKEND_URL || process.env.BACKEND_URL || '').replace(/\/+$/, '');
+  if (renderBackend) {
+    try {
+      const targetUrl = `${renderBackend}${req.url}`;
+      const proxyRes = await fetch(targetUrl);
+      const data = await proxyRes.json();
+      res.end(JSON.stringify(data));
+      return;
+    } catch (_) {}
+  }
+
   try {
     const query = sanitizeString(req.query?.q || '', 120);
     if (!query) {

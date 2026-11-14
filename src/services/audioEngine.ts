@@ -80,8 +80,9 @@ class AudioEngine {
     this.currentSong = song;
     this.updateMediaSession(song);
 
-    // Stream directly through local proxy endpoint (with title & artist for seamless on-the-fly resolution)
-    const streamUrl = `/api/stream?id=${encodeURIComponent(song.id)}&title=${encodeURIComponent(song.title || '')}&artist=${encodeURIComponent(song.artist || '')}`;
+    // Stream directly through local or Render proxy endpoint (with title & artist for seamless on-the-fly resolution)
+    const backendBase = ((import.meta as any).env?.VITE_BACKEND_URL || (window as any).SUNONA_BACKEND_URL || '').replace(/\/+$/, '');
+    const streamUrl = `${backendBase}/api/stream?id=${encodeURIComponent(song.id)}&title=${encodeURIComponent(song.title || '')}&artist=${encodeURIComponent(song.artist || '')}`;
     
     if (this.audio.src !== streamUrl) {
       this.audio.src = streamUrl;

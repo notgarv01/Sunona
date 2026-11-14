@@ -61,6 +61,47 @@ export default async function handler(req, res) {
     return;
   }
 
+  // If a dedicated Render backend is configured, forward seamlessly
+  const renderBackend = (process.env.RENDER_BACKEND_URL || process.env.BACKEND_URL || '').replace(/\/+$/, '');
+  if (renderBackend) {
+    try {
+      const targetUrl = `${renderBackend}${req.url}`;
+      const forwardHeaders = {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko)',
+      };
+      if (req.headers.range) {
+        forwardHeaders['Range'] = req.headers.range;
+      }
+      const proxyRes = await fetch(targetUrl, { headers: forwardHeaders });
+      res.statusCode = proxyRes.status;
+      proxyRes.headers.forEach((val, key) => {
+        const lowerKey = key.toLowerCase();
+        if (
+          lowerKey === 'content-type' ||
+          lowerKey === 'content-length' ||
+          lowerKey === 'content-range' ||
+          lowerKey === 'accept-ranges'
+        ) {
+          res.setHeader(key, val);
+        }
+      });
+      res.setHeader('Access-Control-Allow-Origin', '*');
+      res.setHeader('Accept-Ranges', 'bytes');
+      if (proxyRes.body) {
+        const reader = proxyRes.body.getReader();
+        while (true) {
+          const { done, value } = await reader.read();
+          if (done) break;
+          res.write(value);
+        }
+      }
+      res.end();
+      return;
+    } catch (proxyErr) {
+      console.warn('[Proxy] Render proxy fallback triggered:', proxyErr.message);
+    }
+  }
+
   try {
     const query = req.query || {};
     let videoId = sanitizeString(query.id || '', 40);

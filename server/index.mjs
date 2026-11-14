@@ -1,6 +1,6 @@
 import express from 'express';
 import cors from 'cors';
-import { createPoTokenProvider, Ytdl, chooseFormat } from '@distube/ytdl-core';
+import { createPoTokenProvider, Ytdl, Client, chooseFormat } from '@distube/ytdl-core';
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -16,15 +16,17 @@ const YOUTUBE_ID_REGEX = /^[a-zA-Z0-9_-]{11}$/;
 let getPoToken = null;
 let ytInstance = null;
 
+const OPTIMIZED_CLIENTS = [Client.VisionOS, Client.WebEmbedded, Client.Tv];
+
 async function initPoTokenEngine() {
   try {
     console.log('[PO-Token] Initializing BotGuard worker thread...');
     getPoToken = await createPoTokenProvider({ timeoutMs: 25000 });
-    ytInstance = new Ytdl({ getPoToken });
+    ytInstance = new Ytdl({ getPoToken, clients: OPTIMIZED_CLIENTS });
     console.log('[PO-Token] BotGuard engine active and ready for YouTube requests!');
   } catch (err) {
-    console.warn('[PO-Token] Warning initializing PO Token provider, falling back to standard Ytdl:', err.message);
-    ytInstance = new Ytdl();
+    console.warn('[PO-Token] Warning initializing PO Token provider, falling back to VisionOS client:', err.message);
+    ytInstance = new Ytdl({ clients: OPTIMIZED_CLIENTS });
   }
 }
 
@@ -83,15 +85,11 @@ app.get(['/health', '/ping', '/'], (req, res) => {
   });
 });
 
-const YTDL_CLIENT_OPTS = {
-  playerClients: ['IOS', 'ANDROID', 'WEB_EMBEDDED', 'WEB'],
-};
-
 app.get('/api/debug-stream', async (req, res) => {
   const testId = req.query.id || '9CmAUpXtVFc';
   try {
-    const yt = ytInstance || new Ytdl();
-    const info = await yt.getInfo(testId, YTDL_CLIENT_OPTS);
+    const yt = ytInstance || new Ytdl({ clients: OPTIMIZED_CLIENTS });
+    const info = await yt.getInfo(testId);
     const audioFormats = (info.formats || []).filter((f) => f.hasAudio);
     let chosen = chooseFormat(info.formats, { filter: (f) => f.hasAudio && !f.hasVideo });
     if (!chosen || !chosen.url) {
@@ -148,8 +146,8 @@ app.get('/api/stream', async (req, res) => {
     } else {
       if (videoId && YOUTUBE_ID_REGEX.test(videoId)) {
         try {
-          const yt = ytInstance || new Ytdl();
-          const info = await yt.getInfo(videoId, YTDL_CLIENT_OPTS);
+          const yt = ytInstance || new Ytdl({ clients: OPTIMIZED_CLIENTS });
+          const info = await yt.getInfo(videoId);
           let format = chooseFormat(info.formats, {
             filter: (f) => f.hasAudio && !f.hasVideo,
           });
@@ -171,8 +169,8 @@ app.get('/api/stream', async (req, res) => {
         try {
           const dynamicId = await resolveYouTubeAudioId(`${titleParam} ${artistParam}`.trim());
           if (dynamicId) {
-            const yt = ytInstance || new Ytdl();
-            const dynamicInfo = await yt.getInfo(dynamicId, YTDL_CLIENT_OPTS);
+            const yt = ytInstance || new Ytdl({ clients: OPTIMIZED_CLIENTS });
+            const dynamicInfo = await yt.getInfo(dynamicId);
             let dynFormat = chooseFormat(dynamicInfo.formats, {
               filter: (f) => f.hasAudio && !f.hasVideo,
             });

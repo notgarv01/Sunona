@@ -83,19 +83,27 @@ app.get(['/health', '/ping', '/'], (req, res) => {
   });
 });
 
+const YTDL_CLIENT_OPTS = {
+  playerClients: ['IOS', 'ANDROID', 'WEB_EMBEDDED', 'WEB'],
+};
+
 app.get('/api/debug-stream', async (req, res) => {
   const testId = req.query.id || '9CmAUpXtVFc';
   try {
     const yt = ytInstance || new Ytdl();
-    const info = await yt.getInfo(testId);
+    const info = await yt.getInfo(testId, YTDL_CLIENT_OPTS);
     const audioFormats = (info.formats || []).filter((f) => f.hasAudio);
-    const chosen = chooseFormat(info.formats, { filter: (f) => f.hasAudio && !f.hasVideo });
+    let chosen = chooseFormat(info.formats, { filter: (f) => f.hasAudio && !f.hasVideo });
+    if (!chosen || !chosen.url) {
+      chosen = chooseFormat(info.formats, { filter: (f) => f.hasAudio });
+    }
     res.json({
       success: true,
       title: info.videoDetails?.title,
       formatsCount: info.formats?.length,
       audioFormatsCount: audioFormats.length,
       chosenHasUrl: Boolean(chosen?.url),
+      streamUrlPreview: chosen?.url ? chosen.url.slice(0, 60) : null,
     });
   } catch (err) {
     res.status(500).json({
@@ -141,10 +149,13 @@ app.get('/api/stream', async (req, res) => {
       if (videoId && YOUTUBE_ID_REGEX.test(videoId)) {
         try {
           const yt = ytInstance || new Ytdl();
-          const info = await yt.getInfo(videoId);
-          const format = chooseFormat(info.formats, {
+          const info = await yt.getInfo(videoId, YTDL_CLIENT_OPTS);
+          let format = chooseFormat(info.formats, {
             filter: (f) => f.hasAudio && !f.hasVideo,
           });
+          if (!format || !format.url) {
+            format = chooseFormat(info.formats, { filter: (f) => f.hasAudio });
+          }
 
           if (format && format.url) {
             directUrl = format.url;
@@ -161,14 +172,35 @@ app.get('/api/stream', async (req, res) => {
           const dynamicId = await resolveYouTubeAudioId(`${titleParam} ${artistParam}`.trim());
           if (dynamicId) {
             const yt = ytInstance || new Ytdl();
-            const dynamicInfo = await yt.getInfo(dynamicId);
-            const dynFormat = chooseFormat(dynamicInfo.formats, {
+            const dynamicInfo = await yt.getInfo(dynamicId, YTDL_CLIENT_OPTS);
+            let dynFormat = chooseFormat(dynamicInfo.formats, {
               filter: (f) => f.hasAudio && !f.hasVideo,
             });
+            if (!dynFormat || !dynFormat.url) {
+              dynFormat = chooseFormat(dynamicInfo.formats, { filter: (f) => f.hasAudio });
+            }
             if (dynFormat && dynFormat.url) {
               directUrl = dynFormat.url;
               if (videoId) streamCache.set(videoId, { url: directUrl, timestamp: Date.now() });
               streamCache.set(dynamicId, { url: directUrl, timestamp: Date.now() });
+            }
+          }
+        } catch (_) {}
+      }
+
+      // High-availability CDN audio fallback (JioSaavn) if YouTube is throttled/blocked
+      if (!directUrl && (titleParam || artistParam)) {
+        try {
+          const fallbackQuery = `${titleParam} ${artistParam}`.trim();
+          const saavnRes = await fetch(
+            `https://saavn.dev/api/search/songs?query=${encodeURIComponent(fallbackQuery)}&limit=1`
+          ).then((r) => r.json()).catch(() => null);
+          const saavnSong = saavnRes?.data?.results?.[0];
+          if (saavnSong?.downloadUrl && Array.isArray(saavnSong.downloadUrl)) {
+            const topQuality = saavnSong.downloadUrl[saavnSong.downloadUrl.length - 1]?.url;
+            if (topQuality) {
+              directUrl = topQuality;
+              if (videoId) streamCache.set(videoId, { url: directUrl, timestamp: Date.now() });
             }
           }
         } catch (_) {}

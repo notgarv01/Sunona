@@ -674,48 +674,54 @@ app.get('/api/related', async (req, res) => {
       return res.json({ results: [], continuation: null });
     }
 
-    const radioRes = await fetch('https://music.youtube.com/youtubei/v1/next', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'User-Agent':
-          'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-        Referer: 'https://music.youtube.com',
-      },
-      body: JSON.stringify(requestBody),
-    });
+    try {
+      const radioRes = await fetch('https://music.youtube.com/youtubei/v1/next', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'User-Agent':
+            'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+          Referer: 'https://music.youtube.com',
+        },
+        body: JSON.stringify(requestBody),
+      });
 
-    const rData = await radioRes.json();
-    const playlist =
-      rData.contents?.singleColumnMusicWatchNextResultsRenderer?.tabbedRenderer?.watchNextTabbedResultsRenderer?.tabs?.[0]?.tabRenderer?.content?.musicQueueRenderer?.content?.playlistPanelRenderer ||
-      rData.continuationContents?.playlistPanelContinuation;
+      const rData = await radioRes.json();
+      const playlist =
+        rData.contents?.singleColumnMusicWatchNextResultsRenderer?.tabbedRenderer?.watchNextTabbedResultsRenderer?.tabs?.[0]?.tabRenderer?.content?.musicQueueRenderer?.content?.playlistPanelRenderer ||
+        rData.continuationContents?.playlistPanelContinuation;
 
-    const items = playlist?.contents || [];
-    for (const it of items) {
-      const r = it.playlistPanelVideoRenderer;
-      if (r && r.videoId) {
-        results.push({
-          id: r.videoId,
-          title: r.title?.runs?.[0]?.text || 'Suggested Track',
-          artist: r.shortBylineText?.runs?.[0]?.text || r.longBylineText?.runs?.[0]?.text || 'YouTube Music',
-          album: r.longBylineText?.runs?.[2]?.text || 'Single',
-          duration: parseDurationSec(r.lengthText?.runs?.[0]?.text),
-          coverUrl: r.thumbnail?.thumbnails?.pop()?.url || `https://i.ytimg.com/vi/${r.videoId}/hqdefault.jpg`,
-          audioUrl: '',
-          views: 'AutoMix Radio',
-          lyrics: [],
-        });
+      const items = playlist?.contents || [];
+      for (const it of items) {
+        const r = it.playlistPanelVideoRenderer;
+        if (r && r.videoId) {
+          results.push({
+            id: r.videoId,
+            title: r.title?.runs?.[0]?.text || 'Suggested Track',
+            artist: r.shortBylineText?.runs?.[0]?.text || r.longBylineText?.runs?.[0]?.text || 'YouTube Music',
+            album: r.longBylineText?.runs?.[2]?.text || 'Single',
+            duration: parseDurationSec(r.lengthText?.runs?.[0]?.text),
+            coverUrl: r.thumbnail?.thumbnails?.pop()?.url || `https://i.ytimg.com/vi/${r.videoId}/hqdefault.jpg`,
+            audioUrl: '',
+            views: 'AutoMix Radio',
+            lyrics: [],
+          });
+        }
       }
-    }
 
-    const contData = playlist?.continuations?.[0]?.nextRadioContinuationData || playlist?.continuations?.[0]?.nextContinuationData;
-    if (contData?.continuation) {
-      nextContinuation = contData.continuation;
-    }
+      const contData = playlist?.continuations?.[0]?.nextRadioContinuationData || playlist?.continuations?.[0]?.nextContinuationData;
+      if (contData?.continuation) {
+        nextContinuation = contData.continuation;
+      }
+    } catch (_) {}
 
-    // Fallback if playlist panel returned 0 results
+    // Fallback if playlist panel returned 0 results (e.g. cloud datacenter IP block)
     if (results.length === 0 && rawId) {
       try {
+        const fallbackQuery = (req.query.title || req.query.artist)
+          ? `${req.query.title || ''} ${req.query.artist || ''} songs`.trim()
+          : 'trending hindi romantic songs';
+
         const searchRes = await fetch('https://www.youtube.com/youtubei/v1/search', {
           method: 'POST',
           headers: {
@@ -727,7 +733,7 @@ app.get('/api/related', async (req, res) => {
             context: {
               client: { clientName: 'WEB', clientVersion: '2.20240101.01.00', hl: 'en', gl: 'IN' },
             },
-            query: 'hindi romantic songs radio automix',
+            query: fallbackQuery,
           }),
         });
         const sData = await searchRes.json();
@@ -754,9 +760,9 @@ app.get('/api/related', async (req, res) => {
       } catch (_) {}
     }
 
-    res.json({ results, continuation: nextContinuation, count: results.length, debug: { rawId, hasContinuation: Boolean(continuation) } });
+    res.json({ results, continuation: nextContinuation });
   } catch (err) {
-    res.json({ results: [], continuation: null, error: err.message, stack: err.stack });
+    res.json({ results: [], continuation: null });
   }
 });
 

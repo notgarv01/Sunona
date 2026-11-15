@@ -754,9 +754,9 @@ app.get('/api/related', async (req, res) => {
       } catch (_) {}
     }
 
-    res.json({ results, continuation: nextContinuation });
+    res.json({ results, continuation: nextContinuation, count: results.length, debug: { rawId, hasContinuation: Boolean(continuation) } });
   } catch (err) {
-    res.json({ results: [], continuation: null });
+    res.json({ results: [], continuation: null, error: err.message, stack: err.stack });
   }
 });
 

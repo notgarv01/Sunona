@@ -434,6 +434,7 @@ app.get('/api/similar', async (req, res) => {
             'Content-Type': 'application/json',
             'User-Agent':
               'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+            Referer: 'https://music.youtube.com',
           },
           body: JSON.stringify({
             context: {
@@ -546,6 +547,7 @@ app.get('/api/daily-discover', async (req, res) => {
             'Content-Type': 'application/json',
             'User-Agent':
               'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+            Referer: 'https://music.youtube.com',
           },
           body: JSON.stringify({
             context: {
@@ -678,6 +680,7 @@ app.get('/api/related', async (req, res) => {
         'Content-Type': 'application/json',
         'User-Agent':
           'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+        Referer: 'https://music.youtube.com',
       },
       body: JSON.stringify(requestBody),
     });
@@ -708,6 +711,47 @@ app.get('/api/related', async (req, res) => {
     const contData = playlist?.continuations?.[0]?.nextRadioContinuationData || playlist?.continuations?.[0]?.nextContinuationData;
     if (contData?.continuation) {
       nextContinuation = contData.continuation;
+    }
+
+    // Fallback if playlist panel returned 0 results
+    if (results.length === 0 && rawId) {
+      try {
+        const searchRes = await fetch('https://www.youtube.com/youtubei/v1/search', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'User-Agent':
+              'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+          },
+          body: JSON.stringify({
+            context: {
+              client: { clientName: 'WEB', clientVersion: '2.20240101.01.00', hl: 'en', gl: 'IN' },
+            },
+            query: 'hindi romantic songs radio automix',
+          }),
+        });
+        const sData = await searchRes.json();
+        const sContents =
+          sData.contents?.twoColumnSearchResultsRenderer?.primaryContents?.sectionListRenderer?.contents?.[0]
+            ?.itemSectionRenderer?.contents || [];
+        for (const c of sContents) {
+          const vr = c.videoRenderer;
+          if (vr && vr.videoId && vr.videoId !== rawId) {
+            results.push({
+              id: vr.videoId,
+              title: vr.title?.runs?.[0]?.text || 'Suggested Track',
+              artist: vr.ownerText?.runs?.[0]?.text || 'YouTube Music',
+              album: 'AutoMix',
+              duration: parseDurationSec(vr.lengthText?.simpleText),
+              coverUrl: vr.thumbnail?.thumbnails?.pop()?.url || `https://i.ytimg.com/vi/${vr.videoId}/hqdefault.jpg`,
+              audioUrl: '',
+              views: 'AutoMix Radio',
+              lyrics: [],
+            });
+            if (results.length >= 10) break;
+          }
+        }
+      } catch (_) {}
     }
 
     res.json({ results, continuation: nextContinuation });
@@ -830,6 +874,7 @@ app.get('/api/home', async (req, res) => {
             'Content-Type': 'application/json',
             'User-Agent':
               'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+            Referer: 'https://music.youtube.com',
           },
           body: JSON.stringify({
             context: {

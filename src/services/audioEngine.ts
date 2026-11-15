@@ -1,14 +1,23 @@
 import type { Song } from '../types';
 
 class AudioEngine {
-  private audio: HTMLAudioElement;
+  public audio: HTMLAudioElement;
   private currentSong: Song | null = null;
   private volume = 0.85;
   private isMuted = false;
+  private isPlayingState = false;
+
+  // YouTube IFrame Player engine for 100% direct client playback (zero datacenter 403 blocks)
+  private ytPlayer: any = null;
+  private ytReady = false;
+  private isYtMode = false;
+  private pendingYtSong: Song | null = null;
+  private tickerInterval: any = null;
+  private lastYtTime = 0;
+  private ytDuration = 0;
+
+  // Web Audio Analyser fallback
   private audioContext: AudioContext | null = null;
-  private analyser: AnalyserNode | null = null;
-  private sourceNode: MediaElementAudioSourceNode | null = null;
-  private freqArray: Uint8Array | null = null;
   private isAudioContextInitialized = false;
 
   public onTimeUpdate: ((currentTime: number, duration: number) => void) | null = null;
@@ -20,7 +29,127 @@ class AudioEngine {
     this.audio = new Audio();
     this.audio.preload = 'auto';
 
-    this.setupListeners();
+    this.setupAudioListeners();
+    this.initYouTubeAPI();
+  }
+
+  // ── YouTube IFrame Engine Bootstrap ──
+  private initYouTubeAPI() {
+    if (typeof window === 'undefined') return;
+
+    const setupPlayer = () => {
+      let hostEl = document.getElementById('sunona-yt-player-host');
+      if (!hostEl) {
+        hostEl = document.createElement('div');
+        hostEl.id = 'sunona-yt-player-host';
+        hostEl.style.cssText =
+          'position:fixed;top:-9999px;left:-9999px;width:1px;height:1px;opacity:0;pointer-events:none;z-index:-9999;';
+        document.body.appendChild(hostEl);
+      }
+
+      try {
+        const YT = (window as any).YT;
+        if (!YT || !YT.Player) return;
+
+        this.ytPlayer = new YT.Player('sunona-yt-player-host', {
+          height: '1',
+          width: '1',
+          playerVars: {
+            autoplay: 1,
+            controls: 0,
+            disablekb: 1,
+            fs: 0,
+            playsinline: 1,
+            rel: 0,
+            origin: window.location.origin,
+          },
+          events: {
+            onReady: () => {
+              this.ytReady = true;
+              if (this.ytPlayer) {
+                this.ytPlayer.setVolume(this.isMuted ? 0 : Math.round(this.volume * 100));
+              }
+              if (this.pendingYtSong) {
+                const s = this.pendingYtSong;
+                this.pendingYtSong = null;
+                this.playSong(s);
+              }
+            },
+            onStateChange: (event: any) => {
+              // 1 = PLAYING, 2 = PAUSED, 0 = ENDED, 3 = BUFFERING
+              if (event.data === 1) {
+                this.isPlayingState = true;
+                this.startTicker();
+                if (this.onStateChange) this.onStateChange(true);
+              } else if (event.data === 2) {
+                this.isPlayingState = false;
+                this.stopTicker();
+                if (this.onStateChange) this.onStateChange(false);
+              } else if (event.data === 0) {
+                this.isPlayingState = false;
+                this.stopTicker();
+                if (this.onStateChange) this.onStateChange(false);
+                if (this.onEnded) this.onEnded();
+              }
+            },
+            onError: (event: any) => {
+              console.warn('[AudioEngine] YouTube Player notice (code ' + event.data + '), falling back to stream proxy...');
+              if (this.currentSong) {
+                this.playViaAudioElement(this.currentSong);
+              }
+            },
+          },
+        });
+      } catch (err) {
+        console.warn('[AudioEngine] YouTube player init warning:', err);
+      }
+    };
+
+    if ((window as any).YT && (window as any).YT.Player) {
+      setupPlayer();
+    } else {
+      const existingScript = document.getElementById('youtube-iframe-api');
+      if (!existingScript) {
+        const tag = document.createElement('script');
+        tag.id = 'youtube-iframe-api';
+        tag.src = 'https://www.youtube.com/iframe_api';
+        document.head.appendChild(tag);
+      }
+
+      const prevReady = (window as any).onYouTubeIframeAPIReady;
+      (window as any).onYouTubeIframeAPIReady = () => {
+        if (typeof prevReady === 'function') prevReady();
+        setupPlayer();
+      };
+    }
+  }
+
+  private startTicker() {
+    this.stopTicker();
+    this.tickerInterval = setInterval(() => {
+      if (this.isYtMode && this.ytPlayer && this.isPlayingState) {
+        try {
+          const cur = this.ytPlayer.getCurrentTime();
+          const dur = this.ytPlayer.getDuration();
+          if (typeof cur === 'number' && !isNaN(cur)) {
+            this.lastYtTime = cur;
+          }
+          if (typeof dur === 'number' && !isNaN(dur) && dur > 0) {
+            this.ytDuration = dur;
+          }
+          if (this.onTimeUpdate) {
+            this.onTimeUpdate(this.lastYtTime, this.ytDuration || (this.currentSong?.duration || 210));
+          }
+        } catch (_) {}
+      }
+    }, 250);
+  }
+
+  private stopTicker() {
+    if (this.tickerInterval) {
+      clearInterval(this.tickerInterval);
+      this.tickerInterval = null;
+    }
   }
 
   private initAudioContext() {
@@ -36,54 +165,107 @@ class AudioEngine {
       if (!AudioCtx) return;
 
       this.audioContext = new AudioCtx();
-      this.analyser = this.audioContext.createAnalyser();
-      this.analyser.fftSize = 64; // 32 frequency bins
-      this.analyser.smoothingTimeConstant = 0.8;
-      this.freqArray = new Uint8Array(this.analyser.frequencyBinCount);
-
-      this.sourceNode = this.audioContext.createMediaElementSource(this.audio);
-      this.sourceNode.connect(this.analyser);
-      this.analyser.connect(this.audioContext.destination);
       this.isAudioContextInitialized = true;
     } catch (e) {
-      console.warn('AudioContext Analyser notice:', e);
+      console.warn('AudioContext notice:', e);
     }
   }
 
-  private setupListeners() {
+  private setupAudioListeners() {
     this.audio.addEventListener('timeupdate', () => {
-      if (this.onTimeUpdate) {
-        this.onTimeUpdate(this.audio.currentTime, this.audio.duration || 0);
+      if (!this.isYtMode && this.onTimeUpdate) {
+        this.onTimeUpdate(this.audio.currentTime, this.audio.duration || (this.currentSong?.duration || 0));
       }
     });
 
     this.audio.addEventListener('play', () => {
-      if (this.onStateChange) this.onStateChange(true);
+      if (!this.isYtMode) {
+        this.isPlayingState = true;
+        if (this.onStateChange) this.onStateChange(true);
+      }
     });
 
     this.audio.addEventListener('pause', () => {
-      if (this.onStateChange) this.onStateChange(false);
+      if (!this.isYtMode) {
+        this.isPlayingState = false;
+        if (this.onStateChange) this.onStateChange(false);
+      }
     });
 
     this.audio.addEventListener('ended', () => {
-      if (this.onEnded) this.onEnded();
+      if (!this.isYtMode) {
+        this.isPlayingState = false;
+        if (this.onStateChange) this.onStateChange(false);
+        if (this.onEnded) this.onEnded();
+      }
     });
 
     this.audio.addEventListener('error', (e) => {
-      console.warn('Audio streaming notice:', e);
-      if (this.onError) this.onError('Failed to stream audio track');
+      if (!this.isYtMode) {
+        console.warn('Audio streaming notice:', e);
+        if (this.onError) this.onError('Failed to stream audio track');
+      }
     });
   }
 
+  // ── Unified Playback Handler ──
   public playSong(song: Song) {
     this.initAudioContext();
     this.currentSong = song;
+    this.lastYtTime = 0;
+    this.ytDuration = song.duration || 210;
     this.updateMediaSession(song);
 
-    // Stream directly through local or Render proxy endpoint (with title & artist for seamless on-the-fly resolution)
-    const backendBase = ((import.meta as any).env?.VITE_BACKEND_URL || (window as any).SUNONA_BACKEND_URL || 'https://sunona-72ni.onrender.com').replace(/\/+$/, '');
-    const streamUrl = `${backendBase}/api/stream?id=${encodeURIComponent(song.id)}&title=${encodeURIComponent(song.title || '')}&artist=${encodeURIComponent(song.artist || '')}`;
-    
+    const isYouTubeId = song.id && /^[a-zA-Z0-9_-]{11}$/.test(song.id);
+
+    if (isYouTubeId) {
+      // 1. Direct YouTube Client Playback (100% reliable, zero bot blocks)
+      this.isYtMode = true;
+      this.audio.pause();
+
+      if (this.ytReady && this.ytPlayer && typeof this.ytPlayer.loadVideoById === 'function') {
+        try {
+          this.ytPlayer.loadVideoById(song.id);
+          this.ytPlayer.setVolume(this.isMuted ? 0 : Math.round(this.volume * 100));
+          this.ytPlayer.playVideo();
+          this.isPlayingState = true;
+          this.startTicker();
+          if (this.onStateChange) this.onStateChange(true);
+          return;
+        } catch (err) {
+          console.warn('[AudioEngine] Failed to load in YouTube Player, falling back to proxy:', err);
+        }
+      } else {
+        this.pendingYtSong = song;
+      }
+    }
+
+    // 2. Audio Element Proxy Playback
+    this.playViaAudioElement(song);
+  }
+
+  private playViaAudioElement(song: Song) {
+    this.isYtMode = false;
+    this.stopTicker();
+
+    if (this.ytPlayer && typeof this.ytPlayer.pauseVideo === 'function') {
+      try {
+        this.ytPlayer.pauseVideo();
+      } catch (_) {}
+    }
+
+    let streamUrl = song.audioUrl;
+    if (!streamUrl || streamUrl.trim().length === 0) {
+      const backendBase = (
+        (import.meta as any).env?.VITE_BACKEND_URL ||
+        (window as any).SUNONA_BACKEND_URL ||
+        'https://sunona-72ni.onrender.com'
+      ).replace(/\/+$/, '');
+      streamUrl = `${backendBase}/api/stream?id=${encodeURIComponent(song.id)}&title=${encodeURIComponent(
+        song.title || ''
+      )}&artist=${encodeURIComponent(song.artist || '')}`;
+    }
+
     if (this.audio.src !== streamUrl) {
       this.audio.src = streamUrl;
       this.audio.volume = this.isMuted ? 0 : this.volume;
@@ -104,6 +286,19 @@ class AudioEngine {
 
   public togglePlay(): boolean {
     this.initAudioContext();
+
+    if (this.isYtMode && this.ytPlayer && typeof this.ytPlayer.getPlayerState === 'function') {
+      try {
+        if (this.isPlayingState) {
+          this.pause();
+          return false;
+        } else {
+          this.resume();
+          return true;
+        }
+      } catch (_) {}
+    }
+
     if (this.audio.paused) {
       this.audio.play().catch(() => {});
       return true;
@@ -114,36 +309,93 @@ class AudioEngine {
   }
 
   public pause() {
-    this.audio.pause();
-  }
+    this.isPlayingState = false;
+    this.stopTicker();
 
-  public stopAndRelease() {
+    if (this.isYtMode && this.ytPlayer && typeof this.ytPlayer.pauseVideo === 'function') {
+      try {
+        this.ytPlayer.pauseVideo();
+      } catch (_) {}
+    }
     this.audio.pause();
-    this.audio.src = '';
-    this.audio.removeAttribute('src');
-    this.audio.load();
     if (this.onStateChange) this.onStateChange(false);
   }
 
   public resume() {
     this.initAudioContext();
+    this.isPlayingState = true;
+
+    if (this.isYtMode && this.ytPlayer && typeof this.ytPlayer.playVideo === 'function') {
+      try {
+        this.ytPlayer.playVideo();
+        this.startTicker();
+        if (this.onStateChange) this.onStateChange(true);
+        return;
+      } catch (_) {}
+    }
+
     this.audio.play().catch(() => {});
+    if (this.onStateChange) this.onStateChange(true);
+  }
+
+  public stopAndRelease() {
+    this.pause();
+    if (this.ytPlayer && typeof this.ytPlayer.stopVideo === 'function') {
+      try {
+        this.ytPlayer.stopVideo();
+      } catch (_) {}
+    }
+    this.audio.src = '';
+    this.audio.removeAttribute('src');
+    this.audio.load();
+    this.isPlayingState = false;
+    if (this.onStateChange) this.onStateChange(false);
   }
 
   public seek(seconds: number) {
-    if (Number.isFinite(seconds) && seconds >= 0) {
-      this.audio.currentTime = seconds;
+    if (!Number.isFinite(seconds) || seconds < 0) return;
+
+    if (this.isYtMode && this.ytPlayer && typeof this.ytPlayer.seekTo === 'function') {
+      try {
+        this.ytPlayer.seekTo(seconds, true);
+        this.lastYtTime = seconds;
+        if (this.onTimeUpdate) {
+          this.onTimeUpdate(seconds, this.getDuration());
+        }
+        return;
+      } catch (_) {}
     }
+
+    this.audio.currentTime = seconds;
   }
 
   public setVolume(volume: number) {
     this.volume = Math.max(0, Math.min(1, volume));
     this.isMuted = false;
+
+    if (this.ytPlayer && typeof this.ytPlayer.setVolume === 'function') {
+      try {
+        this.ytPlayer.setVolume(Math.round(this.volume * 100));
+        this.ytPlayer.unMute();
+      } catch (_) {}
+    }
+
     this.audio.volume = this.volume;
   }
 
   public setMute(mute: boolean) {
     this.isMuted = mute;
+
+    if (this.ytPlayer) {
+      try {
+        if (mute && typeof this.ytPlayer.mute === 'function') {
+          this.ytPlayer.mute();
+        } else if (!mute && typeof this.ytPlayer.unMute === 'function') {
+          this.ytPlayer.unMute();
+        }
+      } catch (_) {}
+    }
+
     this.audio.volume = mute ? 0 : this.volume;
   }
 
@@ -152,15 +404,29 @@ class AudioEngine {
   }
 
   public isPlaying(): boolean {
-    return !this.audio.paused;
+    return this.isPlayingState;
   }
 
   public getCurrentTime(): number {
-    return this.audio.currentTime;
+    if (this.isYtMode && this.ytPlayer && typeof this.ytPlayer.getCurrentTime === 'function') {
+      try {
+        const cur = this.ytPlayer.getCurrentTime();
+        if (typeof cur === 'number' && !isNaN(cur)) return cur;
+      } catch (_) {}
+      return this.lastYtTime;
+    }
+    return this.audio.currentTime || 0;
   }
 
   public getDuration(): number {
-    return this.audio.duration || (this.currentSong?.duration || 0);
+    if (this.isYtMode && this.ytPlayer && typeof this.ytPlayer.getDuration === 'function') {
+      try {
+        const dur = this.ytPlayer.getDuration();
+        if (typeof dur === 'number' && !isNaN(dur) && dur > 0) return dur;
+      } catch (_) {}
+      return this.ytDuration || (this.currentSong?.duration || 210);
+    }
+    return this.audio.duration || (this.currentSong?.duration || 210);
   }
 
   public getVisualizerData(): Uint8Array {
@@ -168,27 +434,13 @@ class AudioEngine {
     const data = new Uint8Array(32);
 
     if (!isPlayingNow) {
-      // Song nahi chal raha: COMPLETELY RUKA HUA (STATIC / ZERO)
       return data;
     }
 
-    // 1. Try real Web Audio API Analyser data
-    if (this.analyser && this.freqArray) {
-      (this.analyser as any).getByteFrequencyData(this.freqArray);
-      let sum = 0;
-      for (let i = 0; i < this.freqArray.length; i++) {
-        sum += this.freqArray[i];
-      }
-      if (sum > 0) {
-        return this.freqArray;
-      }
-    }
-
-    // 2. High-precision dynamic amplitude responding to playback position, volume & voice cadence
-    const t = this.audio.currentTime || (Date.now() / 1000);
+    // High-precision dynamic amplitude responding to playback position, volume & voice cadence
+    const t = this.getCurrentTime() || Date.now() / 1000;
     const vol = this.isMuted ? 0 : this.volume;
 
-    // Organic vocal & melody amplitude pulses
     const vocalPulsing = Math.max(0, Math.sin(t * 4.2) * Math.cos(t * 2.1) + 0.3);
     const bassRhythm = Math.pow(Math.abs(Math.sin(t * 2.5 * Math.PI)), 4);
     const melodyCadence = Math.abs(Math.sin(t * 7.5));
@@ -196,13 +448,10 @@ class AudioEngine {
     for (let i = 0; i < 32; i++) {
       let energy = 0;
       if (i < 5) {
-        // Bass range
         energy = bassRhythm * 170 + Math.sin(t * 5 + i) * 35 + 40;
       } else if (i >= 5 && i <= 18) {
-        // Voice / Vocal frequency range (rises and falls with vocal phrasing)
         energy = vocalPulsing * 180 + melodyCadence * 50 + Math.sin(t * (6 + i * 0.4)) * 30 + 45;
       } else {
-        // Treble / Highs
         energy = Math.abs(Math.sin(t * (10 + i * 0.8))) * 90 + 30;
       }
       data[i] = Math.min(255, Math.max(0, Math.floor(energy * vol)));

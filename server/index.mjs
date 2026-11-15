@@ -572,7 +572,7 @@ app.get('/api/daily-discover', async (req, res) => {
           const r = it.playlistPanelVideoRenderer;
           if (r && r.videoId && !seenIds.has(r.videoId)) {
             seenIds.add(r.videoId);
-            discover.push({
+            const songObj = {
               id: r.videoId,
               title: r.title?.runs?.[0]?.text || 'Discover Track',
               artist: r.shortBylineText?.runs?.[0]?.text || r.longBylineText?.runs?.[0]?.text || 'YouTube Music',
@@ -582,6 +582,16 @@ app.get('/api/daily-discover', async (req, res) => {
               audioUrl: '',
               views: 'Daily Discover',
               lyrics: [],
+            };
+            discover.push({
+              ...songObj,
+              seed: {
+                id: seed,
+                title: 'Your Favorites',
+                artist: 'YouTube Music',
+                coverUrl: songObj.coverUrl,
+              },
+              recommendation: songObj,
             });
             if (discover.length >= 10) break;
           }
@@ -621,7 +631,7 @@ app.get('/api/daily-discover', async (req, res) => {
             const vr = c.videoRenderer;
             if (vr && vr.videoId && !seenIds.has(vr.videoId)) {
               seenIds.add(vr.videoId);
-              discover.push({
+              const songObj = {
                 id: vr.videoId,
                 title: vr.title?.runs?.[0]?.text || '',
                 artist: vr.ownerText?.runs?.[0]?.text || 'Bollywood',
@@ -631,6 +641,16 @@ app.get('/api/daily-discover', async (req, res) => {
                 audioUrl: '',
                 views: 'Trending',
                 lyrics: [],
+              };
+              discover.push({
+                ...songObj,
+                seed: {
+                  id: vr.videoId,
+                  title: 'Trending',
+                  artist: 'YouTube',
+                  coverUrl: songObj.coverUrl,
+                },
+                recommendation: songObj,
               });
               if (discover.length >= 8) break;
             }

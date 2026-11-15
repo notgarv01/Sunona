@@ -410,6 +410,26 @@ export const App: React.FC = () => {
   }, []);
 
   // Metrolist Discovery & Suggestion Engine States
+  const normalizeDiscoverItems = (items: any[]): DailyDiscoverItem[] => {
+    if (!Array.isArray(items)) return [];
+    return items
+      .filter(Boolean)
+      .map((it: any) => {
+        const rec = it.recommendation || it;
+        if (!rec || !rec.id) return null;
+        return {
+          seed: it.seed || {
+            id: rec.id,
+            title: 'Daily Mix',
+            artist: rec.artist || 'Artist',
+            coverUrl: rec.coverUrl || '',
+          },
+          recommendation: rec,
+        };
+      })
+      .filter((x): x is DailyDiscoverItem => Boolean(x));
+  };
+
   const [dailyDiscover, setDailyDiscover] = useState<DailyDiscoverItem[]>([]);
   const [listenAgain, setListenAgain] = useState<Song[]>([]);
   const [similarShelf, setSimilarShelf] = useState<{ title: string; songs: Song[] } | null>(null);
@@ -520,7 +540,7 @@ export const App: React.FC = () => {
           fetch(`/api/daily-discover?seeds=${userSeeds.join(',')}`)
             .then((res) => res.json())
             .then((data) => {
-              if (data.discover && data.discover.length > 0) setDailyDiscover(data.discover);
+              if (data.discover && data.discover.length > 0) setDailyDiscover(normalizeDiscoverItems(data.discover));
             })
             .catch(() => {});
         } else {
@@ -638,7 +658,7 @@ export const App: React.FC = () => {
               setFavoriteArtistShelf({
                 title: `Because You Love ${initialTp.favoriteArtist}`,
                 subtitle: `Curated for your ${initialTp.primaryGenre} listening habit`,
-                songs: data.results,
+                songs: (data.results || []).filter((s: any) => s && s.id),
               });
             }
           })
@@ -656,7 +676,7 @@ export const App: React.FC = () => {
         .then((res) => res.json())
         .then((data) => {
           if (data.discover && data.discover.length > 0) {
-            setDailyDiscover(data.discover);
+            setDailyDiscover(normalizeDiscoverItems(data.discover));
           }
         })
         .catch(() => {});
@@ -896,7 +916,7 @@ export const App: React.FC = () => {
               setFavoriteArtistShelf({
                 title: `Because You Love ${updatedTp.favoriteArtist}`,
                 subtitle: `Curated for your ${updatedTp.primaryGenre} listening habit`,
-                songs: data.results,
+                songs: (data.results || []).filter((s: any) => s && s.id),
               });
             }
           })
@@ -935,7 +955,7 @@ export const App: React.FC = () => {
           }
           if (data.results && data.results.length > 0) {
             if (!isAlreadyInQueue) {
-              const station = [song, ...data.results.filter((r: Song) => r.id !== song.id)];
+              const station = [song, ...data.results.filter((r: Song) => r && r.id && r.id !== song.id)];
               setQueue(station);
               queueRef.current = station;
             } else {
@@ -945,7 +965,7 @@ export const App: React.FC = () => {
               setQueue((prev) => {
                 const existingIds = new Set(prev.map((s) => s.id));
                 const newSuggestions = data.results.filter(
-                  (r: Song) => !existingIds.has(r.id)
+                  (r: Song) => r && r.id && !existingIds.has(r.id)
                 );
                 if (newSuggestions.length === 0) return prev;
                 const updated = [...prev, ...newSuggestions];
@@ -965,7 +985,7 @@ export const App: React.FC = () => {
       .then((res) => res.json())
       .then((d) => {
         if (d.discover && d.discover.length > 0) {
-          setDailyDiscover(d.discover);
+          setDailyDiscover(normalizeDiscoverItems(d.discover));
           try {
             localStorage.setItem('metrolist_daily_discover_cache_v2', JSON.stringify(d.discover));
           } catch {}
@@ -978,7 +998,10 @@ export const App: React.FC = () => {
       .then((res) => res.json())
       .then((data) => {
         if (data.results && data.results.length > 0) {
-          setSimilarShelf({ title: data.title, songs: data.results });
+          setSimilarShelf({
+            title: data.title || 'Similar Tracks',
+            songs: (data.results || []).filter((s: any) => s && s.id),
+          });
         }
       })
       .catch(() => {});

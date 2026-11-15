@@ -109,18 +109,22 @@ export const HomeScreen: React.FC<Props> = ({
           </div>
 
           <div className="daily-discover-carousel">
-            {dailyDiscover.map((item, idx) => {
-              const isItemPlaying = currentSong?.id === item.recommendation.id && isPlaying;
+            {dailyDiscover.map((rawItem: any, idx) => {
+              if (!rawItem) return null;
+              const rec: Song = rawItem.recommendation || rawItem;
+              if (!rec || !rec.id) return null;
+              const isItemPlaying = currentSong?.id === rec.id && isPlaying;
+              const seedObj = rawItem.seed || null;
 
               return (
                 <div
-                  key={`${item.recommendation.id}_${idx}`}
+                  key={`${rec.id}_${idx}`}
                   className="daily-discover-card"
-                  onClick={() => onPlaySong(item.recommendation)}
+                  onClick={() => onPlaySong(rec)}
                 >
                   <img
-                    src={item.recommendation.coverUrl}
-                    alt={item.recommendation.title}
+                    src={rec.coverUrl}
+                    alt={rec.title}
                     className="daily-discover-bg"
                   />
                   <div className="daily-discover-overlay" />
@@ -129,18 +133,18 @@ export const HomeScreen: React.FC<Props> = ({
                     <div className="daily-discover-badge">
                       <span>Daily Mix {idx + 1}</span>
                     </div>
-                    {item.seed && (
+                    {seedObj && (
                       <div className="daily-discover-seed">
                         <span>Based on</span>
-                        <span className="daily-discover-seed-title">{item.seed.title}</span>
+                        <span className="daily-discover-seed-title">{seedObj.title}</span>
                       </div>
                     )}
                   </div>
 
                   <div className="daily-discover-bottom">
                     <div className="daily-discover-info">
-                      <div className="daily-discover-title">{item.recommendation.title}</div>
-                      <div className="daily-discover-artist">{item.recommendation.artist}</div>
+                      <div className="daily-discover-title">{rec.title}</div>
+                      <div className="daily-discover-artist">{rec.artist}</div>
                     </div>
                     <div className="daily-discover-play-btn" title="Play Radio">
                       {isItemPlaying ? (
@@ -171,7 +175,7 @@ export const HomeScreen: React.FC<Props> = ({
           </div>
 
           <div className="cards-grid">
-            {favoriteArtistShelf.songs.slice(0, 6).map((song) => (
+            {favoriteArtistShelf.songs.filter((s): s is Song => Boolean(s && s.id)).slice(0, 6).map((song) => (
               <div
                 key={`fav_art_${song.id}`}
                 className="song-card"
@@ -205,7 +209,7 @@ export const HomeScreen: React.FC<Props> = ({
 
       <div className={showAllSongs ? 'queue-scroll-active-container' : ''}>
         <div className="song-list-table">
-          {(showAllSongs ? songs : songs.slice(0, 20)).map((song, index) => {
+          {(showAllSongs ? songs : songs.slice(0, 20)).filter((s): s is Song => Boolean(s && s.id)).map((song, index) => {
             const isThisPlaying = currentSong?.id === song.id && isPlaying;
             const isCurrent = currentSong?.id === song.id;
 
@@ -308,7 +312,7 @@ export const HomeScreen: React.FC<Props> = ({
           </div>
 
           <div className="cards-grid">
-            {similarShelf.songs.slice(0, 6).map((song) => (
+            {similarShelf.songs.filter((s): s is Song => Boolean(s && s.id)).slice(0, 6).map((song) => (
               <div
                 key={`sim_${song.id}`}
                 className="song-card"
@@ -337,7 +341,7 @@ export const HomeScreen: React.FC<Props> = ({
       </div>
 
       <div className="cards-grid">
-        {albums.map((album) => (
+        {albums.filter((a): a is Album => Boolean(a && a.id)).map((album) => (
           <div
             key={album.id}
             className="song-card"
@@ -383,7 +387,7 @@ export const HomeScreen: React.FC<Props> = ({
       </div>
 
       <div className="cards-grid">
-        {playlists.map((pl) => (
+        {playlists.filter((p): p is Playlist => Boolean(p && p.id)).map((pl) => (
           <div
             key={pl.id}
             className="song-card"

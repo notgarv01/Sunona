@@ -3,7 +3,6 @@ import cors from 'cors';
 import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
-import CryptoJS from 'crypto-js';
 
 // Auto-patch solver timeout for low-CPU cloud environments (Render Free Tier)
 try {
@@ -41,7 +40,8 @@ const YOUTUBE_ID_REGEX = /^[a-zA-Z0-9_-]{11}$/;
 let getPoToken = null;
 let ytInstance = null;
 
-const OPTIMIZED_CLIENTS = [Client.WebEmbedded, Client.Tv, Client.Mweb, Client.VisionOS];
+// YouTube MWEB client is the official client that transmits YouTube BotGuard PO Token
+const OPTIMIZED_CLIENTS = [Client.Mweb];
 
 async function initPoTokenEngine() {
   try {
@@ -60,50 +60,6 @@ await initPoTokenEngine();
 function sanitizeString(str, maxLen = 150) {
   if (!str || typeof str !== 'string') return '';
   return str.replace(/[\x00-\x1F\x7F]/g, '').trim().substring(0, maxLen);
-}
-
-// ── Ultra-Reliable 320kbps Akamai CDN Decrypter (Zero Bot Blocks, Instant Range Streaming) ──
-function decryptSaavnMediaUrl(encrypted) {
-  if (!encrypted) return null;
-  try {
-    const key = CryptoJS.enc.Utf8.parse('38346591');
-    const decrypted = CryptoJS.DES.decrypt(
-      { ciphertext: CryptoJS.enc.Base64.parse(encrypted) },
-      key,
-      { mode: CryptoJS.mode.ECB, padding: CryptoJS.pad.Pkcs7 }
-    );
-    const url = decrypted.toString(CryptoJS.enc.Utf8);
-    if (!url || !url.startsWith('http')) return null;
-    return url.replace(/_\d+\.mp4/, '_320.mp4');
-  } catch (_) {
-    return null;
-  }
-}
-
-async function resolveSaavnCdnAudio(title, artist) {
-  const query = `${title} ${artist}`.trim();
-  if (!query) return null;
-  try {
-    const res = await fetch(
-      `https://www.jiosaavn.com/api.php?__call=search.getResults&_format=json&_marker=0&cc=in&p=1&n=3&q=${encodeURIComponent(query)}`,
-      {
-        headers: {
-          'User-Agent':
-            'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-          Accept: 'application/json',
-        },
-      }
-    );
-    const data = await res.json();
-    const songs = data.results || [];
-    for (const s of songs) {
-      if (s.encrypted_media_url) {
-        const decrypted = decryptSaavnMediaUrl(s.encrypted_media_url);
-        if (decrypted) return decrypted;
-      }
-    }
-  } catch (_) {}
-  return null;
 }
 
 async function resolveYouTubeAudioId(query) {
@@ -156,13 +112,6 @@ app.get(['/health', '/ping', '/'], (req, res) => {
 
 app.get('/api/debug-stream', async (req, res) => {
   const testId = req.query.id || '9CmAUpXtVFc';
-  const title = req.query.title || 'Dagabaaz Re';
-  const artist = req.query.artist || 'Rahat Fateh Ali Khan';
-  let saavnUrl = null;
-  try {
-    saavnUrl = await resolveSaavnCdnAudio(title, artist);
-  } catch (_) {}
-
   try {
     const yt = ytInstance || new Ytdl({ clients: OPTIMIZED_CLIENTS });
     const info = await yt.getInfo(testId);
@@ -173,17 +122,17 @@ app.get('/api/debug-stream', async (req, res) => {
     }
     res.json({
       success: true,
+      provider: 'YouTube Music / Googlevideo',
       title: info.videoDetails?.title,
       formatsCount: info.formats?.length,
       audioFormatsCount: audioFormats.length,
       chosenHasUrl: Boolean(chosen?.url),
       streamUrlPreview: chosen?.url ? chosen.url.slice(0, 60) : null,
-      saavnDirectUrl: saavnUrl ? saavnUrl.slice(0, 70) : null,
     });
   } catch (err) {
     res.json({
       success: false,
-      saavnDirectUrl: saavnUrl ? saavnUrl.slice(0, 70) : null,
+      provider: 'YouTube Music / Googlevideo',
       errorName: err.name,
       errorMessage: err.message,
       cause: err.cause ? (err.cause.message || String(err.cause)) : null,
@@ -223,19 +172,8 @@ app.get('/api/stream', async (req, res) => {
     if (cached && Date.now() - cached.timestamp < 3600000) {
       directUrl = cached.url;
     } else {
-      // 1. Ultra-fast, high-fidelity 320kbps Akamai CDN stream (zero bot checks, instant scrubbing)
-      if (titleParam || artistParam) {
-        try {
-          const saavnUrl = await resolveSaavnCdnAudio(titleParam, artistParam);
-          if (saavnUrl) {
-            directUrl = saavnUrl;
-            if (videoId) streamCache.set(videoId, { url: directUrl, timestamp: Date.now() });
-          }
-        } catch (_) {}
-      }
-
-      // 2. High-performance YouTube Engine if not on CDN
-      if (!directUrl && videoId && YOUTUBE_ID_REGEX.test(videoId)) {
+      // 1. High-performance YouTube Engine with BotGuard PO Token
+      if (videoId && YOUTUBE_ID_REGEX.test(videoId)) {
         try {
           const yt = ytInstance || new Ytdl({ clients: OPTIMIZED_CLIENTS });
           const info = await yt.getInfo(videoId);
@@ -255,7 +193,7 @@ app.get('/api/stream', async (req, res) => {
         }
       }
 
-      // 3. Resilient YouTube search fallback if initial ID failed
+      // 2. Resilient YouTube search fallback if initial ID failed
       if (!directUrl && (titleParam || artistParam)) {
         try {
           const dynamicId = await resolveYouTubeAudioId(`${titleParam} ${artistParam}`.trim());

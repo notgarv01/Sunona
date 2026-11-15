@@ -308,6 +308,7 @@ app.get('/api/search', async (req, res) => {
     }
 
     const trimmedQuery = query.trim();
+    const clientIp = (req.headers['x-forwarded-for'] || '').split(',')[0].trim() || req.socket?.remoteAddress || '';
 
     // 1. YouTube Music Live Autocomplete Suggestions & Official Tracks
     let suggestions = [];
@@ -315,14 +316,20 @@ app.get('/api/search', async (req, res) => {
     const seenIds = new Set();
 
     try {
+      const suggHeaders = {
+        'Content-Type': 'application/json',
+        'User-Agent':
+          'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+        Referer: 'https://music.youtube.com',
+      };
+      if (clientIp) {
+        suggHeaders['X-Forwarded-For'] = clientIp;
+        suggHeaders['X-Real-IP'] = clientIp;
+      }
+
       const suggRes = await fetch('https://music.youtube.com/youtubei/v1/music/get_search_suggestions', {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'User-Agent':
-            'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-          Referer: 'https://music.youtube.com',
-        },
+        headers: suggHeaders,
         body: JSON.stringify({
           context: {
             client: {
@@ -330,6 +337,7 @@ app.get('/api/search', async (req, res) => {
               clientVersion: '1.20240101.01.00',
               hl: 'en',
               gl: 'IN',
+              utcOffsetMinutes: 330,
             },
           },
           input: trimmedQuery,
@@ -499,6 +507,21 @@ app.get('/api/search', async (req, res) => {
         }
       } catch (_) {}
     }
+
+    // Exact-match priority sort: Songs whose title exactly matches the query rank #1
+    results.sort((a, b) => {
+      const aExact = a.title.toLowerCase().trim() === trimmedQuery.toLowerCase();
+      const bExact = b.title.toLowerCase().trim() === trimmedQuery.toLowerCase();
+      if (aExact && !bExact) return -1;
+      if (!aExact && bExact) return 1;
+
+      const aStarts = a.title.toLowerCase().trim().startsWith(trimmedQuery.toLowerCase());
+      const bStarts = b.title.toLowerCase().trim().startsWith(trimmedQuery.toLowerCase());
+      if (aStarts && !bStarts) return -1;
+      if (!aStarts && bStarts) return 1;
+
+      return 0;
+    });
 
     res.json({ suggestions, results });
   } catch (err) {
@@ -810,6 +833,8 @@ app.get('/api/related', async (req, res) => {
     const results = [];
     let nextContinuation = null;
 
+    const clientIp = (req.headers['x-forwarded-for'] || '').split(',')[0].trim() || req.socket?.remoteAddress || '';
+
     const requestBody = {
       context: {
         client: {
@@ -817,6 +842,7 @@ app.get('/api/related', async (req, res) => {
           clientVersion: '1.20240101.01.00',
           hl: 'en',
           gl: 'IN',
+          utcOffsetMinutes: 330,
         },
       },
     };
@@ -831,14 +857,20 @@ app.get('/api/related', async (req, res) => {
     }
 
     try {
+      const radioHeaders = {
+        'Content-Type': 'application/json',
+        'User-Agent':
+          'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+        Referer: 'https://music.youtube.com',
+      };
+      if (clientIp) {
+        radioHeaders['X-Forwarded-For'] = clientIp;
+        radioHeaders['X-Real-IP'] = clientIp;
+      }
+
       const radioRes = await fetch('https://music.youtube.com/youtubei/v1/next', {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'User-Agent':
-            'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-          Referer: 'https://music.youtube.com',
-        },
+        headers: radioHeaders,
         body: JSON.stringify(requestBody),
       });
 
@@ -850,7 +882,7 @@ app.get('/api/related', async (req, res) => {
       const items = playlist?.contents || [];
       for (const it of items) {
         const r = it.playlistPanelVideoRenderer;
-        if (r && r.videoId) {
+        if (r && r.videoId && r.videoId !== rawId && !results.some((x) => x.id === r.videoId)) {
           results.push({
             id: r.videoId,
             title: r.title?.runs?.[0]?.text || 'Suggested Track',

@@ -16,7 +16,7 @@ const YOUTUBE_ID_REGEX = /^[a-zA-Z0-9_-]{11}$/;
 let getPoToken = null;
 let ytInstance = null;
 
-const OPTIMIZED_CLIENTS = [Client.VisionOS, Client.WebEmbedded, Client.Tv];
+const OPTIMIZED_CLIENTS = [Client.VisionOS];
 
 async function initPoTokenEngine() {
   try {
@@ -108,6 +108,8 @@ app.get('/api/debug-stream', async (req, res) => {
       success: false,
       errorName: err.name,
       errorMessage: err.message,
+      cause: err.cause ? (err.cause.message || String(err.cause)) : null,
+      causeStack: err.cause?.stack || null,
       stack: err.stack,
     });
   }

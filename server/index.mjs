@@ -38,30 +38,41 @@ const ytIdCache = new Map();
 const YOUTUBE_ID_REGEX = /^[a-zA-Z0-9_-]{11}$/;
 
 let getPoToken = null;
-let ytInstance = null;
-
-// YouTube MWEB client is the official client that transmits YouTube BotGuard PO Token
-const OPTIMIZED_CLIENTS = [Client.Mweb];
+let ytVision = new Ytdl({ clients: [Client.VisionOS] });
+let ytMusic = new Ytdl({ clients: [Client.WebMusic] });
+let ytMulti = new Ytdl({ clients: [Client.VisionOS, Client.WebMusic, Client.Tv, Client.WebEmbedded] });
+let ytMweb = null;
 
 async function initPoTokenEngine() {
   try {
-    console.log('[PO-Token] Initializing BotGuard worker thread...');
     getPoToken = await createPoTokenProvider({ timeoutMs: 25000 });
-    ytInstance = new Ytdl({ getPoToken, clients: OPTIMIZED_CLIENTS });
-    console.log('[PO-Token] BotGuard engine active and ready for YouTube requests!');
+    ytMweb = new Ytdl({ getPoToken, clients: [Client.Mweb, Client.VisionOS] });
   } catch (err) {
-    console.warn('[PO-Token] Warning initializing PO Token provider, falling back to standard Ytdl:', err.message);
-    ytInstance = new Ytdl({ clients: OPTIMIZED_CLIENTS });
+    ytMweb = new Ytdl({ clients: [Client.VisionOS, Client.WebMusic] });
   }
 }
 
-await initPoTokenEngine();
+// Initialize PO token in background so server starts immediately without blocking
+initPoTokenEngine().catch(() => {});
 
 function sanitizeString(str, maxLen = 150) {
   if (!str || typeof str !== 'string') return '';
   return str.replace(/[\x00-\x1F\x7F]/g, '').trim().substring(0, maxLen);
 }
 
+function parseDurationSec(durText) {
+  if (!durText || typeof durText !== 'string') return 210;
+  const parts = durText.split(':').map((p) => parseInt(p, 10));
+  if (parts.length === 2 && !isNaN(parts[0]) && !isNaN(parts[1])) {
+    return parts[0] * 60 + parts[1];
+  }
+  if (parts.length === 3 && !isNaN(parts[0]) && !isNaN(parts[1]) && !isNaN(parts[2])) {
+    return parts[0] * 3600 + parts[1] * 60 + parts[2];
+  }
+  return 210;
+}
+
+// ── Pure YouTube Search Resolution ──
 async function resolveYouTubeAudioId(query) {
   if (!query) return null;
   try {
@@ -99,62 +110,126 @@ async function resolveYouTubeAudioId(query) {
   return null;
 }
 
-// ── Health / Ping (For UptimeRobot Keep-Alive to Prevent Sleep) ──
+// ── High-Performance YouTube Audio URL Resolver ──
+async function getAudioDirectUrl(videoId, titleParam = '', artistParam = '') {
+  // 1. Resolve to standard 11-char YouTube ID if needed
+  if (!videoId || !YOUTUBE_ID_REGEX.test(videoId)) {
+    const lookupKey = (videoId ? videoId + '_' : '') + `${titleParam} ${artistParam}`.trim().toLowerCase();
+    let resolvedId = ytIdCache.get(lookupKey) || (videoId ? ytIdCache.get(videoId) : null);
+    if (!resolvedId && (titleParam || artistParam)) {
+      resolvedId = await resolveYouTubeAudioId(`${titleParam} ${artistParam}`.trim());
+      if (resolvedId) {
+        ytIdCache.set(lookupKey, resolvedId);
+        if (videoId) ytIdCache.set(videoId, resolvedId);
+      }
+    }
+    if (resolvedId) {
+      videoId = resolvedId;
+    }
+  }
+
+  if (!videoId || !YOUTUBE_ID_REGEX.test(videoId)) {
+    return null;
+  }
+
+  // 2. Check stream cache (valid for 3 hours)
+  const cached = streamCache.get(videoId);
+  if (cached && Date.now() - cached.timestamp < 10800000) {
+    return cached.url;
+  }
+
+  // 3. Multi-client YouTube audio format resolution (VisionOS -> WebMusic -> Multi -> Mweb)
+  const engines = [
+    { name: 'VisionOS', yt: ytVision },
+    { name: 'WebMusic', yt: ytMusic },
+    { name: 'Multi', yt: ytMulti },
+    { name: 'Mweb', yt: ytMweb || ytVision },
+  ];
+
+  for (const engine of engines) {
+    try {
+      const info = await engine.yt.getInfo(videoId);
+      let format = chooseFormat(info.formats, {
+        filter: (f) => f.hasAudio && !f.hasVideo,
+        quality: 'highestaudio',
+      });
+      if (!format || !format.url) {
+        format = chooseFormat(info.formats, { filter: (f) => f.hasAudio });
+      }
+
+      if (format && format.url) {
+        streamCache.set(videoId, { url: format.url, timestamp: Date.now() });
+        return format.url;
+      }
+    } catch (_) {}
+  }
+
+  // 4. Secondary fallback: Dynamic search if initial ID was geo-restricted or unavailable
+  if (titleParam || artistParam) {
+    try {
+      const altId = await resolveYouTubeAudioId(`${titleParam} ${artistParam}`.trim());
+      if (altId && altId !== videoId) {
+        const info = await ytVision.getInfo(altId);
+        let format = chooseFormat(info.formats, {
+          filter: (f) => f.hasAudio && !f.hasVideo,
+          quality: 'highestaudio',
+        });
+        if (!format || !format.url) {
+          format = chooseFormat(info.formats, { filter: (f) => f.hasAudio });
+        }
+        if (format && format.url) {
+          streamCache.set(videoId, { url: format.url, timestamp: Date.now() });
+          streamCache.set(altId, { url: format.url, timestamp: Date.now() });
+          return format.url;
+        }
+      }
+    } catch (_) {}
+  }
+
+  return null;
+}
+
+// ── Health / Ping (For Keep-Alive & Monitoring) ──
 app.get(['/health', '/ping', '/'], (req, res) => {
   res.json({
     status: 'online',
-    service: 'SunoNa Streaming Engine',
-    poTokenActive: Boolean(getPoToken),
+    service: 'SunoNa Pure YouTube Streaming Engine',
+    clients: ['VisionOS', 'WebMusic', 'Tv', 'WebEmbedded', 'Mweb'],
     uptime: Math.round(process.uptime()),
     timestamp: new Date().toISOString(),
   });
 });
 
+// ── Stream Diagnostic Endpoint (/api/debug-stream?id=...) ──
 app.get('/api/debug-stream', async (req, res) => {
   const testId = req.query.id || '9CmAUpXtVFc';
-  let poTokenResult = null;
-  let poTokenError = null;
-  try {
-    if (getPoToken) {
-      poTokenResult = await getPoToken({ contentBinding: testId, client: 'mweb' });
+  const results = {};
+
+  for (const clientName of ['VisionOS', 'WebMusic']) {
+    try {
+      const yt = new Ytdl({ clients: [Client[clientName]] });
+      const t0 = Date.now();
+      const info = await yt.getInfo(testId);
+      const chosen = chooseFormat(info.formats, { filter: (f) => f.hasAudio && !f.hasVideo });
+      results[clientName] = {
+        success: true,
+        ms: Date.now() - t0,
+        title: info.videoDetails?.title,
+        formatsCount: info.formats?.length,
+        chosenItag: chosen?.itag,
+        hasUrl: Boolean(chosen?.url),
+        urlPreview: chosen?.url ? chosen.url.slice(0, 70) : null,
+      };
+    } catch (e) {
+      results[clientName] = { success: false, error: e.message };
     }
-  } catch (pe) {
-    poTokenError = pe.message;
   }
 
-  try {
-    const yt = ytInstance || new Ytdl({ clients: OPTIMIZED_CLIENTS });
-    const info = await yt.getInfo(testId);
-    const audioFormats = (info.formats || []).filter((f) => f.hasAudio);
-    let chosen = chooseFormat(info.formats, { filter: (f) => f.hasAudio && !f.hasVideo });
-    if (!chosen || !chosen.url) {
-      chosen = chooseFormat(info.formats, { filter: (f) => f.hasAudio });
-    }
-    res.json({
-      success: true,
-      provider: 'YouTube Music / Googlevideo',
-      poTokenGenerated: Boolean(poTokenResult?.poToken),
-      poTokenLength: poTokenResult?.poToken?.length || 0,
-      visitorDataLength: poTokenResult?.visitorData?.length || 0,
-      poTokenError,
-      title: info.videoDetails?.title,
-      formatsCount: info.formats?.length,
-      audioFormatsCount: audioFormats.length,
-      chosenHasUrl: Boolean(chosen?.url),
-      streamUrlPreview: chosen?.url ? chosen.url.slice(0, 60) : null,
-    });
-  } catch (err) {
-    res.json({
-      success: false,
-      provider: 'YouTube Music / Googlevideo',
-      poTokenGenerated: Boolean(poTokenResult?.poToken),
-      poTokenError,
-      errorName: err.name,
-      errorMessage: err.message,
-      cause: err.cause ? (err.cause.message || String(err.cause)) : null,
-      stack: err.stack,
-    });
-  }
+  res.json({
+    testId,
+    timestamp: new Date().toISOString(),
+    results,
+  });
 });
 
 // ── Audio Stream Proxy (/api/stream?id=...&title=...&artist=...) ──
@@ -167,74 +242,9 @@ app.get('/api/stream', async (req, res) => {
     const titleParam = sanitizeString(req.query.title || '', 120);
     const artistParam = sanitizeString(req.query.artist || '', 120);
 
-    // Dynamic resolution if ID is not standard 11-char YouTube ID
-    if (!videoId || !YOUTUBE_ID_REGEX.test(videoId)) {
-      const lookupKey = (videoId ? videoId + '_' : '') + `${titleParam} ${artistParam}`.trim().toLowerCase();
-      let resolvedId = ytIdCache.get(lookupKey) || (videoId ? ytIdCache.get(videoId) : null);
-      if (!resolvedId && (titleParam || artistParam)) {
-        resolvedId = await resolveYouTubeAudioId(`${titleParam} ${artistParam}`.trim());
-        if (resolvedId) {
-          ytIdCache.set(lookupKey, resolvedId);
-          if (videoId) ytIdCache.set(videoId, resolvedId);
-        }
-      }
-      if (resolvedId) {
-        videoId = resolvedId;
-      }
-    }
-
-    let directUrl = '';
-    const cached = videoId ? streamCache.get(videoId) : null;
-    if (cached && Date.now() - cached.timestamp < 3600000) {
-      directUrl = cached.url;
-    } else {
-      // 1. High-performance YouTube Engine with BotGuard PO Token
-      if (videoId && YOUTUBE_ID_REGEX.test(videoId)) {
-        try {
-          const yt = ytInstance || new Ytdl({ clients: OPTIMIZED_CLIENTS });
-          const info = await yt.getInfo(videoId);
-          let format = chooseFormat(info.formats, {
-            filter: (f) => f.hasAudio && !f.hasVideo,
-          });
-          if (!format || !format.url) {
-            format = chooseFormat(info.formats, { filter: (f) => f.hasAudio });
-          }
-
-          if (format && format.url) {
-            directUrl = format.url;
-            streamCache.set(videoId, { url: directUrl, timestamp: Date.now() });
-          }
-        } catch (ytdlErr) {
-          console.warn('[Stream] Info error:', ytdlErr.message);
-        }
-      }
-
-      // 2. Resilient YouTube search fallback if initial ID failed
-      if (!directUrl && (titleParam || artistParam)) {
-        try {
-          const dynamicId = await resolveYouTubeAudioId(`${titleParam} ${artistParam}`.trim());
-          if (dynamicId) {
-            const yt = ytInstance || new Ytdl({ clients: OPTIMIZED_CLIENTS });
-            const dynamicInfo = await yt.getInfo(dynamicId);
-            let dynFormat = chooseFormat(dynamicInfo.formats, {
-              filter: (f) => f.hasAudio && !f.hasVideo,
-            });
-            if (!dynFormat || !dynFormat.url) {
-              dynFormat = chooseFormat(dynamicInfo.formats, { filter: (f) => f.hasAudio });
-            }
-            if (dynFormat && dynFormat.url) {
-              directUrl = dynFormat.url;
-              if (videoId) streamCache.set(videoId, { url: directUrl, timestamp: Date.now() });
-              streamCache.set(dynamicId, { url: directUrl, timestamp: Date.now() });
-            }
-          }
-        } catch (_) {}
-      }
-
-      if (!directUrl) {
-        res.status(404).send('Audio stream format unavailable');
-        return;
-      }
+    const directUrl = await getAudioDirectUrl(videoId, titleParam, artistParam);
+    if (!directUrl) {
+      return res.status(404).send('Audio stream format unavailable');
     }
 
     // Forward Range request for instant seek & smooth scrubbing
@@ -249,27 +259,29 @@ app.get('/api/stream', async (req, res) => {
     const audioRes = await fetch(directUrl, { headers });
     res.status(audioRes.status);
 
+    const forwardHeaders = ['content-type', 'content-length', 'content-range', 'accept-ranges'];
     audioRes.headers.forEach((val, key) => {
-      const lowerKey = key.toLowerCase();
-      if (
-        lowerKey === 'content-type' ||
-        lowerKey === 'content-length' ||
-        lowerKey === 'content-range' ||
-        lowerKey === 'accept-ranges'
-      ) {
+      if (forwardHeaders.includes(key.toLowerCase())) {
         res.setHeader(key, val);
       }
     });
 
     res.setHeader('Access-Control-Allow-Origin', '*');
     res.setHeader('Accept-Ranges', 'bytes');
+    res.setHeader('Cache-Control', 'public, max-age=3600');
 
     if (audioRes.body) {
       const reader = audioRes.body.getReader();
-      while (true) {
+      let isClosed = false;
+      req.on('close', () => {
+        isClosed = true;
+        reader.cancel().catch(() => {});
+      });
+
+      while (!isClosed) {
         const { done, value } = await reader.read();
-        if (done) {
-          res.end();
+        if (done || isClosed) {
+          if (!res.writableEnded) res.end();
           break;
         }
         res.write(value);
@@ -279,7 +291,11 @@ app.get('/api/stream', async (req, res) => {
     }
   } catch (err) {
     console.error('[Stream] Resolution error:', err.message);
-    res.status(500).send(`Stream resolution failed: ${err.message}`);
+    if (!res.headersSent) {
+      res.status(500).send(`Stream resolution failed: ${err.message}`);
+    } else {
+      res.end();
+    }
   }
 });
 
@@ -293,157 +309,410 @@ app.get('/api/search', async (req, res) => {
 
     const trimmedQuery = query.trim();
 
-    const resData = await fetch('https://music.youtube.com/youtubei/v1/music/get_search_suggestions', {
+    // 1. YouTube Music Live Autocomplete Suggestions
+    let suggestions = [];
+    try {
+      const suggRes = await fetch('https://music.youtube.com/youtubei/v1/music/get_search_suggestions', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'User-Agent':
+            'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+          Referer: 'https://music.youtube.com',
+        },
+        body: JSON.stringify({
+          context: {
+            client: {
+              clientName: 'WEB_REMIX',
+              clientVersion: '1.20240101.01.00',
+              hl: 'en',
+              gl: 'IN',
+            },
+          },
+          input: trimmedQuery,
+        }),
+      });
+      const suggData = await suggRes.json();
+      const rawSuggs = (suggData.contents?.[0]?.searchSuggestionsSectionRenderer?.contents || [])
+        .map((c) => (c.searchSuggestionRenderer?.suggestion?.runs || []).map((r) => r.text).join(''))
+        .filter(Boolean);
+
+      const seenSuggs = new Set();
+      for (const s of rawSuggs) {
+        const clean = s
+          .replace(/\b(?:song|songs|video|audio|lyrics?|full|hd)\b/gi, '')
+          .replace(/[.,\-]+$/, '')
+          .replace(/\s+/g, ' ')
+          .trim();
+        if (clean && !seenSuggs.has(clean.toLowerCase())) {
+          seenSuggs.add(clean.toLowerCase());
+          suggestions.push(clean);
+        }
+        if (suggestions.length >= 4) break;
+      }
+    } catch (_) {}
+
+    // 2. Pure YouTube Video Search (100% genuine YouTube IDs and playable audio)
+    const results = [];
+    const seenIds = new Set();
+
+    try {
+      const searchRes = await fetch('https://www.youtube.com/youtubei/v1/search', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'User-Agent':
+            'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+        },
+        body: JSON.stringify({
+          context: {
+            client: {
+              clientName: 'WEB',
+              clientVersion: '2.20240101.01.00',
+              hl: 'en',
+              gl: 'IN',
+            },
+          },
+          query: `${trimmedQuery} song`,
+        }),
+      });
+      const data = await searchRes.json();
+      const sections =
+        data.contents?.twoColumnSearchResultsRenderer?.primaryContents?.sectionListRenderer?.contents || [];
+
+      for (const s of sections) {
+        const contents = s.itemSectionRenderer?.contents || [];
+        for (const c of contents) {
+          const vr = c.videoRenderer;
+          if (vr && vr.videoId && !seenIds.has(vr.videoId)) {
+            seenIds.add(vr.videoId);
+            const title = vr.title?.runs?.[0]?.text || trimmedQuery;
+            const artist = vr.ownerText?.runs?.[0]?.text || 'YouTube Music';
+            const durText = vr.lengthText?.simpleText || '3:30';
+            const duration = parseDurationSec(durText);
+            const coverUrl =
+              vr.thumbnail?.thumbnails?.pop()?.url ||
+              `https://i.ytimg.com/vi/${vr.videoId}/hqdefault.jpg`;
+
+            results.push({
+              id: vr.videoId,
+              title,
+              artist,
+              subtitle: `Song • ${artist}`,
+              album: 'YouTube Music',
+              duration,
+              coverUrl,
+              type: 'song',
+            });
+            if (results.length >= 10) break;
+          }
+        }
+        if (results.length >= 10) break;
+      }
+    } catch (_) {}
+
+    res.json({ suggestions, results });
+  } catch (err) {
+    res.status(500).json({ suggestions: [], results: [] });
+  }
+});
+
+// ── Similar Recommendations Shelf (/api/similar?id=...&title=...) ──
+app.get('/api/similar', async (req, res) => {
+  try {
+    const rawId = sanitizeString(req.query.id || '', 40);
+    const title = sanitizeString(req.query.title || '', 100);
+    const shelfTitle = title ? `Because You Love ${title}` : 'Recommended Songs';
+    const results = [];
+    const seenIds = new Set();
+
+    if (rawId && YOUTUBE_ID_REGEX.test(rawId)) {
+      try {
+        const radioRes = await fetch('https://music.youtube.com/youtubei/v1/next', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'User-Agent':
+              'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+          },
+          body: JSON.stringify({
+            context: {
+              client: {
+                clientName: 'WEB_REMIX',
+                clientVersion: '1.20240101.01.00',
+                hl: 'en',
+                gl: 'IN',
+              },
+            },
+            videoId: rawId,
+            playlistId: 'RDAMVM' + rawId,
+          }),
+        });
+
+        const rData = await radioRes.json();
+        const playlist =
+          rData.contents?.singleColumnMusicWatchNextResultsRenderer?.tabbedRenderer?.watchNextTabbedResultsRenderer?.tabs?.[0]?.tabRenderer?.content?.musicQueueRenderer?.content?.playlistPanelRenderer;
+        const items = playlist?.contents || [];
+
+        for (const it of items) {
+          const r = it.playlistPanelVideoRenderer;
+          if (r && r.videoId && r.videoId !== rawId && !seenIds.has(r.videoId)) {
+            seenIds.add(r.videoId);
+            results.push({
+              id: r.videoId,
+              title: r.title?.runs?.[0]?.text || 'Suggested Track',
+              artist: r.shortBylineText?.runs?.[0]?.text || r.longBylineText?.runs?.[0]?.text || 'YouTube Music',
+              album: r.longBylineText?.runs?.[2]?.text || 'Single',
+              duration: parseDurationSec(r.lengthText?.runs?.[0]?.text),
+              coverUrl: r.thumbnail?.thumbnails?.pop()?.url || `https://i.ytimg.com/vi/${r.videoId}/hqdefault.jpg`,
+              audioUrl: '',
+              views: 'Recommended for you',
+              lyrics: [],
+            });
+            if (results.length >= 8) break;
+          }
+        }
+      } catch (_) {}
+    }
+
+    if (results.length === 0 && title) {
+      try {
+        const searchRes = await fetch('https://www.youtube.com/youtubei/v1/search', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'User-Agent':
+              'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+          },
+          body: JSON.stringify({
+            context: {
+              client: {
+                clientName: 'WEB',
+                clientVersion: '2.20240101.01.00',
+                hl: 'en',
+                gl: 'IN',
+              },
+            },
+            query: `${title} songs`,
+          }),
+        });
+        const data = await searchRes.json();
+        const sections =
+          data.contents?.twoColumnSearchResultsRenderer?.primaryContents?.sectionListRenderer?.contents || [];
+        for (const s of sections) {
+          const contents = s.itemSectionRenderer?.contents || [];
+          for (const c of contents) {
+            const vr = c.videoRenderer;
+            if (vr && vr.videoId && !seenIds.has(vr.videoId)) {
+              seenIds.add(vr.videoId);
+              results.push({
+                id: vr.videoId,
+                title: vr.title?.runs?.[0]?.text || '',
+                artist: vr.ownerText?.runs?.[0]?.text || '',
+                album: 'Single',
+                duration: parseDurationSec(vr.lengthText?.simpleText),
+                coverUrl: vr.thumbnail?.thumbnails?.pop()?.url || `https://i.ytimg.com/vi/${vr.videoId}/hqdefault.jpg`,
+                audioUrl: '',
+                views: 'Recommended for you',
+                lyrics: [],
+              });
+              if (results.length >= 8) break;
+            }
+          }
+          if (results.length >= 8) break;
+        }
+      } catch (_) {}
+    }
+
+    res.json({ title: shelfTitle, results });
+  } catch (err) {
+    res.json({ title: 'Recommended Songs', results: [] });
+  }
+});
+
+// ── Daily Discover Recommendations (/api/daily-discover?seeds=...) ──
+app.get('/api/daily-discover', async (req, res) => {
+  try {
+    const seedsParam = sanitizeString(req.query.seeds || '', 300);
+    const seeds = seedsParam.split(',').map((s) => s.trim()).filter((s) => YOUTUBE_ID_REGEX.test(s));
+    const discover = [];
+    const seenIds = new Set(seeds);
+
+    for (const seed of seeds.slice(0, 3)) {
+      try {
+        const radioRes = await fetch('https://music.youtube.com/youtubei/v1/next', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'User-Agent':
+              'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+          },
+          body: JSON.stringify({
+            context: {
+              client: {
+                clientName: 'WEB_REMIX',
+                clientVersion: '1.20240101.01.00',
+                hl: 'en',
+                gl: 'IN',
+              },
+            },
+            videoId: seed,
+            playlistId: 'RDAMVM' + seed,
+          }),
+        });
+
+        const rData = await radioRes.json();
+        const playlist =
+          rData.contents?.singleColumnMusicWatchNextResultsRenderer?.tabbedRenderer?.watchNextTabbedResultsRenderer?.tabs?.[0]?.tabRenderer?.content?.musicQueueRenderer?.content?.playlistPanelRenderer;
+        const items = playlist?.contents || [];
+
+        for (const it of items) {
+          const r = it.playlistPanelVideoRenderer;
+          if (r && r.videoId && !seenIds.has(r.videoId)) {
+            seenIds.add(r.videoId);
+            discover.push({
+              id: r.videoId,
+              title: r.title?.runs?.[0]?.text || 'Discover Track',
+              artist: r.shortBylineText?.runs?.[0]?.text || r.longBylineText?.runs?.[0]?.text || 'YouTube Music',
+              album: r.longBylineText?.runs?.[2]?.text || 'Single',
+              duration: parseDurationSec(r.lengthText?.runs?.[0]?.text),
+              coverUrl: r.thumbnail?.thumbnails?.pop()?.url || `https://i.ytimg.com/vi/${r.videoId}/hqdefault.jpg`,
+              audioUrl: '',
+              views: 'Daily Discover',
+              lyrics: [],
+            });
+            if (discover.length >= 10) break;
+          }
+        }
+      } catch (_) {}
+      if (discover.length >= 10) break;
+    }
+
+    // Default trending fallback if no seeds provided or discovery empty
+    if (discover.length === 0) {
+      try {
+        const searchRes = await fetch('https://www.youtube.com/youtubei/v1/search', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'User-Agent':
+              'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+          },
+          body: JSON.stringify({
+            context: {
+              client: {
+                clientName: 'WEB',
+                clientVersion: '2.20240101.01.00',
+                hl: 'en',
+                gl: 'IN',
+              },
+            },
+            query: 'trending hindi bollywood songs 2026',
+          }),
+        });
+        const data = await searchRes.json();
+        const sections =
+          data.contents?.twoColumnSearchResultsRenderer?.primaryContents?.sectionListRenderer?.contents || [];
+        for (const s of sections) {
+          const contents = s.itemSectionRenderer?.contents || [];
+          for (const c of contents) {
+            const vr = c.videoRenderer;
+            if (vr && vr.videoId && !seenIds.has(vr.videoId)) {
+              seenIds.add(vr.videoId);
+              discover.push({
+                id: vr.videoId,
+                title: vr.title?.runs?.[0]?.text || '',
+                artist: vr.ownerText?.runs?.[0]?.text || 'Bollywood',
+                album: 'Trending',
+                duration: parseDurationSec(vr.lengthText?.simpleText),
+                coverUrl: vr.thumbnail?.thumbnails?.pop()?.url || `https://i.ytimg.com/vi/${vr.videoId}/hqdefault.jpg`,
+                audioUrl: '',
+                views: 'Trending',
+                lyrics: [],
+              });
+              if (discover.length >= 8) break;
+            }
+          }
+          if (discover.length >= 8) break;
+        }
+      } catch (_) {}
+    }
+
+    res.json({ discover });
+  } catch (err) {
+    res.json({ discover: [] });
+  }
+});
+
+// ── Related Automix / Radio (/api/related?id=...&continuation=...) ──
+app.get('/api/related', async (req, res) => {
+  try {
+    const rawId = sanitizeString(req.query.id || '', 40);
+    const continuation = sanitizeString(req.query.continuation || '', 300);
+    const results = [];
+    let nextContinuation = null;
+
+    const requestBody = {
+      context: {
+        client: {
+          clientName: 'WEB_REMIX',
+          clientVersion: '1.20240101.01.00',
+          hl: 'en',
+          gl: 'IN',
+        },
+      },
+    };
+
+    if (continuation) {
+      requestBody.continuation = continuation;
+    } else if (rawId && YOUTUBE_ID_REGEX.test(rawId)) {
+      requestBody.videoId = rawId;
+      requestBody.playlistId = 'RDAMVM' + rawId;
+    } else {
+      return res.json({ results: [], continuation: null });
+    }
+
+    const radioRes = await fetch('https://music.youtube.com/youtubei/v1/next', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
         'User-Agent':
           'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-        Referer: 'https://music.youtube.com',
       },
-      body: JSON.stringify({
-        context: {
-          client: {
-            clientName: 'WEB_REMIX',
-            clientVersion: '1.20240101.01.00',
-            hl: 'en',
-            gl: 'IN',
-          },
-        },
-        input: trimmedQuery,
-      }),
-    })
-      .then((r) => r.json())
-      .catch(() => null);
+      body: JSON.stringify(requestBody),
+    });
 
-    const sections = resData?.contents || [];
+    const rData = await radioRes.json();
+    const playlist =
+      rData.contents?.singleColumnMusicWatchNextResultsRenderer?.tabbedRenderer?.watchNextTabbedResultsRenderer?.tabs?.[0]?.tabRenderer?.content?.musicQueueRenderer?.content?.playlistPanelRenderer ||
+      rData.continuationContents?.playlistPanelContinuation;
 
-    // Suggestions
-    const rawSuggs = (sections[0]?.searchSuggestionsSectionRenderer?.contents || [])
-      .map((c) => (c.searchSuggestionRenderer?.suggestion?.runs || []).map((r) => r.text).join(''))
-      .filter(Boolean);
-
-    const suggestions = [];
-    const seenSuggs = new Set();
-    for (const s of rawSuggs) {
-      const clean = s
-        .replace(/\b(?:song|songs|video|audio|lyrics?|full|hd)\b/gi, '')
-        .replace(/[.,\-]+$/, '')
-        .replace(/\s+/g, ' ')
-        .trim();
-      if (clean && !seenSuggs.has(clean.toLowerCase())) {
-        seenSuggs.add(clean.toLowerCase());
-        suggestions.push(clean);
+    const items = playlist?.contents || [];
+    for (const it of items) {
+      const r = it.playlistPanelVideoRenderer;
+      if (r && r.videoId) {
+        results.push({
+          id: r.videoId,
+          title: r.title?.runs?.[0]?.text || 'Suggested Track',
+          artist: r.shortBylineText?.runs?.[0]?.text || r.longBylineText?.runs?.[0]?.text || 'YouTube Music',
+          album: r.longBylineText?.runs?.[2]?.text || 'Single',
+          duration: parseDurationSec(r.lengthText?.runs?.[0]?.text),
+          coverUrl: r.thumbnail?.thumbnails?.pop()?.url || `https://i.ytimg.com/vi/${r.videoId}/hqdefault.jpg`,
+          audioUrl: '',
+          views: 'AutoMix Radio',
+          lyrics: [],
+        });
       }
-      if (suggestions.length >= 4) break;
     }
 
-    // Results
-    const results = [];
-    const seenIds = new Set();
-
-    for (const c of sections[1]?.searchSuggestionsSectionRenderer?.contents || []) {
-      const item = c.musicResponsiveListItemRenderer;
-      if (!item) continue;
-
-      const titleRuns = item.flexColumns?.[0]?.musicResponsiveListItemFlexColumnRenderer?.text?.runs || [];
-      const title = titleRuns.map((r) => r.text).join('').trim();
-      if (!title) continue;
-
-      const metaRuns = item.flexColumns?.[1]?.musicResponsiveListItemFlexColumnRenderer?.text?.runs || [];
-      const metaParts = [];
-      let cur = [];
-      for (const r of metaRuns) {
-        if (r.text && r.text.includes('•')) {
-          if (cur.length) metaParts.push(cur.map((x) => x.text).join('').trim());
-          cur = [];
-        } else {
-          cur.push(r);
-        }
-      }
-      if (cur.length) metaParts.push(cur.map((x) => x.text).join('').trim());
-
-      let type = 'song';
-      let artist = '';
-      let extra = '';
-
-      if (metaParts.length >= 3) {
-        type = metaParts[0].toLowerCase();
-        artist = metaParts[1];
-        extra = metaParts[2];
-      } else if (metaParts.length === 2) {
-        if (/song|album|artist|playlist|single/i.test(metaParts[0])) {
-          type = metaParts[0].toLowerCase();
-          artist = metaParts[1];
-        } else {
-          artist = metaParts[0];
-          extra = metaParts[1];
-        }
-      } else if (metaParts.length === 1) {
-        artist = metaParts[0];
-      }
-
-      const videoId =
-        item.overlay?.musicItemThumbnailOverlayRenderer?.content?.musicPlayButtonRenderer?.playNavigationEndpoint?.watchEndpoint?.videoId ||
-        item.playlistItemData?.videoId ||
-        item.navigationEndpoint?.watchEndpoint?.videoId;
-
-      const displayType = type.charAt(0).toUpperCase() + type.slice(1);
-      let subtitle = `${displayType} • ${artist || 'Artist'}`;
-      if (extra && extra.includes('plays')) {
-        subtitle = `${displayType} • ${artist} • ${extra}`;
-      }
-
-      const thumbnails = item.thumbnail?.musicThumbnailRenderer?.thumbnail?.thumbnails || [];
-      let coverUrl = thumbnails.length ? thumbnails[thumbnails.length - 1].url : '';
-      if (coverUrl) {
-        coverUrl = coverUrl.replace(/=w\d+-h\d+.*$/, '=w544-h544-l90-rj');
-      }
-
-      const id = videoId || ('ytm_' + Math.random().toString(36).slice(2));
-      if (seenIds.has(id)) continue;
-      seenIds.add(id);
-
-      results.push({
-        id,
-        title,
-        artist: artist || 'Artist',
-        subtitle,
-        album: displayType,
-        duration: 210,
-        coverUrl,
-        type,
-      });
+    const contData = playlist?.continuations?.[0]?.nextRadioContinuationData || playlist?.continuations?.[0]?.nextContinuationData;
+    if (contData?.continuation) {
+      nextContinuation = contData.continuation;
     }
 
-    if (results.length < 3) {
-      try {
-        const itunesRes = await fetch(
-          `https://itunes.apple.com/search?term=${encodeURIComponent(trimmedQuery)}&country=IN&entity=song&limit=6`
-        );
-        const itunesData = await itunesRes.json();
-        for (const it of itunesData.results || []) {
-          const itId = 'itunes_' + it.trackId;
-          if (seenIds.has(itId)) continue;
-          seenIds.add(itId);
-          results.push({
-            id: itId,
-            title: it.trackName,
-            artist: it.artistName,
-            subtitle: `Song • ${it.artistName}`,
-            album: it.collectionName || 'Single',
-            duration: Math.round((it.trackTimeMillis || 210000) / 1000),
-            coverUrl: (it.artworkUrl100 || '').replace('100x100bb.jpg', '600x600bb.jpg'),
-            type: 'song',
-          });
-          if (results.length >= 6) break;
-        }
-      } catch (_) {}
-    }
-
-    res.json({ suggestions, results: results.slice(0, 10) });
+    res.json({ results, continuation: nextContinuation });
   } catch (err) {
-    res.status(500).json({ suggestions: [], results: [] });
+    res.json({ results: [], continuation: null });
   }
 });
 
@@ -593,12 +862,7 @@ app.get('/api/home', async (req, res) => {
             const cover =
               r.thumbnail?.thumbnails?.pop()?.url ||
               `https://i.ytimg.com/vi/${r.videoId}/hqdefault.jpg`;
-            const durText = r.lengthText?.runs?.[0]?.text || '3:30';
-            const parts = durText.split(':').map((p) => parseInt(p, 10));
-            let durSec = 210;
-            if (parts.length === 2 && !isNaN(parts[0]) && !isNaN(parts[1])) {
-              durSec = parts[0] * 60 + parts[1];
-            }
+            const durSec = parseDurationSec(r.lengthText?.runs?.[0]?.text);
 
             quickPicks.push({
               id: r.videoId,
@@ -651,12 +915,7 @@ app.get('/api/home', async (req, res) => {
             const cover =
               vr.thumbnail?.thumbnails?.pop()?.url ||
               `https://i.ytimg.com/vi/${vr.videoId}/hqdefault.jpg`;
-            const durText = vr.lengthText?.simpleText || '3:30';
-            const parts = durText.split(':').map((p) => parseInt(p, 10));
-            let durSec = 210;
-            if (parts.length === 2 && !isNaN(parts[0]) && !isNaN(parts[1])) {
-              durSec = parts[0] * 60 + parts[1];
-            }
+            const durSec = parseDurationSec(vr.lengthText?.simpleText);
 
             quickPicks.push({
               id: vr.videoId,
@@ -682,5 +941,5 @@ app.get('/api/home', async (req, res) => {
 });
 
 app.listen(PORT, () => {
-  console.log(`[SunoNa-Engine] Server listening on http://0.0.0.0:${PORT}`);
+  console.log(`[SunoNa-Engine] Pure YouTube Streaming Engine listening on http://0.0.0.0:${PORT}`);
 });

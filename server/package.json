@@ -1,7 +1,7 @@
 {
   "name": "sunona-engine",
   "version": "1.0.0",
-  "description": "SunoNa High-Fi YouTube Audio Streaming Microservice with PO Token Provider",
+  "description": "SunoNa High-Fi YouTube Audio Streaming Microservice",
   "main": "index.mjs",
   "type": "module",
   "scripts": {

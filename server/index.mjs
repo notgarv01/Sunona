@@ -112,6 +112,16 @@ app.get(['/health', '/ping', '/'], (req, res) => {
 
 app.get('/api/debug-stream', async (req, res) => {
   const testId = req.query.id || '9CmAUpXtVFc';
+  let poTokenResult = null;
+  let poTokenError = null;
+  try {
+    if (getPoToken) {
+      poTokenResult = await getPoToken({ contentBinding: testId, client: 'mweb' });
+    }
+  } catch (pe) {
+    poTokenError = pe.message;
+  }
+
   try {
     const yt = ytInstance || new Ytdl({ clients: OPTIMIZED_CLIENTS });
     const info = await yt.getInfo(testId);
@@ -123,6 +133,10 @@ app.get('/api/debug-stream', async (req, res) => {
     res.json({
       success: true,
       provider: 'YouTube Music / Googlevideo',
+      poTokenGenerated: Boolean(poTokenResult?.poToken),
+      poTokenLength: poTokenResult?.poToken?.length || 0,
+      visitorDataLength: poTokenResult?.visitorData?.length || 0,
+      poTokenError,
       title: info.videoDetails?.title,
       formatsCount: info.formats?.length,
       audioFormatsCount: audioFormats.length,
@@ -133,6 +147,8 @@ app.get('/api/debug-stream', async (req, res) => {
     res.json({
       success: false,
       provider: 'YouTube Music / Googlevideo',
+      poTokenGenerated: Boolean(poTokenResult?.poToken),
+      poTokenError,
       errorName: err.name,
       errorMessage: err.message,
       cause: err.cause ? (err.cause.message || String(err.cause)) : null,

@@ -5,7 +5,7 @@
   "main": "index.mjs",
   "type": "module",
   "scripts": {
-    "build": "echo 'Ready for deployment'",
+    "build": "node patch-timeout.mjs",
     "start": "node index.mjs"
   },
   "dependencies": {

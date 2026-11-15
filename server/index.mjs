@@ -1,5 +1,23 @@
 import express from 'express';
 import cors from 'cors';
+import fs from 'fs';
+import path from 'path';
+import { fileURLToPath } from 'url';
+
+// Auto-patch solver timeout for low-CPU cloud environments (Render Free Tier)
+try {
+  const currentDir = path.dirname(fileURLToPath(import.meta.url));
+  const workerFile = path.resolve(currentDir, 'node_modules/@distube/ytdl-core/dist/solver/worker.js');
+  if (fs.existsSync(workerFile)) {
+    let content = fs.readFileSync(workerFile, 'utf8');
+    if (content.includes('TIMEOUT_MS = 2000')) {
+      content = content.replace('TIMEOUT_MS = 2000', 'TIMEOUT_MS = 30000');
+      fs.writeFileSync(workerFile, content, 'utf8');
+      console.log('[PO-Engine] Applied 30s solver timeout patch for Render free CPU');
+    }
+  }
+} catch (_) {}
+
 import { createPoTokenProvider, Ytdl, Client, chooseFormat } from '@distube/ytdl-core';
 
 const app = express();
@@ -16,7 +34,7 @@ const YOUTUBE_ID_REGEX = /^[a-zA-Z0-9_-]{11}$/;
 let getPoToken = null;
 let ytInstance = null;
 
-const OPTIMIZED_CLIENTS = [Client.VisionOS];
+const OPTIMIZED_CLIENTS = [Client.WebEmbedded, Client.Tv, Client.Mweb, Client.VisionOS];
 
 async function initPoTokenEngine() {
   try {
@@ -25,7 +43,7 @@ async function initPoTokenEngine() {
     ytInstance = new Ytdl({ getPoToken, clients: OPTIMIZED_CLIENTS });
     console.log('[PO-Token] BotGuard engine active and ready for YouTube requests!');
   } catch (err) {
-    console.warn('[PO-Token] Warning initializing PO Token provider, falling back to VisionOS client:', err.message);
+    console.warn('[PO-Token] Warning initializing PO Token provider, falling back to standard Ytdl:', err.message);
     ytInstance = new Ytdl({ clients: OPTIMIZED_CLIENTS });
   }
 }

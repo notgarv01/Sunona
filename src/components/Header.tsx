@@ -68,6 +68,7 @@ export const Header: React.FC<Props> = ({
 }) => {
   const [searchQuery, setSearchQuery] = useState('');
   const [searchResults, setSearchResults] = useState<Song[]>([]);
+  const [searchSuggestions, setSearchSuggestions] = useState<string[]>([]);
   const [recentSongs, setRecentSongs] = useState<RecentSearchSong[]>(() => getStoredRecentSongs(user?.uid));
   const [isLoading, setIsLoading] = useState(false);
 
@@ -168,6 +169,7 @@ export const Header: React.FC<Props> = ({
   useEffect(() => {
     if (!searchQuery.trim()) {
       setSearchResults([]);
+      setSearchSuggestions([]);
       setIsLoading(false);
       return;
     }
@@ -185,6 +187,11 @@ export const Header: React.FC<Props> = ({
         const res = await fetch(`/api/search?q=${encodeURIComponent(searchQuery)}`, { headers });
         if (res.ok) {
           const data = await res.json();
+          if (Array.isArray(data.suggestions)) {
+            setSearchSuggestions(data.suggestions.slice(0, 5));
+          } else {
+            setSearchSuggestions([]);
+          }
           const items: Song[] = (data.results || []).map((it: any) => ({
             id: it.id,
             title: it.title,
@@ -369,6 +376,50 @@ export const Header: React.FC<Props> = ({
                 </div>
               ) : (
                 <>
+                  {searchSuggestions.length > 0 && (
+                    <div className="search-suggestions-container" style={{ padding: '8px 12px 10px', borderBottom: '1px solid rgba(255,255,255,0.08)' }}>
+                      <div style={{ fontSize: '0.72rem', textTransform: 'uppercase', letterSpacing: '0.05em', color: 'var(--text-muted)', marginBottom: '8px', fontWeight: 600 }}>
+                        Predictions
+                      </div>
+                      <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px' }}>
+                        {searchSuggestions.map((sugg, sIdx) => (
+                          <button
+                            key={`sugg_${sIdx}`}
+                            type="button"
+                            onClick={() => {
+                              setSearchQuery(sugg);
+                              inputRef.current?.focus();
+                            }}
+                            style={{
+                              background: 'rgba(255,255,255,0.06)',
+                              border: '1px solid rgba(255,255,255,0.1)',
+                              borderRadius: '16px',
+                              padding: '4px 10px',
+                              color: '#e4e4e7',
+                              fontSize: '0.78rem',
+                              cursor: 'pointer',
+                              display: 'inline-flex',
+                              alignItems: 'center',
+                              gap: '5px',
+                              transition: 'all 0.15s ease',
+                            }}
+                            onMouseEnter={(e) => {
+                              e.currentTarget.style.background = 'rgba(255,255,255,0.14)';
+                              e.currentTarget.style.color = '#ffffff';
+                            }}
+                            onMouseLeave={(e) => {
+                              e.currentTarget.style.background = 'rgba(255,255,255,0.06)';
+                              e.currentTarget.style.color = '#e4e4e7';
+                            }}
+                          >
+                            <Search size={11} style={{ opacity: 0.6 }} />
+                            <span>{sugg}</span>
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
                   <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '10px 12px 6px' }}>
                     <span style={{ fontSize: '0.92rem', fontWeight: 700, color: '#ffffff' }}>Search results</span>
                     {isLoading && (

@@ -309,8 +309,11 @@ app.get('/api/search', async (req, res) => {
 
     const trimmedQuery = query.trim();
 
-    // 1. YouTube Music Live Autocomplete Suggestions
+    // 1. YouTube Music Live Autocomplete Suggestions & Official Tracks
     let suggestions = [];
+    const results = [];
+    const seenIds = new Set();
+
     try {
       const suggRes = await fetch('https://music.youtube.com/youtubei/v1/music/get_search_suggestions', {
         method: 'POST',
@@ -333,6 +336,8 @@ app.get('/api/search', async (req, res) => {
         }),
       });
       const suggData = await suggRes.json();
+
+      // 1A. Text Query Autocomplete Predictions (Section 0)
       const rawSuggs = (suggData.contents?.[0]?.searchSuggestionsSectionRenderer?.contents || [])
         .map((c) => (c.searchSuggestionRenderer?.suggestion?.runs || []).map((r) => r.text).join(''))
         .filter(Boolean);
@@ -348,68 +353,152 @@ app.get('/api/search', async (req, res) => {
           seenSuggs.add(clean.toLowerCase());
           suggestions.push(clean);
         }
-        if (suggestions.length >= 4) break;
+        if (suggestions.length >= 5) break;
       }
-    } catch (_) {}
 
-    // 2. Pure YouTube Video Search (100% genuine YouTube IDs and playable audio)
-    const results = [];
-    const seenIds = new Set();
+      // 1B. Curated Official YouTube Music Tracks (Section 1)
+      const sec1 = suggData.contents?.[1]?.searchSuggestionsSectionRenderer?.contents || [];
+      for (const c of sec1) {
+        const item = c.musicResponsiveListItemRenderer;
+        if (!item) continue;
 
-    try {
-      const searchRes = await fetch('https://www.youtube.com/youtubei/v1/search', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'User-Agent':
-            'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-        },
-        body: JSON.stringify({
-          context: {
-            client: {
-              clientName: 'WEB',
-              clientVersion: '2.20240101.01.00',
-              hl: 'en',
-              gl: 'IN',
-            },
-          },
-          query: `${trimmedQuery} song`,
-        }),
-      });
-      const data = await searchRes.json();
-      const sections =
-        data.contents?.twoColumnSearchResultsRenderer?.primaryContents?.sectionListRenderer?.contents || [];
+        const titleRuns = item.flexColumns?.[0]?.musicResponsiveListItemFlexColumnRenderer?.text?.runs || [];
+        const title = titleRuns.map((r) => r.text).join('').trim();
+        if (!title) continue;
 
-      for (const s of sections) {
-        const contents = s.itemSectionRenderer?.contents || [];
-        for (const c of contents) {
-          const vr = c.videoRenderer;
-          if (vr && vr.videoId && !seenIds.has(vr.videoId)) {
-            seenIds.add(vr.videoId);
-            const title = vr.title?.runs?.[0]?.text || trimmedQuery;
-            const artist = vr.ownerText?.runs?.[0]?.text || 'YouTube Music';
-            const durText = vr.lengthText?.simpleText || '3:30';
-            const duration = parseDurationSec(durText);
-            const coverUrl =
-              vr.thumbnail?.thumbnails?.pop()?.url ||
-              `https://i.ytimg.com/vi/${vr.videoId}/hqdefault.jpg`;
-
-            results.push({
-              id: vr.videoId,
-              title,
-              artist,
-              subtitle: `Song • ${artist}`,
-              album: 'YouTube Music',
-              duration,
-              coverUrl,
-              type: 'song',
-            });
-            if (results.length >= 10) break;
+        const metaRuns = item.flexColumns?.[1]?.musicResponsiveListItemFlexColumnRenderer?.text?.runs || [];
+        const metaParts = [];
+        let cur = [];
+        for (const r of metaRuns) {
+          if (r.text && r.text.includes('•')) {
+            if (cur.length) metaParts.push(cur.map((x) => x.text).join('').trim());
+            cur = [];
+          } else {
+            cur.push(r);
           }
         }
-        if (results.length >= 10) break;
+        if (cur.length) metaParts.push(cur.map((x) => x.text).join('').trim());
+
+        let type = 'song';
+        let artist = '';
+        let extra = '';
+
+        if (metaParts.length >= 3) {
+          type = metaParts[0].toLowerCase();
+          artist = metaParts[1];
+          extra = metaParts[2];
+        } else if (metaParts.length === 2) {
+          if (/song|album|artist|playlist|single/i.test(metaParts[0])) {
+            type = metaParts[0].toLowerCase();
+            artist = metaParts[1];
+          } else {
+            artist = metaParts[0];
+            extra = metaParts[1];
+          }
+        } else if (metaParts.length === 1) {
+          artist = metaParts[0];
+        }
+
+        const videoId =
+          item.overlay?.musicItemThumbnailOverlayRenderer?.content?.musicPlayButtonRenderer?.playNavigationEndpoint?.watchEndpoint?.videoId ||
+          item.playlistItemData?.videoId ||
+          item.navigationEndpoint?.watchEndpoint?.videoId;
+
+        if (!videoId || !YOUTUBE_ID_REGEX.test(videoId)) continue;
+        if (seenIds.has(videoId)) continue;
+        seenIds.add(videoId);
+
+        const displayType = type.charAt(0).toUpperCase() + type.slice(1);
+        let subtitle = `${displayType} • ${artist || 'Artist'}`;
+        if (extra && extra.includes('plays')) {
+          subtitle = `${displayType} • ${artist} • ${extra}`;
+        }
+
+        const thumbnails = item.thumbnail?.musicThumbnailRenderer?.thumbnail?.thumbnails || [];
+        let coverUrl = thumbnails.length ? thumbnails[thumbnails.length - 1].url : '';
+        if (coverUrl) {
+          coverUrl = coverUrl.replace(/=w\d+-h\d+.*$/, '=w544-h544-l90-rj');
+        }
+        if (!coverUrl) {
+          coverUrl = `https://i.ytimg.com/vi/${videoId}/hqdefault.jpg`;
+        }
+
+        results.push({
+          id: videoId,
+          title,
+          artist: artist || 'YouTube Music',
+          subtitle,
+          album: displayType,
+          duration: 210,
+          coverUrl,
+          type: 'song',
+        });
       }
     } catch (_) {}
+
+    // 2. Secondary YouTube Search Fallback (Cleaned & sanitized)
+    if (results.length < 6) {
+      try {
+        const searchRes = await fetch('https://www.youtube.com/youtubei/v1/search', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'User-Agent':
+              'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+          },
+          body: JSON.stringify({
+            context: {
+              client: {
+                clientName: 'WEB',
+                clientVersion: '2.20240101.01.00',
+                hl: 'en',
+                gl: 'IN',
+              },
+            },
+            query: `${trimmedQuery} audio song`,
+          }),
+        });
+        const data = await searchRes.json();
+        const sections =
+          data.contents?.twoColumnSearchResultsRenderer?.primaryContents?.sectionListRenderer?.contents || [];
+
+        for (const s of sections) {
+          const contents = s.itemSectionRenderer?.contents || [];
+          for (const c of contents) {
+            const vr = c.videoRenderer;
+            if (vr && vr.videoId && !seenIds.has(vr.videoId)) {
+              seenIds.add(vr.videoId);
+              const rawTitle = vr.title?.runs?.[0]?.text || trimmedQuery;
+              const title = rawTitle
+                .replace(/\(.*?(official|video|audio|lyric|hd|4k|song).*?\)/gi, '')
+                .replace(/\[.*?(official|video|audio|lyric|hd|4k|song).*?\]/gi, '')
+                .replace(/-\s*(Official|Audio|Video|Lyrical|Full Song|HD).*$/gi, '')
+                .trim() || rawTitle;
+
+              const artist = vr.ownerText?.runs?.[0]?.text?.replace(/-\s*Topic/i, '')?.trim() || 'YouTube Music';
+              const durText = vr.lengthText?.simpleText || '3:30';
+              const duration = parseDurationSec(durText);
+              const coverUrl =
+                vr.thumbnail?.thumbnails?.pop()?.url ||
+                `https://i.ytimg.com/vi/${vr.videoId}/hqdefault.jpg`;
+
+              results.push({
+                id: vr.videoId,
+                title,
+                artist,
+                subtitle: `Song • ${artist}`,
+                album: 'Single',
+                duration,
+                coverUrl,
+                type: 'song',
+              });
+              if (results.length >= 10) break;
+            }
+          }
+          if (results.length >= 10) break;
+        }
+      } catch (_) {}
+    }
 
     res.json({ suggestions, results });
   } catch (err) {
@@ -466,6 +555,53 @@ app.get('/api/similar', async (req, res) => {
               album: r.longBylineText?.runs?.[2]?.text || 'Single',
               duration: parseDurationSec(r.lengthText?.runs?.[0]?.text),
               coverUrl: r.thumbnail?.thumbnails?.pop()?.url || `https://i.ytimg.com/vi/${r.videoId}/hqdefault.jpg`,
+              audioUrl: '',
+              views: 'Recommended for you',
+              lyrics: [],
+            });
+            if (results.length >= 8) break;
+          }
+        }
+      } catch (_) {}
+    }
+
+    if (results.length < 4 && rawId && YOUTUBE_ID_REGEX.test(rawId)) {
+      try {
+        const webRes = await fetch('https://www.youtube.com/youtubei/v1/next', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'User-Agent':
+              'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+          },
+          body: JSON.stringify({
+            context: { client: { clientName: 'WEB', clientVersion: '2.20240101.01.00', hl: 'en', gl: 'IN' } },
+            videoId: rawId,
+          }),
+        });
+        const webData = await webRes.json();
+        const sections = webData.contents?.twoColumnWatchNextResults?.secondaryResults?.secondaryResults?.results || [];
+        for (const s of sections) {
+          const vm = s.lockupViewModel;
+          if (vm && vm.contentId && vm.contentId !== rawId && !seenIds.has(vm.contentId)) {
+            seenIds.add(vm.contentId);
+            const rawTitle = vm.metadata?.lockupMetadataViewModel?.title?.content || '';
+            const artist =
+              vm.metadata?.lockupMetadataViewModel?.metadata?.contentMetadataViewModel?.metadataRows?.[0]?.metadataParts?.[0]?.text?.content ||
+              'YouTube Music';
+            const cleanTitle = rawTitle
+              .replace(/\(.*?(official|video|audio|lyric|hd|4k|song).*?\)/gi, '')
+              .replace(/\[.*?(official|video|audio|lyric|hd|4k|song).*?\]/gi, '')
+              .replace(/-\s*(Official|Audio|Video|Lyrical|Full Song|HD).*$/gi, '')
+              .trim() || rawTitle;
+
+            results.push({
+              id: vm.contentId,
+              title: cleanTitle,
+              artist,
+              album: 'Recommended',
+              duration: 210,
+              coverUrl: `https://i.ytimg.com/vi/${vm.contentId}/hqdefault.jpg`,
               audioUrl: '',
               views: 'Recommended for you',
               lyrics: [],
@@ -735,12 +871,85 @@ app.get('/api/related', async (req, res) => {
       }
     } catch (_) {}
 
-    // Fallback if playlist panel returned 0 results (e.g. cloud datacenter IP block)
+    // Stage 2: Standard YouTube Watch Next (lockupViewModel & compactVideoRenderer)
+    if (results.length < 5 && rawId) {
+      try {
+        const webRes = await fetch('https://www.youtube.com/youtubei/v1/next', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'User-Agent':
+              'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+          },
+          body: JSON.stringify({
+            context: { client: { clientName: 'WEB', clientVersion: '2.20240101.01.00', hl: 'en', gl: 'IN' } },
+            videoId: rawId,
+          }),
+        });
+        const webData = await webRes.json();
+        const sections = webData.contents?.twoColumnWatchNextResults?.secondaryResults?.secondaryResults?.results || [];
+        for (const s of sections) {
+          const vm = s.lockupViewModel;
+          if (vm && vm.contentId && vm.contentId !== rawId && !results.some((x) => x.id === vm.contentId)) {
+            const rawTitle = vm.metadata?.lockupMetadataViewModel?.title?.content || '';
+            const artist =
+              vm.metadata?.lockupMetadataViewModel?.metadata?.contentMetadataViewModel?.metadataRows?.[0]?.metadataParts?.[0]?.text?.content ||
+              'YouTube Music';
+            const title = rawTitle
+              .replace(/\(.*?(official|video|audio|lyric|hd|4k|song).*?\)/gi, '')
+              .replace(/\[.*?(official|video|audio|lyric|hd|4k|song).*?\]/gi, '')
+              .replace(/-\s*(Official|Audio|Video|Lyrical|Full Song|HD).*$/gi, '')
+              .trim() || rawTitle;
+
+            results.push({
+              id: vm.contentId,
+              title,
+              artist,
+              album: 'AutoMix Radio',
+              duration: 210,
+              coverUrl: `https://i.ytimg.com/vi/${vm.contentId}/hqdefault.jpg`,
+              audioUrl: '',
+              views: 'AutoMix Radio',
+              lyrics: [],
+            });
+            if (results.length >= 15) break;
+          }
+
+          const vr = s.compactVideoRenderer;
+          if (vr && vr.videoId && vr.videoId !== rawId && !results.some((x) => x.id === vr.videoId)) {
+            const rawTitle = vr.title?.simpleText || vr.title?.runs?.[0]?.text || '';
+            const artist = vr.shortBylineText?.runs?.[0]?.text || 'YouTube Music';
+            const title = rawTitle
+              .replace(/\(.*?(official|video|audio|lyric|hd|4k|song).*?\)/gi, '')
+              .replace(/\[.*?(official|video|audio|lyric|hd|4k|song).*?\]/gi, '')
+              .replace(/-\s*(Official|Audio|Video|Lyrical|Full Song|HD).*$/gi, '')
+              .trim() || rawTitle;
+
+            results.push({
+              id: vr.videoId,
+              title,
+              artist,
+              album: 'AutoMix Radio',
+              duration: parseDurationSec(vr.lengthText?.simpleText),
+              coverUrl: vr.thumbnail?.thumbnails?.pop()?.url || `https://i.ytimg.com/vi/${vr.videoId}/hqdefault.jpg`,
+              audioUrl: '',
+              views: 'AutoMix Radio',
+              lyrics: [],
+            });
+            if (results.length >= 15) break;
+          }
+        }
+      } catch (_) {}
+    }
+
+    // Stage 3: Dynamic Search Fallback (Scoped strictly to playing artist & track)
     if (results.length === 0 && rawId) {
       try {
-        const fallbackQuery = (req.query.title || req.query.artist)
-          ? `${req.query.title || ''} ${req.query.artist || ''} songs`.trim()
-          : 'trending hindi romantic songs';
+        const qArtist = sanitizeString(req.query.artist || '', 80);
+        const qTitle = sanitizeString(req.query.title || '', 80);
+        const fallbackQuery = (qArtist && qTitle)
+          ? `${qArtist} ${qTitle} songs`
+          : (qArtist ? `${qArtist} songs` : (qTitle ? `${qTitle} songs` : 'hindi acoustic songs'));
 
         const searchRes = await fetch('https://www.youtube.com/youtubei/v1/search', {
           method: 'POST',
@@ -762,11 +971,20 @@ app.get('/api/related', async (req, res) => {
             ?.itemSectionRenderer?.contents || [];
         for (const c of sContents) {
           const vr = c.videoRenderer;
-          if (vr && vr.videoId && vr.videoId !== rawId) {
+          if (vr && vr.videoId && vr.videoId !== rawId && !results.some((x) => x.id === vr.videoId)) {
+            const rawTitle = vr.title?.runs?.[0]?.text || 'Suggested Track';
+            const title = rawTitle
+              .replace(/\(.*?(official|video|audio|lyric|hd|4k|song).*?\)/gi, '')
+              .replace(/\[.*?(official|video|audio|lyric|hd|4k|song).*?\]/gi, '')
+              .replace(/-\s*(Official|Audio|Video|Lyrical|Full Song|HD).*$/gi, '')
+              .trim() || rawTitle;
+
+            const artist = vr.ownerText?.runs?.[0]?.text?.replace(/-\s*Topic/i, '')?.trim() || (qArtist || 'YouTube Music');
+
             results.push({
               id: vr.videoId,
-              title: vr.title?.runs?.[0]?.text || 'Suggested Track',
-              artist: vr.ownerText?.runs?.[0]?.text || 'YouTube Music',
+              title,
+              artist,
               album: 'AutoMix',
               duration: parseDurationSec(vr.lengthText?.simpleText),
               coverUrl: vr.thumbnail?.thumbnails?.pop()?.url || `https://i.ytimg.com/vi/${vr.videoId}/hqdefault.jpg`,

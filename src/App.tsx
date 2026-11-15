@@ -944,8 +944,8 @@ export const App: React.FC = () => {
         queueRef.current = initialStation;
       }
 
-      // Fetch live YouTube Music Radio Automix Suggestions & Continuation Token (/api/related?id=...)
-      fetch(`/api/related?id=${song.id}`)
+      // Fetch live YouTube Music Radio Automix Suggestions & Continuation Token (/api/related?id=...&title=...&artist=...)
+      fetch(`/api/related?id=${encodeURIComponent(song.id)}&title=${encodeURIComponent(song.title)}&artist=${encodeURIComponent(song.artist)}`)
         .then((res) => res.json())
         .then((data) => {
           if (playbackContextRef.current === 'playlist') return; // Guard against race conditions

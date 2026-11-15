@@ -7,13 +7,19 @@ import { fileURLToPath } from 'url';
 // Auto-patch solver timeout for low-CPU cloud environments (Render Free Tier)
 try {
   const currentDir = path.dirname(fileURLToPath(import.meta.url));
-  const workerFile = path.resolve(currentDir, 'node_modules/@distube/ytdl-core/dist/solver/worker.js');
+  const solverDir = path.resolve(currentDir, 'node_modules/@distube/ytdl-core/dist/solver');
+  const workerFile = path.join(solverDir, 'worker.js');
   if (fs.existsSync(workerFile)) {
     let content = fs.readFileSync(workerFile, 'utf8');
     if (content.includes('TIMEOUT_MS = 2000')) {
-      content = content.replace('TIMEOUT_MS = 2000', 'TIMEOUT_MS = 30000');
-      fs.writeFileSync(workerFile, content, 'utf8');
-      console.log('[PO-Engine] Applied 30s solver timeout patch for Render free CPU');
+      fs.writeFileSync(workerFile, content.replace('TIMEOUT_MS = 2000', 'TIMEOUT_MS = 60000'), 'utf8');
+    }
+  }
+  const indexFile = path.join(solverDir, 'index.js');
+  if (fs.existsSync(indexFile)) {
+    let content = fs.readFileSync(indexFile, 'utf8');
+    if (content.includes('CALL_DEADLINE_MS = 10_000')) {
+      fs.writeFileSync(indexFile, content.replace('CALL_DEADLINE_MS = 10_000', 'CALL_DEADLINE_MS = 60_000'), 'utf8');
     }
   }
 } catch (_) {}
